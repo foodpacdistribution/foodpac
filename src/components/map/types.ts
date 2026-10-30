@@ -38,6 +38,8 @@ export type MapProps = {
   focusRouteId?: string | null;
   highlightStopId?: string | null;
   onSelectStop?: (id: string) => void;
+  /** Makes stop pins draggable; called with the new position when one is dropped. */
+  onMoveStop?: (id: string, lat: number, lng: number) => void;
   className?: string;
   /** Keep the current view when data refreshes (live tracking). */
   fitOnce?: boolean;

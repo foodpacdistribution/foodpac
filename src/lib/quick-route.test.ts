@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planSingleRoute } from "./quick-route";
+import { planSingleRoute, projectRemaining } from "./quick-route";
 
 /** Points on a line: travel time = |a - b| × 60 s, distance = |a - b| × 1000 m. */
 function lineMatrix(xs: number[]) {
@@ -61,5 +61,28 @@ describe("planSingleRoute", () => {
     expect(plan.exact).toBe(false);
     expect(new Set(plan.order).size).toBe(12);
     expect(plan.driveS).toBe(12 * 60);
+  });
+});
+
+describe("projectRemaining", () => {
+  const stops = [
+    { legDurationS: 600, arrivalS: 1600, departureS: 1900 },
+    { legDurationS: 300, arrivalS: 2200, departureS: 2500 },
+  ];
+
+  it("matches the plan when the driver is on time", () => {
+    expect(projectRemaining(stops, 1000, 1200)).toEqual([
+      { arrivalS: 1600, departureS: 1900 },
+      { arrivalS: 2200, departureS: 2500 },
+    ]);
+  });
+
+  it("shifts later stops when the driver left the previous stop late", () => {
+    expect(projectRemaining(stops, 1600, 1700).map((s) => s.arrivalS)).toEqual([2200, 2800]);
+  });
+
+  it("never puts the next arrival in the past", () => {
+    // Left at 1000, should have arrived at 1600, but it is 2000 and still not there.
+    expect(projectRemaining(stops, 1000, 2000).map((s) => s.arrivalS)).toEqual([2000, 2600]);
   });
 });

@@ -77,6 +77,7 @@ export default function MapInner({
   focusRouteId,
   highlightStopId,
   onSelectStop,
+  onMoveStop,
   className,
   fitOnce,
 }: MapProps) {
@@ -140,7 +141,16 @@ export default function MapInner({
             icon={pinIcon(s.label, s.color, s.status, s.id === highlightStopId)}
             opacity={dim ? 0.35 : 1}
             zIndexOffset={s.id === highlightStopId ? 900 : 0}
-            eventHandlers={onSelectStop ? { click: () => onSelectStop(s.id) } : undefined}
+            draggable={!!onMoveStop}
+            eventHandlers={{
+              ...(onSelectStop && { click: () => onSelectStop(s.id) }),
+              ...(onMoveStop && {
+                dragend: (e: L.DragEndEvent) => {
+                  const p = (e.target as L.Marker).getLatLng();
+                  onMoveStop(s.id, p.lat, p.lng);
+                },
+              }),
+            }}
           >
             <Popup>
               <div className="space-y-0.5">

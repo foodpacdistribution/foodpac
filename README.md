@@ -48,12 +48,18 @@ Objectives:
 `/quick-route` is for when a driver just has a handful of drops to do: no orders, plan or dispatch needed. Drivers open it from the *Quick route* button on their page; staff use *Quick Route* in the sidebar.
 
 1. Choose a start: the phone's GPS position (needs HTTPS or localhost), the depot, or a typed address.
-2. Paste the addresses, one per line.
-3. Choose how the route ends: at the last stop, back at the start, or at the depot.
-4. The page geocodes the addresses, fetches the OSRM matrix (with the traffic buffer), and returns the fastest order. For each stop it shows the drive time and distance from the previous stop and the ETA. It also shows how much driving that saves compared with the order you typed. Up to 9 stops, every possible order is compared, so the result is exact. Above 9, the solver's heuristic is used (max 25 stops).
-5. *Start navigation* hands one stop at a time to Google Maps or Apple Maps, so the navigation app can't reorder the stops. Mark each stop *Delivered* or *Couldn't deliver* to move on. *Re-plan remaining* re-optimises what's left from the current GPS position.
+2. Paste the addresses, one per line, and tap *Check addresses*. They're located one at a time, with progress shown.
+3. **Check the pins.** Approximate matches are amber. Drag any pin that's on the wrong building. Addresses that aren't found must be edited, pinned by hand or removed before planning, because a wrong pin means a wrong route.
+4. Choose how the route ends: at the last stop, back at the start, or at the depot.
+5. The page fetches the OSRM matrix for the confirmed pins (with the traffic buffer) and returns the fastest order. For each stop it shows the drive time and distance from the previous stop and the ETA. It also shows how much driving that saves compared with the order you typed. Up to 9 stops, every possible order is compared, so the result is exact. Above 9, the solver's heuristic is used (max 25 stops).
+6. *Start navigation* hands one stop at a time to Google Maps or Apple Maps, so the navigation app can't reorder the stops. Mark each stop *Delivered* or *Couldn't deliver* to move on. *Re-plan remaining* re-optimises what's left from the current GPS position.
+7. **Live ETAs.** While driving, the remaining ETAs and the finish time are re-timed from when each stop was actually finished. If the driver is still on the way to a stop after its planned arrival, the ETAs move later. Stops more than 3 minutes behind the plan are flagged.
 
 Quick routes are not saved to the database. The route in progress lives in the phone's browser storage, so it survives a page refresh.
+
+## Sign-in protection
+
+Each email gets 5 sign-in attempts and each IP gets 30 per 15 minutes. After that, sign-in is refused until the window ends, even with the right password. A successful sign-in clears the email's count. Attempts are counted in Postgres (`login_throttle`) before the password is checked, so they add up correctly across server instances and parallel requests. The IP comes from `x-forwarded-for`, which Vercel sets.
 
 ## Roles
 

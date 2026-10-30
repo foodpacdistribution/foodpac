@@ -50,6 +50,7 @@ export default function GoogleMapInner({
   focusRouteId,
   highlightStopId,
   onSelectStop,
+  onMoveStop,
   className,
   fitOnce,
 }: MapProps) {
@@ -129,6 +130,8 @@ export default function GoogleMapInner({
               position={{ lat: s.lat, lng: s.lng }}
               zIndex={s.id === highlightStopId ? 900 : 1}
               title={s.title}
+              draggable={!!onMoveStop}
+              onDragEnd={(e) => e.latLng && onMoveStop?.(s.id, e.latLng.lat(), e.latLng.lng())}
               onClick={() => {
                 setSelected({ lat: s.lat, lng: s.lng, title: s.title, lines: s.lines, navigateUrl: s.navigateUrl });
                 onSelectStop?.(s.id);

@@ -1,25 +1,60 @@
 "use client";
 
-import { ArrowLeft, CheckCircle2, Flag, LocateFixed, MapPin, Navigation, RotateCcw, Route, TriangleAlert, Warehouse, Zap } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Flag,
+  LocateFixed,
+  MapPin,
+  MapPinned,
+  Navigation,
+  Pencil,
+  RotateCcw,
+  Route,
+  Search,
+  Trash2,
+  TriangleAlert,
+  Warehouse,
+  Zap,
+} from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
-import { planQuickRoute, type QuickEnd, type QuickRouteRequest, type QuickRouteResult } from "@/app/actions/quick-route";
+import { useEffect, useState, useTransition } from "react";
+import { locateAddress, planQuickRoute, type QuickEnd, type QuickRouteRequest, type QuickRouteResult } from "@/app/actions/quick-route";
 import { FormError } from "@/components/client-ui";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { btn, cx, Field, inputCls } from "@/components/ui";
 import { multiStopNavigation, navigationUrls } from "@/lib/orders";
+import { projectRemaining } from "@/lib/quick-route";
 import { formatClock, formatDuration, formatKm } from "@/lib/time";
 
 type StartKind = "gps" | "depot" | "address";
 type Form = { startKind: StartKind; startAddress: string; addresses: string; end: QuickEnd; serviceMin: number };
+/** An address as located for the driver to confirm. "manual" = the driver placed or moved the pin. */
+type Check = { address: string; status: "ok" | "approximate" | "failed" | "manual"; lat: number | null; lng: number | null; label: string | null };
 type Done = { address: string; status: "delivered" | "failed" };
-type Saved = { form: Form; result: QuickRouteResult | null; driving: boolean; next: number; done: Done[] };
+type Saved = {
+  form: Form;
+  step: "enter" | "review";
+  checks: Check[];
+  result: QuickRouteResult | null;
+  /** Browser clock when `result` was planned; maps real time onto the plan's clock (result.startS). */
+  plannedAtMs: number;
+  /** When the driver finished the last stop (and so left it). */
+  leftAtMs: number | null;
+  driving: boolean;
+  next: number;
+  done: Done[];
+};
 
-const STORAGE_KEY = "quick-route:v1";
+const STORAGE_KEY = "quick-route:v2";
 const COLOR = "#2563eb";
+const PIN_COLOR: Record<Check["status"], string> = { ok: COLOR, approximate: "#d97706", manual: "#059669", failed: "#94a3b8" };
+const BRISBANE = { lat: -27.4698, lng: 153.0251 };
+/** ETAs this much later than planned are flagged. */
+const LATE_S = 180;
 
 function load(defaults: Form): Saved {
-  const empty: Saved = { form: defaults, result: null, driving: false, next: 0, done: [] };
+  const empty: Saved = { form: defaults, step: "enter", checks: [], result: null, plannedAtMs: 0, leftAtMs: null, driving: false, next: 0, done: [] };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? { ...empty, ...(JSON.parse(raw) as Saved) } : empty;
@@ -68,7 +103,10 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
   const [showMap, setShowMap] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const update = (patch: Partial<Saved>) =>
     setState((prev) => {
@@ -78,16 +116,76 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
     });
   const setForm = (patch: Partial<Form>) => update({ form: { ...state.form, ...patch } });
 
-  const { form, result, driving, next, done } = state;
+  const { form, step, checks, result, plannedAtMs, leftAtMs, driving, next, done } = state;
   const addressList = form.addresses.split("\n").map((a) => a.trim()).filter(Boolean);
 
-  const run = (build: () => Promise<QuickRouteRequest>, after: (r: QuickRouteResult) => Partial<Saved>) => {
+  // Keep projected ETAs current while driving.
+  useEffect(() => {
+    if (!driving) return;
+    const t = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [driving]);
+
+  // ---------------------------------------------------------------- address checking
+
+  /** Looks each address up one by one (showing progress), reusing ones already checked or pinned by hand. */
+  const checkAddresses = () => {
+    setError(null);
+    startTransition(async () => {
+      const known = new Map(checks.map((c) => [c.address, c]));
+      const out: Check[] = [];
+      setProgress({ done: 0, total: addressList.length });
+      for (const address of addressList) {
+        let c = known.get(address);
+        if (!c || c.status === "failed") {
+          const res = await locateAddress(address);
+          if (!res.ok) {
+            setProgress(null);
+            return setError(res.error);
+          }
+          c = { address, ...res.data! };
+        }
+        out.push(c);
+        setProgress({ done: out.length, total: addressList.length });
+      }
+      setProgress(null);
+      update({ checks: out, step: "review" });
+    });
+  };
+
+  const setChecks = (list: Check[]) => update({ checks: list, form: { ...form, addresses: list.map((c) => c.address).join("\n") } });
+
+  const researchAddress = (index: number, address: string) => {
+    const q = address.trim();
+    if (!q) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await locateAddress(q);
+      if (!res.ok) return setError(res.error);
+      setChecks(checks.map((c, i) => (i === index ? { address: q, ...res.data! } : c)));
+      setEditing(null);
+    });
+  };
+
+  const placePin = (index: number) => {
+    const located = checks.filter((c) => c.lat !== null && c.lng !== null);
+    const at = located.length
+      ? { lat: located.reduce((a, c) => a + c.lat!, 0) / located.length, lng: located.reduce((a, c) => a + c.lng!, 0) / located.length }
+      : BRISBANE;
+    setChecks(checks.map((c, i) => (i === index ? { ...c, ...at, status: "manual", label: "Pin placed by hand" } : c)));
+  };
+
+  // ---------------------------------------------------------------- planning
+
+  const run = (build: () => Promise<QuickRouteRequest>, after: Partial<Saved>) => {
     setError(null);
     startTransition(async () => {
       try {
         const res = await planQuickRoute(await build());
         if (!res.ok) return setError(res.error);
-        update({ result: res.data!, ...after(res.data!) });
+        const now = Date.now();
+        setNowMs(now);
+        update({ result: res.data!, plannedAtMs: now, leftAtMs: null, ...after });
         window.scrollTo({ top: 0, behavior: "smooth" });
       } catch (err) {
         setError((err as Error).message);
@@ -104,11 +202,11 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             : form.startKind === "depot"
               ? { kind: "depot" }
               : { kind: "address", address: form.startAddress },
-        stops: addressList.map((address) => ({ address })),
+        stops: checks.map((c) => ({ address: c.address, lat: c.lat ?? undefined, lng: c.lng ?? undefined })),
         end: form.end,
         serviceMin: form.serviceMin,
       }),
-      () => ({ driving: false, next: 0, done: [] }),
+      { driving: false, next: 0, done: [] },
     );
 
   // Re-plan what's left from where the driver is now, keeping the original finish point.
@@ -121,16 +219,19 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
         returnTo: form.end === "start" ? result!.start : undefined,
         serviceMin: form.serviceMin,
       }),
-      () => ({ next: 0 }),
+      { next: 0 },
     );
 
   const finishStop = (status: Done["status"]) => {
     if (!result) return;
-    update({ next: next + 1, done: [...done, { address: result.stops[next].address, status }] });
+    const now = Date.now();
+    setNowMs(now);
+    update({ next: next + 1, leftAtMs: now, done: [...done, { address: result.stops[next].address, status }] });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const reset = () => update({ result: null, driving: false, next: 0, done: [] });
+  const reset = () => update({ result: null, step: "review", driving: false, next: 0, done: [] });
+  const startOver = () => update({ result: null, step: "enter", checks: [], form: { ...form, addresses: "" }, driving: false, next: 0, done: [] });
 
   const header = (
     <header className="bg-navy-900 px-4 pb-16 pt-5 text-white">
@@ -146,8 +247,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
     </header>
   );
 
-  // ---------------------------------------------------------------- setup
-  if (!result) {
+  // ---------------------------------------------------------------- step 1: enter addresses
+  if (!result && step === "enter") {
     return (
       <div className="min-h-dvh pb-10">
         {header}
@@ -224,9 +325,9 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             </Field>
 
             <FormError message={error} />
-            <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || !addressList.length} onClick={optimise}>
-              <Zap className="size-5" />
-              {pending ? (addressList.length > 3 ? "Finding addresses and routes…" : "Calculating…") : "Find the fastest route"}
+            <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || !addressList.length} onClick={checkAddresses}>
+              <Search className="size-5" />
+              {progress ? `Finding address ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : "Check addresses"}
             </button>
           </section>
         </main>
@@ -234,7 +335,109 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
     );
   }
 
-  // ---------------------------------------------------------------- plan / drive
+  // ---------------------------------------------------------------- step 2: confirm pins
+  if (!result) {
+    const failed = checks.filter((c) => c.lat === null).length;
+    const approx = checks.filter((c) => c.status === "approximate").length;
+    const pins: MapStop[] = checks.flatMap((c, i) =>
+      c.lat !== null && c.lng !== null
+        ? [{ id: String(i), routeId: null, lat: c.lat, lng: c.lng, label: String(i + 1), color: PIN_COLOR[c.status], status: "pending" as const, title: `${i + 1}. ${c.address}`, lines: [c.label ?? ""] }]
+        : [],
+    );
+    return (
+      <div className="min-h-dvh pb-10">
+        {header}
+        <main className="mx-auto -mt-12 max-w-lg space-y-4 px-4">
+          <section className="rounded-2xl bg-white p-4 shadow-card">
+            <h2 className="font-semibold text-slate-900">Check the pins</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              A wrong pin means a wrong route. Drag any pin that isn&apos;t on the right building.
+              {approx > 0 && <span className="text-amber-700"> {approx} {approx === 1 ? "address is" : "addresses are"} only approximate (amber).</span>}
+            </p>
+          </section>
+
+          <div className="h-80 overflow-hidden rounded-2xl shadow-card">
+            <DeliveryMap
+              stops={pins}
+              routes={[]}
+              onMoveStop={(id, lat, lng) =>
+                setChecks(checks.map((c, i) => (String(i) === id ? { ...c, lat, lng, status: "manual", label: "Pin moved by hand" } : c)))
+              }
+            />
+          </div>
+
+          <section className="overflow-hidden rounded-2xl bg-white shadow-card">
+            <ol className="divide-y divide-line text-sm">
+              {checks.map((c, i) => (
+                <li key={i} className="px-4 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <span className="grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: PIN_COLOR[c.status] }}>
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-slate-900">{c.address}</span>
+                      <span
+                        className={cx(
+                          "block truncate text-xs",
+                          c.status === "failed" ? "text-red-600" : c.status === "approximate" ? "text-amber-700" : c.status === "manual" ? "text-emerald-700" : "text-slate-500",
+                        )}
+                      >
+                        {c.status === "failed" ? "Not found" : c.status === "approximate" ? `Approximate: ${c.label}` : c.label}
+                      </span>
+                    </span>
+                    <button className={btn("ghost", "icon")} onClick={() => setEditing({ index: i, text: c.address })} aria-label={`Edit ${c.address}`}>
+                      <Pencil className="size-4" />
+                    </button>
+                    <button
+                      className={btn("ghost", "icon", "text-red-600")}
+                      onClick={() => setChecks(checks.filter((_, k) => k !== i))}
+                      aria-label={`Remove ${c.address}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                  {editing?.index === i && (
+                    <form
+                      className="mt-2 flex gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        researchAddress(i, editing.text);
+                      }}
+                    >
+                      <input autoFocus className={cx(inputCls, "h-10 flex-1 text-base")} value={editing.text} onChange={(e) => setEditing({ index: i, text: e.target.value })} />
+                      <button className={btn("primary", "md", "h-10")} disabled={pending}>
+                        Search
+                      </button>
+                    </form>
+                  )}
+                  {c.status === "failed" && editing?.index !== i && (
+                    <button className={btn("secondary", "sm", "mt-2")} onClick={() => placePin(i)}>
+                      <MapPinned className="size-3.5" /> Place a pin on the map instead
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <FormError message={error} />
+          {failed > 0 && (
+            <p className="text-center text-sm text-red-600">
+              Fix, pin or remove the {failed} {failed === 1 ? "address" : "addresses"} not found to continue.
+            </p>
+          )}
+          <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || failed > 0 || !checks.length} onClick={optimise}>
+            <Zap className="size-5" /> {pending ? "Calculating…" : "Find the fastest route"}
+          </button>
+          <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={() => update({ step: "enter" })}>
+            Back to the address list
+          </button>
+        </main>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------- step 3: plan / drive
   const remaining = result.stops.slice(next);
   const current = remaining[0];
   // Stops completed under an earlier plan (before a re-plan), so numbering carries on across re-plans.
@@ -242,6 +445,14 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
   const total = offset + result.stops.length;
   const saved = result.entered.driveS - result.driveS;
   const goingHome = driving && !current && result.end;
+
+  // Real time on the plan's clock (seconds after local midnight), then ETAs re-timed from what actually happened.
+  const toPlanS = (ms: number) => result.startS + Math.round((ms - plannedAtMs) / 1000);
+  const leftS = toPlanS(leftAtMs ?? plannedAtMs);
+  const projected = driving ? projectRemaining(remaining, leftS, toPlanS(nowMs)) : remaining;
+  const lastDeparture = projected.length ? projected[projected.length - 1].departureS : leftS;
+  const finishS = driving ? lastDeparture + (result.returnLeg?.durationS ?? 0) : result.finishS;
+  const lateBy = (k: number) => projected[k].arrivalS - remaining[k].arrivalS;
 
   const mapStops: MapStop[] = result.stops.map((s, i) => ({
     id: String(i),
@@ -252,7 +463,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
     color: COLOR,
     status: i < next ? done[offset + i].status : "pending",
     title: `${offset + i + 1}. ${s.address}`,
-    lines: [`${formatDuration(s.legDurationS)} drive · ETA ${formatClock(s.arrivalS)}`],
+    lines: [`${formatDuration(s.legDurationS)} drive · ETA ${formatClock(i < next ? s.arrivalS : projected[i - next].arrivalS)}`],
     navigateUrl: navigationUrls(s.lat, s.lng).google,
   }));
   const map = (
@@ -287,8 +498,13 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             ))}
           </div>
           <p className="mt-3 flex items-center justify-between border-t border-line pt-3 text-sm">
-            <span className="text-slate-500">All done by</span>
-            <span className="font-semibold text-slate-900">{formatClock(result.finishS)}</span>
+            <span className="text-slate-500">{driving ? "Expected to finish" : "All done by"}</span>
+            <span className="font-semibold text-slate-900">
+              {formatClock(finishS)}
+              {finishS - result.finishS >= LATE_S && (
+                <span className="ml-1.5 text-xs font-normal text-amber-600">{formatDuration(finishS - result.finishS)} behind plan</span>
+              )}
+            </span>
           </p>
           {saved >= 60 && (
             <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
@@ -321,7 +537,15 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
           <>
             {map}
             <div className="grid grid-cols-[1fr_auto] gap-2">
-              <button className={btn("primary", "lg", "rounded-xl")} onClick={() => update({ driving: true })}>
+              <button
+                className={btn("primary", "lg", "rounded-xl")}
+                onClick={() => {
+                  // The clock starts when the driver actually sets off, not when the route was calculated.
+                  const now = Date.now();
+                  setNowMs(now);
+                  update({ driving: true, leftAtMs: now });
+                }}
+              >
                 <Navigation className="size-5" /> Start navigation
               </button>
               <button className={btn("secondary", "lg", "rounded-xl px-4")} onClick={reset} aria-label="Edit addresses">
@@ -346,7 +570,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                 {current.approximate && <p className="mt-1 text-xs text-amber-700">Approximate location: check the address on arrival.</p>}
               </div>
               <p className="text-sm text-slate-600">
-                Planned arrival <span className="font-semibold text-slate-900">{formatClock(current.arrivalS)}</span>
+                Arrive around <span className="font-semibold text-slate-900">{formatClock(projected[0].arrivalS)}</span>
+                {lateBy(0) >= LATE_S && <span className="ml-1.5 text-xs text-amber-600">(planned {formatClock(current.arrivalS)})</span>}
               </p>
               <a href={navigationUrls(current.lat, current.lng).google} target="_blank" rel="noreferrer" className={btn("primary", "lg", "w-full rounded-xl")}>
                 <Navigation className="size-5" /> Navigate (Google Maps)
@@ -375,7 +600,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             <a href={navigationUrls(result.end!.lat, result.end!.lng).google} target="_blank" rel="noreferrer" className={btn("primary", "lg", "w-full rounded-xl")}>
               <Navigation className="size-5" /> Navigate back
             </a>
-            <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={reset}>
+            <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={startOver}>
               Finish and plan a new route
             </button>
           </section>
@@ -383,7 +608,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
           <section className="rounded-2xl bg-white p-8 text-center shadow-card">
             <CheckCircle2 className="mx-auto size-12 text-emerald-500" />
             <p className="mt-3 text-lg font-semibold">All stops completed</p>
-            <button className={btn("secondary", "md", "mt-4 rounded-xl")} onClick={reset}>
+            <button className={btn("secondary", "md", "mt-4 rounded-xl")} onClick={startOver}>
               Plan a new route
             </button>
           </section>
@@ -426,6 +651,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             ))}
             {remaining.map((s, k) => {
               const i = next + k;
+              const late = lateBy(k);
               return (
                 <li key={i} className={cx("flex items-center gap-3 px-4 py-2.5", driving && k === 0 && "bg-blue-50")}>
                   <span className="grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: COLOR }}>
@@ -439,8 +665,10 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                     </span>
                   </span>
                   <span className="text-right">
-                    <span className="block font-semibold tabular-nums text-slate-900">{formatClock(s.arrivalS)}</span>
-                    <span className="block text-[11px] text-slate-400">{formatDuration(s.arrivalS - result.startS)} in</span>
+                    <span className="block font-semibold tabular-nums text-slate-900">{formatClock(projected[k].arrivalS)}</span>
+                    <span className={cx("block text-[11px]", late >= LATE_S ? "text-amber-600" : "text-slate-400")}>
+                      {late >= LATE_S ? `+${formatDuration(late)} late` : `${formatDuration(projected[k].arrivalS - result.startS)} in`}
+                    </span>
                   </span>
                 </li>
               );
@@ -456,7 +684,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                     +{formatDuration(result.returnLeg.durationS)} drive · {formatKm(result.returnLeg.distanceM)}
                   </span>
                 </span>
-                <span className="font-semibold tabular-nums text-slate-900">{formatClock(result.finishS)}</span>
+                <span className="font-semibold tabular-nums text-slate-900">{formatClock(finishS)}</span>
               </li>
             )}
           </ol>

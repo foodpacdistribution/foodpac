@@ -108,3 +108,21 @@ export function planSingleRoute(matrix: Matrix, opts: QuickPlanOptions): QuickPl
     exact,
   };
 }
+
+export type TimedStop = { legDurationS: number; arrivalS: number; departureS: number };
+
+/**
+ * Re-times the stops still to do from when the driver actually left the last
+ * one (`leftS`), keeping each leg's drive time and each stop's service time.
+ * The next stop can't be reached before `nowS`, so a driver who is behind sees
+ * every later ETA move too instead of a plan that is already out of date.
+ */
+export function projectRemaining(stops: TimedStop[], leftS: number, nowS: number): { arrivalS: number; departureS: number }[] {
+  let t = leftS;
+  return stops.map((s, i) => {
+    const arrivalS = Math.max(t + s.legDurationS, i === 0 ? nowS : 0);
+    const departureS = arrivalS + (s.departureS - s.arrivalS);
+    t = departureS;
+    return { arrivalS, departureS };
+  });
+}

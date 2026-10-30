@@ -51,6 +51,19 @@ export type QuickRouteResult = {
 const validPoint = (lat: unknown, lng: unknown) =>
   typeof lat === "number" && typeof lng === "number" && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 
+export type LocatedAddress = { status: "ok" | "approximate" | "failed"; lat: number | null; lng: number | null; label: string | null };
+
+/** One address at a time, so the page can show progress and the driver can check each pin before planning. */
+export async function locateAddress(address: string): Promise<ActionResult<LocatedAddress>> {
+  return attempt(async () => {
+    await assertUser(["admin", "dispatcher", "driver"]);
+    const q = String(address ?? "").trim().slice(0, 300);
+    if (!q) throw new UserError("Enter an address.");
+    const g = await geocodeAddress(await getDb(), q);
+    return { data: { status: g.status, lat: g.lat, lng: g.lng, label: g.label } };
+  });
+}
+
 export async function planQuickRoute(req: QuickRouteRequest): Promise<ActionResult<QuickRouteResult>> {
   return attempt(async () => {
     const user = await assertUser(["admin", "dispatcher", "driver"]);

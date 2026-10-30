@@ -121,6 +121,13 @@ export const orders = pgTable(
   ],
 );
 
+/** Sign-in attempts per email and per IP in a fixed window, to stop password guessing. */
+export const loginThrottle = pgTable("login_throttle", {
+  key: text("key").primaryKey(),
+  attempts: integer("attempts").notNull(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Geocoding results keyed by normalised address, so re-imports don't re-bill. */
 export const geocodeCache = pgTable("geocode_cache", {
   query: text("query").primaryKey(),
