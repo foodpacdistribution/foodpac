@@ -71,22 +71,37 @@ function save(state: Saved) {
   }
 }
 
-function currentPosition(): Promise<{ lat: number; lng: number }> {
-  return new Promise((resolve, reject) => {
-    if (!("geolocation" in navigator)) return reject(new Error("This browser can't share its location. Pick another starting point."));
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      (err) =>
-        reject(
-          new Error(
-            err.code === err.PERMISSION_DENIED
-              ? "Location permission was denied. Allow it in your browser settings, or pick another starting point."
-              : "Couldn't get your location. Check GPS is on and try again.",
-          ),
-        ),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
-    );
-  });
+/** Thrown when the device position can't be read, so the page can offer another starting point. */
+class LocationError extends Error {}
+
+function getPosition(options: PositionOptions) {
+  return new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, options));
+}
+
+async function currentPosition(): Promise<{ lat: number; lng: number }> {
+  if (!window.isSecureContext) {
+    throw new LocationError("Browsers only share location with secure (https://) pages. Open the app over HTTPS, or start from the depot or an address.");
+  }
+  if (!("geolocation" in navigator)) throw new LocationError("This browser can't share its location.");
+  let p: GeolocationPosition;
+  try {
+    p = await getPosition({ enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+  } catch (first) {
+    if ((first as GeolocationPositionError).code === 1) {
+      throw new LocationError("Location permission was denied. Allow location for this site in the browser's address bar, then try again.");
+    }
+    // Laptops have no GPS chip and high accuracy often times out; Wi-Fi positioning is good enough for a start point.
+    try {
+      p = await getPosition({ enableHighAccuracy: false, timeout: 20000, maximumAge: 300000 });
+    } catch (second) {
+      throw new LocationError(
+        (second as GeolocationPositionError).code === 3
+          ? "Finding your location took too long. Move somewhere with better signal and try again."
+          : "Your device couldn't work out where you are. On a Mac, turn on System Settings → Privacy & Security → Location Services for your browser. On a phone, turn on Location.",
+      );
+    }
+  }
+  return { lat: p.coords.latitude, lng: p.coords.longitude };
 }
 
 const END_OPTIONS: { value: QuickEnd; label: string; needsDepot?: boolean }[] = [
@@ -102,6 +117,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
     load({ startKind: "gps", startAddress: "", addresses: "", end: "last_stop", serviceMin: defaultServiceMin }),
   );
   const [error, setError] = useState<string | null>(null);
+  const [locationFailed, setLocationFailed] = useState(false);
   const [pending, startTransition] = useTransition();
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
@@ -179,6 +195,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
 
   const run = (build: () => Promise<QuickRouteRequest>, after: Partial<Saved>) => {
     setError(null);
+    setLocationFailed(false);
     startTransition(async () => {
       try {
         const res = await planQuickRoute(await build());
@@ -189,17 +206,18 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
         window.scrollTo({ top: 0, behavior: "smooth" });
       } catch (err) {
         setError((err as Error).message);
+        setLocationFailed(err instanceof LocationError);
       }
     });
   };
 
-  const optimise = () =>
+  const optimise = (startKind: StartKind = form.startKind) =>
     run(
       async () => ({
         start:
-          form.startKind === "gps"
+          startKind === "gps"
             ? { kind: "gps", ...(await currentPosition()) }
-            : form.startKind === "depot"
+            : startKind === "depot"
               ? { kind: "depot" }
               : { kind: "address", address: form.startAddress },
         stops: checks.map((c) => ({ address: c.address, lat: c.lat ?? undefined, lng: c.lng ?? undefined })),
@@ -420,13 +438,51 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             </ol>
           </section>
 
+          <p className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm shadow-card">
+            <span className="text-slate-500">
+              Starting from{" "}
+              <span className="font-medium text-slate-900">
+                {form.startKind === "gps" ? "my location" : form.startKind === "depot" ? depotName : form.startAddress || "an address"}
+              </span>
+            </span>
+            <button className="text-xs font-medium text-blue-600" onClick={() => update({ step: "enter" })}>
+              Change
+            </button>
+          </p>
+
           <FormError message={error} />
+          {locationFailed && (
+            <div className="grid grid-cols-2 gap-2">
+              {depotName && (
+                <button
+                  className={btn("secondary", "md", "rounded-xl")}
+                  disabled={pending}
+                  onClick={() => {
+                    setForm({ startKind: "depot" });
+                    optimise("depot");
+                  }}
+                >
+                  <Warehouse className="size-4" /> Start from depot
+                </button>
+              )}
+              <button
+                className={btn("secondary", "md", cx("rounded-xl", !depotName && "col-span-2"))}
+                onClick={() => {
+                  setLocationFailed(false);
+                  setError(null);
+                  update({ step: "enter", form: { ...form, startKind: "address" } });
+                }}
+              >
+                <MapPin className="size-4" /> Type a start address
+              </button>
+            </div>
+          )}
           {failed > 0 && (
             <p className="text-center text-sm text-red-600">
               Fix, pin or remove the {failed} {failed === 1 ? "address" : "addresses"} not found to continue.
             </p>
           )}
-          <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || failed > 0 || !checks.length} onClick={optimise}>
+          <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || failed > 0 || !checks.length} onClick={() => optimise()}>
             <Zap className="size-5" /> {pending ? "Calculating…" : "Find the fastest route"}
           </button>
           <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={() => update({ step: "enter" })}>
