@@ -1,0 +1,1 @@
+ALTER TABLE "delivery_proofs" ADD COLUMN "sha256" text;

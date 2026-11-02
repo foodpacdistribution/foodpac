@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
@@ -94,6 +94,36 @@ export async function setCustomerPrice(customerId: string, productId: string, pr
     }
     revalidatePath(`/admin/customers/${customerId}`);
     return { message: price.trim() === "" ? "Back to list price" : "Price saved" };
+  });
+}
+
+/**
+ * Customer prices for many products at once: `percent` off each product's list price
+ * (e.g. 10 = 10% off), or `null` to put them back on the list price.
+ */
+export async function setCustomerDiscount(customerId: string, productIds: string[], percent: number | null) {
+  return attempt(async () => {
+    await assertUser(STAFF);
+    if (!Array.isArray(productIds) || !productIds.length) throw new UserError("Select at least one product.");
+    const db = await getDb();
+    const ids = productIds.slice(0, 2000);
+    if (percent === null) {
+      await db.delete(customerPrices).where(and(eq(customerPrices.customerId, customerId), inArray(customerPrices.productId, ids)));
+      revalidatePath(`/admin/customers/${customerId}`);
+      revalidatePath("/", "layout");
+      return { message: `${ids.length} products back to list price` };
+    }
+    const pct = Number(percent);
+    if (!Number.isFinite(pct) || pct <= 0 || pct >= 100) throw new UserError("Enter a discount between 0 and 100, e.g. 10 for 10% off.");
+    const list = await db.select({ id: products.id, priceCents: products.priceCents }).from(products).where(inArray(products.id, ids));
+    if (!list.length) throw new UserError("Product not found.");
+    await db
+      .insert(customerPrices)
+      .values(list.map((p) => ({ customerId, productId: p.id, priceCents: Math.max(1, Math.round(p.priceCents * (1 - pct / 100))) })))
+      .onConflictDoUpdate({ target: [customerPrices.customerId, customerPrices.productId], set: { priceCents: sql`excluded.price_cents` } });
+    revalidatePath(`/admin/customers/${customerId}`);
+    revalidatePath("/", "layout");
+    return { message: `${pct}% off ${list.length} products` };
   });
 }
 

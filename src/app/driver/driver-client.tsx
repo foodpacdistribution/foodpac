@@ -41,7 +41,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
   const sharing = useLocationSharing(route?.status === "in_progress" && sharePref);
   const [pending, startTransition] = useTransition();
   // The stop the sheet was opened for. Saving refreshes the route, so `current` can already be the next stop by the time it's done.
-  const [sheet, setSheet] = useState<null | { kind: "delivered" | "failed"; stopId: string; name: string }>(null);
+  const [sheet, setSheet] = useState<null | { kind: "delivered" | "failed"; stopId: string; name: string; reference: string }>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -57,7 +57,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
   const doneCount = stops.length - pendingStops.length;
   const current: StopView | undefined = pendingStops.find((s) => s.id === selectedId) ?? pendingStops[0];
   const openSheet = (kind: "delivered" | "failed") =>
-    current && setSheet({ kind, stopId: current.id, name: current.order.customerName || current.order.orderNumber });
+    current && setSheet({ kind, stopId: current.id, name: current.order.customerName || current.order.orderNumber, reference: current.order.orderNumber });
   const finishSheet = (t: Omit<ToastMessage, "id">) => {
     setSheet(null);
     setSelectedId(null);
@@ -436,6 +436,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
           <OutcomeForm
             kind="delivered"
             stopId={sheet.stopId}
+            reference={sheet.reference}
             requirePhoto={requirePhoto}
             requireSignature={requireSignature}
             onDone={() => finishSheet({ tone: "ok", text: `Delivered · ${sheet.name}` })}
@@ -503,9 +504,11 @@ function OutcomeForm({
   onDone,
   requirePhoto = false,
   requireSignature = false,
+  reference = "",
 }: {
   kind: "delivered" | "failed";
   stopId: string;
+  reference?: string;
   onDone: () => void;
   requirePhoto?: boolean;
   requireSignature?: boolean;
@@ -514,6 +517,7 @@ function OutcomeForm({
   const [state, action] = useActionState(kind === "delivered" ? markDelivered : markFailed, undefined);
   const [photo, setPhoto] = useState<File | null>(null);
   const [signature, setSignature] = useState<File | null>(null);
+  const [recipient, setRecipient] = useState("");
   const fix = useBestFix();
   useEffect(() => {
     if (state?.ok) onDone();
@@ -538,10 +542,24 @@ function OutcomeForm({
       {kind === "delivered" ? (
         <>
           <PhotoCapture value={photo} onChange={setPhoto} required={requirePhoto} />
-          <Field label={signature || requireSignature ? "Received by *" : "Received by (optional)"}>
-            <input name="recipient" autoComplete="off" required={!!signature || requireSignature} className={cx(inputCls, "h-11 text-base")} />
+          <Field label={tr(signature || requireSignature ? "Received by *" : "Received by (optional)")}>
+            <input
+              name="recipient"
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              autoComplete="off"
+              required={!!signature || requireSignature}
+              className={cx(inputCls, "h-11 text-base")}
+            />
           </Field>
-          <SignaturePad onChange={setSignature} required={requireSignature} />
+          <SignaturePad
+            onChange={setSignature}
+            required={requireSignature}
+            signer={recipient}
+            onSignerChange={setRecipient}
+            reference={reference}
+            accuracyM={fix ? fix.accuracy : null}
+          />
         </>
       ) : (
         <>

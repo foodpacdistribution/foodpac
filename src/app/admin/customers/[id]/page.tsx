@@ -28,7 +28,14 @@ export default async function CustomerPricesPage({ params }: { params: Promise<{
     <>
       <Link href="/admin/customers" className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
         <ArrowLeft className="size-4" /> {" "}<T>{"Customers"}</T></Link>
-      <PageHeader title={`${c.name} · price list`} subtitle={`${PAYMENT_TERMS_LABEL[c.paymentTerms]}. Leave a price blank to use the list price. Prices are ex GST and only this customer sees them.`} />
+      <PageHeader
+        title={<T vars={{ name: c.name }}>{"{name} · price list"}</T>}
+        subtitle={
+          <>
+            <T>{PAYMENT_TERMS_LABEL[c.paymentTerms]}</T>. <T>{"Tick products to give a % discount in one go, or type a price. Blank means list price. Prices are ex GST and only this customer sees them."}</T>
+          </>
+        }
+      />
       <PriceList customerId={c.id} rows={rows.map((r) => ({ ...r, ownCents: own.find((o) => o.productId === r.id)?.priceCents ?? null }))} />
     </>
   );

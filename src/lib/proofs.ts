@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { DB } from "./db";
 import { deliveryProofs } from "./db/schema";
@@ -32,8 +33,10 @@ export async function saveProof(
   db: Pick<DB, "insert">,
   p: { orderId: string; eventId: string; kind: "photo" | "signature"; mime: string; data: Uint8Array },
 ) {
-  await db.insert(deliveryProofs).values({ ...p, bytes: p.data.byteLength });
+  await db.insert(deliveryProofs).values({ ...p, bytes: p.data.byteLength, sha256: sha256(p.data) });
 }
+
+export const sha256 = (data: Uint8Array) => createHash("sha256").update(data).digest("hex");
 
 export async function readProof(db: DB, id: string) {
   const [row] = await db.select().from(deliveryProofs).where(eq(deliveryProofs.id, id)).limit(1);

@@ -3,6 +3,7 @@ import { getCurrentUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { deliveryEvents, deliveryProofs, drivers, orders } from "@/lib/db/schema";
 import { haversine } from "@/lib/geo/routing";
+import { sha256 } from "@/lib/proofs";
 
 /** Timeline of driver events for one order, with proof-of-delivery images. */
 export async function GET(_req: Request, ctx: RouteContext<"/api/orders/[id]/record">) {
@@ -22,7 +23,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/orders/[id]/rec
     .where(eq(deliveryEvents.orderId, id))
     .orderBy(asc(deliveryEvents.createdAt));
   const proofs = await db
-    .select({ id: deliveryProofs.id, eventId: deliveryProofs.eventId, kind: deliveryProofs.kind })
+    .select({ id: deliveryProofs.id, eventId: deliveryProofs.eventId, kind: deliveryProofs.kind, data: deliveryProofs.data, sha256: deliveryProofs.sha256, at: deliveryProofs.createdAt })
     .from(deliveryProofs)
     .where(eq(deliveryProofs.orderId, id));
 
@@ -44,7 +45,10 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/orders/[id]/rec
               distanceM: order.lat !== null && order.lng !== null ? Math.round(haversine(order as { lat: number; lng: number }, e as { lat: number; lng: number })) : null,
             }
           : null,
-      proofs: proofs.filter((p) => p.eventId === e.id).map((p) => ({ id: p.id, kind: p.kind })),
+      // Re-hash the stored image: "intact" means it's byte-for-byte what the driver uploaded.
+      proofs: proofs
+        .filter((p) => p.eventId === e.id)
+        .map((p) => ({ id: p.id, kind: p.kind, at: p.at.toISOString(), sha256: p.sha256, intact: p.sha256 ? sha256(p.data) === p.sha256 : null })),
     })),
   });
 }

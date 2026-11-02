@@ -376,6 +376,8 @@ export const deliveryProofs = pgTable(
     mime: text("mime").notNull(),
     bytes: integer("bytes").notNull(),
     data: bytea("data").notNull(),
+    /** SHA-256 of `data` when it was received, so any later change to the image can be detected. */
+    sha256: text("sha256"),
     createdAt: createdAt(),
   },
   (t) => [index("delivery_proofs_order_idx").on(t.orderId)],

@@ -1,20 +1,6 @@
 "use client";
 
-import {
-  AlertTriangle,
-  FileImage,
-  MapPinCheck,
-  Package,
-  Pencil,
-  Pin,
-  Plus,
-  Search,
-  Sparkles,
-  Trash2,
-  Send,
-  Upload,
-  Zap,
-} from "lucide-react";
+import { AlertTriangle, FileImage, MapPinCheck, Package, Pencil, Pin, Plus, Search, Send, ShieldAlert, ShieldCheck, Sparkles, Trash2, Upload, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState, useTransition } from "react";
@@ -421,7 +407,7 @@ type RecordEvent = {
   reason: string | null;
   note: string | null;
   place: { lat: number; lng: number; accuracyM: number | null; distanceM: number | null } | null;
-  proofs: { id: string; kind: "photo" | "signature" }[];
+  proofs: { id: string; kind: "photo" | "signature"; at: string; sha256: string | null; intact: boolean | null }[];
 };
 
 function DeliveryRecord({ orderId }: { orderId: string }) {
@@ -482,6 +468,15 @@ function DeliveryRecord({ orderId }: { orderId: string }) {
                   {/* eslint-disable-next-line @next/next/no-img-element -- authenticated private image */}
                   <img src={`/api/proofs/${p.id}`} alt={p.kind === "photo" ? "Delivery photo" : "Customer signature"} className={cx("w-full", p.kind === "photo" ? "h-40 object-cover" : "h-28 object-contain bg-white")} />
                   <span className="block px-2 py-1 text-[11px] text-slate-500">{p.kind === "photo" ? tr("Photo") : tr("Signature")}</span>
+                  {p.sha256 && (
+                    <span
+                      title={`SHA-256 ${p.sha256}`}
+                      className={cx("flex items-center gap-1 border-t border-line px-2 py-1 font-mono text-[10px]", p.intact ? "text-emerald-700" : "text-red-600")}
+                    >
+                      {p.intact ? <ShieldCheck className="size-3 shrink-0" /> : <ShieldAlert className="size-3 shrink-0" />}
+                      {p.intact ? tr("Unchanged since upload") : tr("Changed after upload")} · {p.sha256.slice(0, 10)}…
+                    </span>
+                  )}
                 </a>
               ))}
             </div>
