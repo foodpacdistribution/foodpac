@@ -19,12 +19,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { locateAddress, planQuickRoute, type QuickEnd, type QuickRouteRequest, type QuickRouteResult } from "@/app/actions/quick-route";
+import { describeLocation, locateAddress, planQuickRoute, type QuickEnd, type QuickRouteRequest, type QuickRouteResult } from "@/app/actions/quick-route";
 import { FormError, Toast, type ToastMessage } from "@/components/client-ui";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { btn, cx, Field, inputCls, Spinner } from "@/components/ui";
 import { multiStopNavigation, navigationUrls } from "@/lib/orders";
 import { parseAddressList, projectRemaining } from "@/lib/quick-route";
+import { describeAccuracy, GOOD_FIX_M, locateBest, LocationError, ROUGH_FIX_M } from "@/lib/locate";
 import { formatClock, formatDuration, formatKm } from "@/lib/time";
 
 type StartKind = "gps" | "depot" | "address";
@@ -71,38 +72,8 @@ function save(state: Saved) {
   }
 }
 
-/** Thrown when the device position can't be read, so the page can offer another starting point. */
-class LocationError extends Error {}
-
-function getPosition(options: PositionOptions) {
-  return new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, options));
-}
-
-async function currentPosition(): Promise<{ lat: number; lng: number }> {
-  if (!window.isSecureContext) {
-    throw new LocationError("Browsers only share location with secure (https://) pages. Open the app over HTTPS, or start from the depot or an address.");
-  }
-  if (!("geolocation" in navigator)) throw new LocationError("This browser can't share its location.");
-  let p: GeolocationPosition;
-  try {
-    p = await getPosition({ enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
-  } catch (first) {
-    if ((first as GeolocationPositionError).code === 1) {
-      throw new LocationError("Location permission was denied. Allow location for this site in the browser's address bar, then try again.");
-    }
-    // Laptops have no GPS chip and high accuracy often times out; Wi-Fi positioning is good enough for a start point.
-    try {
-      p = await getPosition({ enableHighAccuracy: false, timeout: 20000, maximumAge: 300000 });
-    } catch (second) {
-      throw new LocationError(
-        (second as GeolocationPositionError).code === 3
-          ? "Finding your location took too long. Move somewhere with better signal and try again."
-          : "Your device couldn't work out where you are. On a Mac, turn on System Settings → Privacy & Security → Location Services for your browser. On a phone, turn on Location.",
-      );
-    }
-  }
-  return { lat: p.coords.latitude, lng: p.coords.longitude };
-}
+/** The confirmed GPS start: measured, or a pin the driver dragged into place. */
+type Here = { lat: number; lng: number; accuracy: number; at: number; manual: boolean; label: string | null };
 
 const END_OPTIONS: { value: QuickEnd; label: string; needsDepot?: boolean }[] = [
   { value: "last_stop", label: "Finish at the last stop" },
@@ -118,6 +89,9 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
   );
   const [error, setError] = useState<string | null>(null);
   const [locationFailed, setLocationFailed] = useState(false);
+  const [here, setHere] = useState<Here | null>(null);
+  /** While measuring: the best accuracy so far (null until the first fix). */
+  const [locating, setLocating] = useState<{ accuracy: number | null } | null>(null);
   const [pending, startTransition] = useTransition();
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
@@ -144,6 +118,34 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
     return () => clearInterval(t);
   }, [driving]);
 
+  // ---------------------------------------------------------------- start position
+
+  /** Measures the position carefully (see lib/locate) and looks up the nearest street to show the driver. */
+  const findMe = async () => {
+    setLocating({ accuracy: null });
+    setLocationFailed(false);
+    try {
+      const fix = await locateBest({ onProgress: (f) => setLocating({ accuracy: f.accuracy }) });
+      setHere({ ...fix, manual: false, label: null });
+      setLocating(null);
+      const res = await describeLocation(fix.lat, fix.lng);
+      if (res.ok && res.data) setHere((h) => (h && h.at === fix.at ? { ...h, label: res.data! } : h));
+      return fix;
+    } catch (err) {
+      setLocating(null);
+      setError((err as Error).message);
+      setLocationFailed(err instanceof LocationError);
+      throw err;
+    }
+  };
+
+  /** The start for planning: the confirmed position if it's recent (or placed by hand), otherwise a fresh measurement. */
+  const startPosition = async () => {
+    if (here && (here.manual || Date.now() - here.at < 3 * 60_000)) return { lat: here.lat, lng: here.lng };
+    const fix = await findMe();
+    return { lat: fix.lat, lng: fix.lng };
+  };
+
   // ---------------------------------------------------------------- address checking
 
   /** Looks each address up one by one (showing progress), reusing ones already checked or pinned by hand. */
@@ -169,6 +171,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
       setProgress(null);
       // Show the cleaned-up list if the driver goes back to edit it.
       update({ checks: out, step: "review", form: { ...form, addresses: addressList.join("\n") } });
+      // Measure the start now, so the driver can check it on the map before planning.
+      if (form.startKind === "gps") findMe().catch(() => {});
     });
   };
 
@@ -219,7 +223,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
       async () => ({
         start:
           startKind === "gps"
-            ? { kind: "gps", ...(await currentPosition()) }
+            ? { kind: "gps", ...(await startPosition()) }
             : startKind === "depot"
               ? { kind: "depot" }
               : { kind: "address", address: form.startAddress },
@@ -234,7 +238,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
   const replanRemaining = () =>
     run(
       async () => ({
-        start: { kind: "gps", ...(await currentPosition()) },
+        start: { kind: "gps", ...(await locateBest({ maxWaitMs: 10_000 }).then((f) => ({ lat: f.lat, lng: f.lng }))) },
         stops: result!.stops.slice(next).map((s) => ({ address: s.address, lat: s.lat, lng: s.lng })),
         end: form.end,
         returnTo: form.end === "start" ? result!.start : undefined,
@@ -378,6 +382,20 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
         ? [{ id: String(i), routeId: null, lat: c.lat, lng: c.lng, label: String(i + 1), color: PIN_COLOR[c.status], status: "pending" as const, title: `${i + 1}. ${c.address}`, lines: [c.label ?? ""] }]
         : [],
     );
+    // The measured start, draggable like the stops so a rough fix can be corrected by hand.
+    if (form.startKind === "gps" && here) {
+      pins.unshift({
+        id: START_PIN,
+        routeId: null,
+        lat: here.lat,
+        lng: here.lng,
+        label: "S",
+        color: "#0d1b30",
+        status: "pending",
+        title: "Your start",
+        lines: [here.manual ? "Placed by hand" : `GPS ${describeAccuracy(here.accuracy)}`],
+      });
+    }
     return (
       <div className="min-h-dvh pb-10">
         {header}
@@ -390,13 +408,19 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             </p>
           </section>
 
+          {form.startKind === "gps" && <StartCard here={here} locating={locating} onRefresh={() => findMe().catch(() => {})} onChange={() => update({ step: "enter" })} />}
           <div className="h-80 overflow-hidden rounded-2xl shadow-card">
             <DeliveryMap
               stops={pins}
               routes={[]}
-              onMoveStop={(id, lat, lng) =>
-                setChecks(checks.map((c, i) => (String(i) === id ? { ...c, lat, lng, status: "manual", label: "Pin moved by hand" } : c)))
-              }
+              onMoveStop={(id, lat, lng) => {
+                if (id === START_PIN) {
+                  setHere({ lat, lng, accuracy: 0, at: Date.now(), manual: true, label: null });
+                  describeLocation(lat, lng).then((res) => res.ok && res.data && setHere((h) => (h?.manual && h.lat === lat ? { ...h, label: res.data! } : h)));
+                  return;
+                }
+                setChecks(checks.map((c, i) => (String(i) === id ? { ...c, lat, lng, status: "manual", label: "Pin moved by hand" } : c)));
+              }}
             />
           </div>
 
@@ -454,7 +478,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             </ol>
           </section>
 
-          <p className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm shadow-card">
+          <p className={cx("flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm shadow-card", form.startKind === "gps" && "hidden")}>
             <span className="text-slate-500">
               Starting from{" "}
               <span className="font-medium text-slate-900">
@@ -498,8 +522,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
               Fix, pin or remove the {failed} {failed === 1 ? "address" : "addresses"} not found to continue.
             </p>
           )}
-          <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || failed > 0 || !checks.length} onClick={() => optimise()}>
-            {pending ? <Spinner className="size-5" /> : <Zap className="size-5" />} {pending ? "Calculating…" : "Find the fastest route"}
+          <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || !!locating || failed > 0 || !checks.length} onClick={() => optimise()}>
+            {pending || locating ? <Spinner className="size-5" /> : <Zap className="size-5" />} {pending ? "Calculating…" : locating ? "Finding your location…" : "Find the fastest route"}
           </button>
           <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={() => update({ step: "enter" })}>
             Back to the address list
@@ -771,5 +795,73 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
       </main>
       <Toast toast={toast} onDone={clearToast} />
     </div>
+  );
+}
+
+const START_PIN = "__start";
+
+/** Where the route will start: live accuracy while measuring, then the nearest street and how much to trust it. */
+function StartCard({
+  here,
+  locating,
+  onRefresh,
+  onChange,
+}: {
+  here: Here | null;
+  locating: { accuracy: number | null } | null;
+  onRefresh: () => void;
+  onChange: () => void;
+}) {
+  const quality = !here ? null : here.manual || here.accuracy <= GOOD_FIX_M ? "good" : here.accuracy <= ROUGH_FIX_M ? "fair" : "rough";
+  return (
+    <section
+      className={cx(
+        "rounded-2xl bg-white p-4 shadow-card ring-1",
+        quality === "rough" ? "ring-red-200" : quality === "fair" ? "ring-amber-200" : quality === "good" ? "ring-emerald-200" : "ring-transparent",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={cx(
+            "relative grid size-9 shrink-0 place-items-center rounded-full",
+            locating ? "bg-blue-50 text-blue-600" : quality === "good" ? "bg-emerald-50 text-emerald-600" : quality === "fair" ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600",
+          )}
+        >
+          <LocateFixed className="size-4" />
+          {locating && <span className="absolute inset-0 animate-ping rounded-full bg-blue-400/30" />}
+        </span>
+        <div className="min-w-0 flex-1 text-sm">
+          <p className="font-semibold text-slate-900">Your start</p>
+          {locating ? (
+            <p className="text-slate-500">
+              Finding your exact location…{locating.accuracy !== null && <span className="tabular-nums"> {describeAccuracy(locating.accuracy)} so far</span>}
+            </p>
+          ) : here ? (
+            <>
+              <p className="truncate text-slate-700">{here.label ? `Near ${here.label}` : `${here.lat.toFixed(5)}, ${here.lng.toFixed(5)}`}</p>
+              <p className={cx("text-xs", quality === "good" ? "text-emerald-700" : quality === "fair" ? "text-amber-700" : "text-red-700")}>
+                {here.manual
+                  ? "Placed by hand on the map"
+                  : quality === "good"
+                    ? `Precise GPS fix (${describeAccuracy(here.accuracy)})`
+                    : quality === "fair"
+                      ? `GPS ${describeAccuracy(here.accuracy)}. Check the dark S pin is where you are.`
+                      : `Only accurate to ${describeAccuracy(here.accuracy)} (no GPS lock). Drag the dark S pin to where you are, or type your start address.`}
+              </p>
+            </>
+          ) : (
+            <p className="text-slate-500">Not measured yet.</p>
+          )}
+        </div>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button className={btn("secondary", "sm")} disabled={!!locating} onClick={onRefresh}>
+          {locating ? <Spinner className="size-3" /> : <LocateFixed className="size-3.5" />} {here ? "Measure again" : "Find my location"}
+        </button>
+        <button className={btn("ghost", "sm")} onClick={onChange}>
+          Use another start
+        </button>
+      </div>
+    </section>
   );
 }

@@ -120,3 +120,37 @@ async function nominatim(address: string): Promise<GeocodeResult> {
     return { status: "failed", lat: null, lng: null, label: null, provider: "nominatim" };
   }
 }
+
+/** Nearest street address for a point ("Near 12 Smith St, Moorooka"), so a GPS start can be checked at a glance. */
+export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (key) {
+    try {
+      const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+      url.searchParams.set("latlng", `${lat},${lng}`);
+      url.searchParams.set("result_type", "street_address|premise|subpremise|route");
+      url.searchParams.set("key", key);
+      const body = (await (await fetch(url, { signal: AbortSignal.timeout(8000) })).json()) as { status: string; results?: { formatted_address: string }[] };
+      if (body.status === "OK" && body.results?.[0]) return body.results[0].formatted_address.replace(/, Australia$/, "");
+    } catch {
+      // Fall through to OpenStreetMap.
+    }
+  }
+  try {
+    const url = new URL((process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org/search").replace(/\/search$/, "/reverse"));
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lon", String(lng));
+    url.searchParams.set("zoom", "18");
+    const r = (await (await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(8000) })).json()) as {
+      address?: Record<string, string>;
+      display_name?: string;
+    };
+    const a = r.address ?? {};
+    const street = [a.house_number, a.road].filter(Boolean).join(" ");
+    const place = a.suburb ?? a.city_district ?? a.town ?? a.city ?? a.village;
+    return [street, place].filter(Boolean).join(", ") || r.display_name || null;
+  } catch {
+    return null;
+  }
+}

@@ -3,7 +3,7 @@
 import { type ActionResult, attempt } from "@/lib/action";
 import { assertUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { geocodeAddress } from "@/lib/geo/geocode";
+import { geocodeAddress, reverseGeocode } from "@/lib/geo/geocode";
 import { type LatLng, routeGeometry, travelMatrix } from "@/lib/geo/routing";
 import { depotForUser, getSettings, UserError } from "@/lib/planning";
 import { MAX_QUICK_STOPS, planSingleRoute } from "@/lib/quick-route";
@@ -61,6 +61,15 @@ export async function locateAddress(address: string): Promise<ActionResult<Locat
     if (!q) throw new UserError("Enter an address.");
     const g = await geocodeAddress(await getDb(), q);
     return { data: { status: g.status, lat: g.lat, lng: g.lng, label: g.label } };
+  });
+}
+
+/** Street address nearest to the driver's GPS position, to confirm the start point. */
+export async function describeLocation(lat: number, lng: number): Promise<ActionResult<string | null>> {
+  return attempt(async () => {
+    await assertUser(["admin", "dispatcher", "driver"]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw new UserError("Invalid position.");
+    return { data: await reverseGeocode(lat, lng) };
   });
 }
 
