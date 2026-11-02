@@ -1,12 +1,14 @@
 "use client";
 
-import { ImageIcon, PackagePlus, Pencil, Plus, Search } from "lucide-react";
+import { Download, FileUp, ImageIcon, PackagePlus, Pencil, Plus, Search } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { adjustStock, saveProduct } from "@/app/actions/products";
 import { FormError, Modal, SubmitButton, Toast, type ToastMessage } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import { aud } from "@/lib/money";
+import { TEMPLATE_HEADERS, toCsv } from "@/lib/product-import";
 
 type Product = {
   id: string;
@@ -50,9 +52,19 @@ export function ProductsClient({ products, categories }: { products: Product[]; 
         title="Products & Stock"
         subtitle="What customers can order in the online shop. Stock is reserved when an order is placed and returned if it's cancelled."
         actions={
-          <button className={btn("primary")} onClick={() => setEditing("new")}>
-            <Plus className="size-4" /> Add product
-          </button>
+          <>
+            {products.length > 0 && (
+              <button className={btn("secondary")} onClick={() => exportCsv(products)} title="Edit in Excel and import again to update in bulk">
+                <Download className="size-4" /> Export CSV
+              </button>
+            )}
+            <Link href="/admin/products/import" className={btn("secondary")}>
+              <FileUp className="size-4" /> Import
+            </Link>
+            <button className={btn("primary")} onClick={() => setEditing("new")}>
+              <Plus className="size-4" /> Add product
+            </button>
+          </>
         }
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -69,7 +81,11 @@ export function ProductsClient({ products, categories }: { products: Product[]; 
       {products.length === 0 ? (
         <Card>
           <EmptyState icon={PackagePlus} title="No products yet">
-            Add your range so customers can order online.
+            Add your range so customers can order online, one by one or{" "}
+            <Link href="/admin/products/import" className="font-medium text-blue-700 hover:underline">
+              all at once from a spreadsheet
+            </Link>
+            .
           </EmptyState>
         </Card>
       ) : (
@@ -140,6 +156,18 @@ export function ProductsClient({ products, categories }: { products: Product[]; 
       <Toast toast={toast} onDone={() => setToast(null)} />
     </>
   );
+}
+
+/** Same columns as the import template, so the file can be edited in Excel and imported back. */
+function exportCsv(products: Product[]) {
+  const yn = (b: boolean) => (b ? "yes" : "no");
+  const csv = toCsv([
+    TEMPLATE_HEADERS,
+    ...products.map((p) => [p.sku, p.name, (p.priceCents / 100).toFixed(2), p.category, p.packSize, p.unit, p.minQty, p.stock, p.barcode ?? "", p.description, yn(p.gst), yn(p.featured), yn(p.active)]),
+  ]);
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  Object.assign(document.createElement("a"), { href: url, download: `foodpac-products-${new Date().toISOString().slice(0, 10)}.csv` }).click();
+  URL.revokeObjectURL(url);
 }
 
 function StockAdjust({ id, onResult }: { id: string; onResult: (t: ToastMessage) => void }) {
