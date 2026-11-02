@@ -40,11 +40,11 @@ export default async function DashboardPage() {
     .limit(8);
 
   const plan = view.plan;
-  const dispatched = plan?.status === "dispatched";
+  const dispatched = plan?.status === "dispatched" || view.routes.some((r) => r.dispatchedAt);
   const count = (st: string) => dayOrders.filter((o) => o.status === st).length;
   const delivered = count("delivered");
   const failed = count("failed");
-  const outForDelivery = dispatched ? view.routes.reduce((a, r) => a + r.stops.filter((x) => x.status === "pending").length, 0) : 0;
+  const outForDelivery = view.routes.filter((r) => r.dispatchedAt).reduce((a, r) => a + r.stops.filter((x) => x.status === "pending").length, 0);
   const activeDrivers = view.routes.filter((r) => r.status === "in_progress").length;
   const notLocated = dayOrders.filter((o) => o.geocodeStatus !== "ok" && o.status !== "delivered").length;
 

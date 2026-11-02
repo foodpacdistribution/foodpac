@@ -47,7 +47,7 @@ export default async function DriversPage() {
                 done: own.filter((x) => x.status !== "pending").length,
                 endS: route.endS,
                 status: route.status,
-                dispatched: plan!.status === "dispatched",
+                dispatched: !!route.dispatchedAt,
               }
             : null,
         };

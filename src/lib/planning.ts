@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { type DB, getDb } from "./db";
 import {
   depots,
@@ -101,6 +101,10 @@ export type RouteView = {
   depotId: string | null;
   status: "planned" | "in_progress" | "completed";
   startedAt: string | null;
+  /** Shipment number (SH-1001). */
+  number: string;
+  /** When it was sent to the driver; null = not visible on their phone yet. */
+  dispatchedAt: string | null;
   geometry: [number, number][] | null;
   stops: StopView[];
 };
@@ -186,6 +190,8 @@ export async function getPlanView(db: DB, date: string): Promise<PlanView> {
       depotId: driver.depotId,
       status: route.status,
       startedAt: route.startedAt?.toISOString() ?? null,
+      number: route.number,
+      dispatchedAt: route.dispatchedAt?.toISOString() ?? null,
       geometry: route.geometry,
       stops: stopRows
         .filter((r) => r.stop.routeId === route.id)
@@ -232,6 +238,23 @@ export async function getPlanView(db: DB, date: string): Promise<PlanView> {
 // ---------------------------------------------------------------------------
 // Summaries
 // ---------------------------------------------------------------------------
+
+/** Recomputes a plan's summary from its stored routes (after a single route changes, e.g. a shipment). */
+export async function refreshPlanSummary(db: Pick<DB, "select" | "update">, planId: string, date: string) {
+  const rs = await db.select().from(routes).where(eq(routes.planId, planId));
+  const stops = rs.length
+    ? await db.select({ routeId: routeStops.routeId, lateS: routeStops.lateS }).from(routeStops).where(inArray(routeStops.routeId, rs.map((r) => r.id)))
+    : [];
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(orders)
+    .where(and(eq(orders.deliveryDate, date), inArray(orders.status, ["pending", "planned", "dispatched", "delivered", "failed"])));
+  const totals: RouteTotals[] = rs.map((r) => {
+    const own = stops.filter((st) => st.routeId === r.id);
+    return { startS: r.startS, endS: r.endS, distanceM: r.distanceM, driveS: r.driveS, serviceS: r.serviceS, waitS: r.waitS, overtimeS: r.overtimeS, lateStops: own.filter((st) => st.lateS > 0).length, stops: own.length };
+  });
+  await db.update(plans).set({ summary: summarise(totals, n), updatedAt: new Date() }).where(eq(plans.id, planId));
+}
 
 type RouteTotals = {
   startS: number;
@@ -697,10 +720,12 @@ async function persistPlan(
             : {}
           : { status: "completed" as const, completedAt: new Date() }),
       };
+      // Re-planning a day that's already with the drivers keeps every route on their phones.
+      const sent = plan.status === "dispatched" ? { dispatchedAt: sql`coalesce(${routes.dispatchedAt}, now())` } : {};
       const [route] = await tx
         .insert(routes)
-        .values({ planId: plan.id, driverId: ev.vehicleId, ...values })
-        .onConflictDoUpdate({ target: [routes.planId, routes.driverId], set: values })
+        .values({ planId: plan.id, driverId: ev.vehicleId, ...values, ...(plan.status === "dispatched" ? { dispatchedAt: new Date() } : {}) })
+        .onConflictDoUpdate({ target: [routes.planId, routes.driverId], set: { ...values, ...sent } })
         .returning();
       keepRoutes.add(route.id);
 
@@ -815,6 +840,10 @@ export async function setPlanDispatched(date: string, dispatched: boolean) {
       .set({ status: dispatched ? "dispatched" : "draft", dispatchedAt: dispatched ? new Date() : null, updatedAt: new Date() })
       .where(eq(plans.id, plan.id));
     if (routeIds.length) {
+      await tx
+        .update(routes)
+        .set({ dispatchedAt: dispatched ? sql`coalesce(${routes.dispatchedAt}, now())` : null })
+        .where(inArray(routes.id, routeIds));
       const stopOrders = await tx
         .select({ orderId: routeStops.orderId })
         .from(routeStops)

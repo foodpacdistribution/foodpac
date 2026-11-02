@@ -29,7 +29,7 @@ async function ownStop(stopId: string) {
     .innerJoin(plans, eq(plans.id, routes.planId))
     .where(and(eq(routeStops.id, stopId), eq(routes.driverId, user.driverId)))
     .limit(1);
-  if (!row || row.plan.status !== "dispatched") throw new UserError("This stop isn't assigned to you.");
+  if (!row || !row.route.dispatchedAt) throw new UserError("This stop isn't assigned to you.");
   return { db, user, ...row };
 }
 
@@ -42,7 +42,7 @@ export async function startRoute(routeId: string) {
       .from(routes)
       .where(and(eq(routes.id, routeId), eq(routes.driverId, user.driverId ?? "")))
       .limit(1);
-    if (!route) throw new UserError("Route not found.");
+    if (!route || !route.dispatchedAt) throw new UserError("Route not found.");
     if (route.status === "planned") {
       await db.update(routes).set({ status: "in_progress", startedAt: new Date() }).where(eq(routes.id, routeId));
       const [first] = await db.select().from(routeStops).where(eq(routeStops.routeId, routeId)).limit(1);

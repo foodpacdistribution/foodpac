@@ -14,7 +14,7 @@ export default async function DriverPage() {
   const today = todayIn(s.timezone);
   const view = await getPlanView(db, today);
   // Drivers only ever receive their own route, and only once it has been dispatched.
-  const route = view.plan?.status === "dispatched" ? (view.routes.find((r) => r.driverId === user.driverId) ?? null) : null;
+  const route = view.routes.find((r) => r.driverId === user.driverId && r.dispatchedAt) ?? null;
   const depot = depotFor(await getDepots(db), route?.depotId);
 
   return (

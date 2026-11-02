@@ -158,8 +158,8 @@ export function OrdersClient(props: {
           <div className="flex items-center gap-2.5 text-sm text-blue-950">
             <Send className="size-4 shrink-0 text-blue-600" />
             <span>
-              <strong>{notSent}</strong> order{notSent === 1 ? " isn't" : "s aren't"} on a driver&apos;s phone yet. Drivers receive orders once the day&apos;s route is
-              planned and dispatched{props.depots.length === 0 ? ", which needs a depot (where routes start)" : ""}.
+              <strong>{notSent}</strong> order{notSent === 1 ? " isn't" : "s aren't"} on a driver&apos;s phone yet. Drivers receive orders once they&apos;re on a shipment (or
+              the day&apos;s plan) that has been sent to them{props.depots.length === 0 ? ", which needs a depot (where routes start)" : ""}.
             </span>
           </div>
           {props.depots.length === 0 ? (
@@ -167,9 +167,14 @@ export function OrdersClient(props: {
               Add a depot
             </Link>
           ) : (
-            <Link href={`/admin/planner?date=${date}`} className={btn("primary", "sm")}>
-              <Send className="size-4" /> Plan &amp; dispatch
-            </Link>
+            <div className="flex gap-2">
+              <Link href={`/admin/planner?date=${date}`} className={btn("secondary", "sm")}>
+                Route Planner
+              </Link>
+              <Link href={`/admin/shipments?date=${date}`} className={btn("primary", "sm")}>
+                <Send className="size-4" /> Create shipments
+              </Link>
+            </div>
           )}
         </Card>
       )}

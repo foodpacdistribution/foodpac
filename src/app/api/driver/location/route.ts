@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { plans, routes, vehicleLocations } from "@/lib/db/schema";
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     .select({ id: routes.id, status: routes.status })
     .from(routes)
     .innerJoin(plans, eq(plans.id, routes.planId))
-    .where(and(eq(plans.deliveryDate, todayIn(s.timezone)), eq(plans.status, "dispatched"), eq(routes.driverId, user.driverId)))
+    .where(and(eq(plans.deliveryDate, todayIn(s.timezone)), isNotNull(routes.dispatchedAt), eq(routes.driverId, user.driverId)))
     .limit(1);
   if (!route || route.status !== "in_progress") {
     return Response.json({ tracking: false, reason: route?.status === "completed" ? "route_completed" : "route_not_started" }, { status: 409 });

@@ -19,7 +19,7 @@ export default async function TrackingPage() {
   const today = todayIn(s.timezone);
   const nowS = nowSecondsIn(s.timezone);
   const [view, depotList] = await Promise.all([getPlanView(db, today), getDepots(db)]);
-  const routes = view.plan?.status === "dispatched" ? view.routes : [];
+  const routes = view.routes.filter((r) => r.dispatchedAt);
   const live = await liveFleet(db, routes);
 
   const rows = routes.map((r) => {

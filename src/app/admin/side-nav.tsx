@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Boxes, Building2, Inbox, LayoutDashboard, Map, Package, Radio, Settings, ShoppingBag, Truck, Zap } from "lucide-react";
+import { BarChart3, Boxes, Building2, Inbox, LayoutDashboard, Map, Package, PackageCheck, Radio, Settings, ShoppingBag, Truck, Zap } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LinkPending } from "@/components/client-ui";
@@ -20,6 +20,7 @@ const SECTIONS = [
     title: "Delivery",
     items: [
       { href: "/admin/orders", label: "Delivery Orders", icon: Package },
+      { href: "/admin/shipments", label: "Shipments", icon: PackageCheck },
       { href: "/admin/planner", label: "Route Planner", icon: Map },
       { href: "/quick-route", label: "Quick Route", icon: Zap },
       { href: "/admin/tracking", label: "Live Tracking", icon: Radio },
@@ -68,17 +69,17 @@ export function SideNav({ role, mobile, newEnquiries = 0 }: { role: Role; mobile
   }
 
   return (
-    <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
+    <nav className="flex-1 space-y-3.5 overflow-y-auto px-3 py-2">
       {sections.map((section) => (
         <div key={section.title}>
-          <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{section.title}</p>
+          <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{section.title}</p>
           <div className="space-y-0.5">
             {section.items.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
                 className={cx(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors",
                   isActive(href) ? "bg-blue-600 text-white shadow-sm" : "hover:bg-white/5 hover:text-white",
                 )}
               >

@@ -33,7 +33,7 @@ type StopRow = {
 function stageOf(status: OrderStatus, s: StopRow | undefined): PortalStage {
   if (status === "delivered") return "delivered";
   if (status === "failed") return "failed";
-  if (s && s.plan.status === "dispatched" && s.route.status === "in_progress" && s.stop.status === "pending") return "out_for_delivery";
+  if (s && s.route.dispatchedAt && s.route.status === "in_progress" && s.stop.status === "pending") return "out_for_delivery";
   if (status === "planned" || status === "dispatched") return "scheduled";
   return "received";
 }
@@ -82,7 +82,7 @@ export async function listPortalOrders(db: DB, customerId: string, today: string
   const stops = await stopsFor(db, rows);
   return rows.map((o) => {
     const s = stops.get(o.id);
-    const dispatched = s?.plan.status === "dispatched";
+    const dispatched = !!s?.route.dispatchedAt;
     return {
       id: o.id,
       orderNumber: o.orderNumber,
@@ -107,7 +107,7 @@ export async function getPortalOrder(db: DB, customerId: string, orderId: string
   if (!o) return null;
   const s = (await stopsFor(db, [o])).get(o.id);
   const stage = stageOf(o.status, s);
-  const dispatched = s?.plan.status === "dispatched";
+  const dispatched = !!s?.route.dispatchedAt;
   const live = s && dispatched ? await liveEta(db, s, timeZone) : null;
 
   const events = await db.select().from(deliveryEvents).where(eq(deliveryEvents.orderId, o.id)).orderBy(desc(deliveryEvents.createdAt));

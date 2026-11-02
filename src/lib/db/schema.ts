@@ -231,6 +231,8 @@ export const plans = pgTable("plans", {
 });
 
 export type RouteStatus = "planned" | "in_progress" | "completed";
+
+export const shipmentNo = pgSequence("shipment_no", { startWith: 1001 });
 export type RouteReload = { afterSeq: number; arrivalS: number; departureS: number };
 
 export const routes = pgTable(
@@ -260,8 +262,12 @@ export const routes = pgTable(
     status: text("status").$type<RouteStatus>().notNull().default("planned"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    /** Shipment number on the driver's docket, e.g. SH-1001. */
+    number: text("number").notNull().default(sql`'SH-' || nextval('shipment_no')`),
+    /** When this route was sent to the driver's phone (per shipment, or for the whole day from the planner). */
+    dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
   },
-  (t) => [uniqueIndex("routes_plan_driver_uq").on(t.planId, t.driverId)],
+  (t) => [uniqueIndex("routes_plan_driver_uq").on(t.planId, t.driverId), uniqueIndex("routes_number_uq").on(t.number)],
 );
 
 export type StopStatus = "pending" | "delivered" | "failed";
