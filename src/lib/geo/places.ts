@@ -61,22 +61,46 @@ async function googleSuggest(q: string, near: Near, session: string, key: string
       includedRegionCodes: ["au"],
       languageCode: "en-AU",
       ...(session && { sessionToken: session }),
-      ...(near && { locationBias: { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: 50_000 } } }),
+      ...(near && {
+        locationBias: { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: 50_000 } },
+        origin: { latitude: near.lat, longitude: near.lng },
+      }),
     }),
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const body = (await res.json()) as {
-    suggestions?: { placePrediction?: { placeId: string; text: { text: string }; structuredFormat?: { mainText: { text: string }; secondaryText?: { text: string } } } }[];
+    suggestions?: {
+      placePrediction?: { placeId: string; distanceMeters?: number; text: { text: string }; structuredFormat?: { mainText: { text: string }; secondaryText?: { text: string } } };
+    }[];
   };
-  return (body.suggestions ?? [])
+  const list = (body.suggestions ?? [])
     .map((s) => s.placePrediction)
     .filter((p): p is NonNullable<typeof p> => !!p)
-    .slice(0, 6)
     .map((p) => {
       const text = p.text.text.replace(/, Australia$/, "");
-      return { id: `g:${p.placeId}`, main: p.structuredFormat?.mainText.text ?? text, secondary: (p.structuredFormat?.secondaryText?.text ?? "").replace(/, Australia$/, ""), text };
+      const main = p.structuredFormat?.mainText.text ?? text;
+      const secondary = (p.structuredFormat?.secondaryText?.text ?? "").replace(/, Australia$/, "");
+      return { s: { id: `g:${p.placeId}`, main, secondary, text }, score: suburbMatch(q, main, secondary), dist: p.distanceMeters ?? Infinity };
     });
+  // Google sometimes ranks a far-away suburb first ("100 Queen St Bris" → Goodna). Put suggestions
+  // whose suburb matches the extra words typed first, then the nearest; otherwise keep its order.
+  return list
+    .map((x, i) => ({ ...x, i }))
+    .sort((a, b) => b.score - a.score || a.dist - b.dist || a.i - b.i)
+    .slice(0, 6)
+    .map((x) => x.s);
+}
+
+/** How many typed words (beyond the street part) start a word in the suburb/state text. */
+function suburbMatch(q: string, main: string, secondary: string) {
+  const mainWords = new Set(main.toLowerCase().split(/[^a-z0-9]+/));
+  const words = secondary.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return q
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2 && !/^\d/.test(t) && !mainWords.has(t))
+    .filter((t) => words.some((w) => w.startsWith(t))).length;
 }
 
 const STATE_ABBR: Record<string, string> = {
