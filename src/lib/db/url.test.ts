@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { databaseUrl, supabaseAddressProblem } from "./url";
+import { databaseUrl, passwordProblem, supabaseAddressProblem } from "./url";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -27,5 +27,19 @@ describe("supabaseAddressProblem", () => {
     expect(supabaseAddressProblem("postgres://postgres:x@db.xkbxnronqrlremqunzpz.supabase.co:5432/postgres")).toContain("IPv6");
     expect(supabaseAddressProblem("postgres://postgres.xkbxnronqrlremqunzpz:x@aws-0-eu-west-1.pooler.supabase.com:6543/postgres")).toBeNull();
     expect(supabaseAddressProblem("postgres://u:p@ep-cool.neon.tech/db")).toBeNull();
+  });
+});
+
+describe("passwordProblem", () => {
+  const url = (pw: string) => `postgresql://postgres.ref:${pw}@aws-0-eu-west-1.pooler.supabase.com:6543/postgres`;
+  it("spots placeholders, API keys and missing passwords", () => {
+    expect(passwordProblem(url("[YOUR-PASSWORD]"))).toContain("placeholder");
+    expect(passwordProblem(url("[s3cret]"))).toContain("placeholder");
+    expect(passwordProblem(url("sb_secret_abc"))).toContain("API key");
+    expect(passwordProblem("postgresql://postgres.ref@host:6543/postgres")).toContain("no password");
+  });
+  it("accepts a real (encoded) password", () => {
+    expect(passwordProblem(url("Gh7kLm2Qp9"))).toBeNull();
+    expect(passwordProblem(url("p%40ss%23word"))).toBeNull();
   });
 });

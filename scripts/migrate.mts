@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { hashPassword } from "../src/lib/auth/password";
-import { databaseUrl, supabaseAddressProblem } from "../src/lib/db/url";
+import { databaseUrl, passwordProblem, supabaseAddressProblem } from "../src/lib/db/url";
 
 const url = databaseUrl();
 if (!url) {
@@ -13,14 +13,31 @@ if (!url) {
   process.exit(1);
 }
 
-const problem = supabaseAddressProblem(url);
+const problem = supabaseAddressProblem(url) ?? passwordProblem(url);
 if (problem) {
   console.error(problem);
   process.exit(1);
 }
 
 const client = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
-await migrate(drizzle(client), { migrationsFolder: "drizzle" });
+try {
+  await migrate(drizzle(client), { migrationsFolder: "drizzle" });
+} catch (err) {
+  const code = (err as { cause?: { code?: string } }).cause?.code;
+  if (code === "28P01") {
+    console.error(
+      [
+        "The database rejected the password in DATABASE_URL. Check that:",
+        "- it's the database password (Supabase → Project Settings → Database), not an API key;",
+        "- the [YOUR-PASSWORD] placeholder and its brackets are gone;",
+        "- @ # / ? : % in the password are written as %40 %23 %2F %3F %3A %25;",
+        "- if you just reset the password, wait a minute and redeploy.",
+      ].join("\n"),
+    );
+    process.exit(1);
+  }
+  throw err;
+}
 await client`insert into settings (id) values (1) on conflict do nothing`;
 
 // First deploy: create the first admin from ADMIN_EMAIL / ADMIN_PASSWORD if there is no admin yet.

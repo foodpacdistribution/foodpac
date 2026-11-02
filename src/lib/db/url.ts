@@ -35,3 +35,21 @@ export function supabaseAddressProblem(url: string): string | null {
     `postgresql://postgres.${m[1]}:YOUR-PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres`,
   ].join("\n");
 }
+
+/** Catches the usual copy-paste mistakes in the password part of the connection string. */
+export function passwordProblem(url: string): string | null {
+  let pw: string;
+  try {
+    pw = decodeURIComponent(new URL(url).password);
+  } catch {
+    return "DATABASE_URL isn't a valid address. If the password contains @ # / ? : or %, write them as %40 %23 %2F %3F %3A %25.";
+  }
+  if (!pw) return "DATABASE_URL has no password. Add your Supabase database password after the user name: postgres.<ref>:PASSWORD@…";
+  if (/[[\]]/.test(pw) || /your[-_ ]?(db[-_ ]?)?password/i.test(pw)) {
+    return "DATABASE_URL still contains the placeholder. Replace [YOUR-PASSWORD] (including the square brackets) with your database password.";
+  }
+  if (/^(sb_(secret|publishable)_|eyJ)/.test(pw)) {
+    return "The password in DATABASE_URL is a Supabase API key. Use the database password instead (Supabase → Project Settings → Database).";
+  }
+  return null;
+}
