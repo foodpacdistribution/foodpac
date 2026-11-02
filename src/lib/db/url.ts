@@ -15,3 +15,23 @@ export function databaseUrl(): string | undefined {
     return raw;
   }
 }
+
+/**
+ * Supabase's project address and its direct database address (db.<ref>.supabase.co, IPv6 only)
+ * can't be reached from Vercel. Returns a message pointing at the pooler address instead.
+ */
+export function supabaseAddressProblem(url: string): string | null {
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return null;
+  }
+  const m = /^(?:db\.)?([a-z0-9]{20})\.supabase\.co$/.exec(host);
+  if (!m) return null;
+  return [
+    `DATABASE_URL points at ${host}, which Vercel can't reach (it's Supabase's ${host.startsWith("db.") ? "direct, IPv6-only database address" : "API address, not a database"}).`,
+    "Use the pooler address instead: Supabase → Connect → Transaction pooler, e.g.",
+    `postgresql://postgres.${m[1]}:YOUR-PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres`,
+  ].join("\n");
+}

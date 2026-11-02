@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { databaseUrl } from "./url";
+import { databaseUrl, supabaseAddressProblem } from "./url";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -18,5 +18,14 @@ describe("databaseUrl", () => {
     vi.stubEnv("DATABASE_URL", "");
     vi.stubEnv("POSTGRES_URL", "postgres://u:p%40ss@aws.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x");
     expect(databaseUrl()).toBe("postgres://u:p%40ss@aws.pooler.supabase.com:6543/postgres?sslmode=require");
+  });
+});
+
+describe("supabaseAddressProblem", () => {
+  it("flags Supabase's API and direct database addresses but not the pooler", () => {
+    expect(supabaseAddressProblem("postgres://postgres:x@xkbxnronqrlremqunzpz.supabase.co:5432/postgres")).toContain("pooler");
+    expect(supabaseAddressProblem("postgres://postgres:x@db.xkbxnronqrlremqunzpz.supabase.co:5432/postgres")).toContain("IPv6");
+    expect(supabaseAddressProblem("postgres://postgres.xkbxnronqrlremqunzpz:x@aws-0-eu-west-1.pooler.supabase.com:6543/postgres")).toBeNull();
+    expect(supabaseAddressProblem("postgres://u:p@ep-cool.neon.tech/db")).toBeNull();
   });
 });
