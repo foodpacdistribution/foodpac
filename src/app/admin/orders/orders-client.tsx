@@ -32,6 +32,8 @@ type Driver = { id: string; name: string; color: string };
 type Depot = { id: string; name: string };
 
 export function OrdersClient(props: {
+  /** Admins can also delete delivered orders (test data). */
+  isAdmin: boolean;
   date: string;
   today: string;
   status: string;
@@ -234,9 +236,16 @@ export function OrdersClient(props: {
               className={btn("danger", "sm")}
               disabled={pending}
               onClick={() => {
-                if (!confirm(`Delete ${selected.size} order(s)? This also removes them from any plan.`)) return;
+                const done = orders.filter((o) => selected.has(o.id) && (o.status === "delivered" || o.status === "failed")).length;
+                const includeCompleted = done > 0 && props.isAdmin;
+                const message = !done
+                  ? `Delete ${selected.size} order(s)? This also removes them from any plan or shipment.`
+                  : props.isAdmin
+                    ? `Delete ${selected.size} order(s), including ${done} already delivered or failed?\n\nThis permanently removes their delivery records, photos and signatures. Use it for test data only.`
+                    : `${done} of these are already delivered or failed and will be kept (only an admin can delete them). Delete the other ${selected.size - done}?`;
+                if (!confirm(message)) return;
                 startTransition(async () => {
-                  report(await deleteOrders([...selected]));
+                  report(await deleteOrders([...selected], { includeCompleted }));
                   setSelected(new Set());
                   router.refresh();
                 });

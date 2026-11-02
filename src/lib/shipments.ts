@@ -223,3 +223,17 @@ export async function readyToShip(db: DB, date: string) {
     paymentStatus: so?.paymentStatus ?? null,
   }));
 }
+
+/** After orders are deleted: drop routes left with no stops and refresh those days' totals. */
+export async function pruneEmptyRoutes(db: DB, dates: string[]) {
+  if (!dates.length) return;
+  const ps = await db.select().from(plans).where(inArray(plans.deliveryDate, [...new Set(dates)]));
+  for (const p of ps) {
+    const rs = await db.select({ id: routes.id }).from(routes).where(eq(routes.planId, p.id));
+    for (const r of rs) {
+      const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(routeStops).where(eq(routeStops.routeId, r.id));
+      if (n === 0) await db.delete(routes).where(eq(routes.id, r.id));
+    }
+    await refreshPlanSummary(db, p.id, p.deliveryDate);
+  }
+}

@@ -11,7 +11,7 @@ import { databaseUrl } from "@/lib/db/url";
 export const metadata: Metadata = { title: "Orders" };
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireUser(STAFF);
+  const me = await requireUser(STAFF);
   const sp = await searchParams;
   const db = await getDb();
   const s = await getSettings(db);
@@ -34,6 +34,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
 
   return (
     <OrdersClient
+      isAdmin={me.role === "admin"}
       date={date}
       today={todayIn(s.timezone)}
       status={status ?? ""}

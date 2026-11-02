@@ -1,9 +1,9 @@
 "use client";
 
-import { CheckCircle2, Clock, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, UserRound, Warehouse, Zap } from "lucide-react";
+import { CheckCircle2, ChevronDown, Clock, History, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useCallback, useEffect, useState, useTransition } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { logout } from "@/app/actions/auth";
 import { markDelivered, markFailed, startRoute } from "@/app/actions/driver";
 import { FormError, Modal, SubmitButton, Toast, type ToastMessage } from "@/components/client-ui";
@@ -52,6 +52,11 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
 
   const stops = route?.stops ?? [];
   const pendingStops = stops.filter((s) => s.status === "pending");
+  const completedStops = stops.filter((s) => s.status !== "pending");
+  const [cleared, setCleared] = useClearedStops(date);
+  const [showDone, setShowDone] = useState(false);
+  const visibleDone = completedStops.filter((s) => !cleared.has(s.id));
+  const lastDoneAt = completedStops.map((s) => s.completedAt).filter(Boolean).sort().at(-1);
   const doneCount = stops.length - pendingStops.length;
   const current: StopView | undefined = pendingStops.find((s) => s.id === selectedId) ?? pendingStops[0];
   const openSheet = (kind: "delivered" | "failed") =>
@@ -88,12 +93,6 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
           </h1>
         </div>
         <div className="flex gap-2">
-          <Link href="/quick-route" className="flex h-9 items-center gap-1.5 rounded-full bg-white/10 px-3 text-xs font-medium text-slate-200">
-            <Zap className="size-3.5" /> Quick route
-          </Link>
-          <Link href="/account" className="grid size-9 place-items-center rounded-full bg-white/10 text-slate-300" aria-label="Profile & password">
-            <UserRound className="size-4" />
-          </Link>
           <form action={logout}>
             <button className="grid size-9 place-items-center rounded-full bg-white/10 text-slate-300" aria-label="Sign out">
               <LogOut className="size-4" />
@@ -114,9 +113,14 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
             <p className="mt-3 font-semibold text-slate-900">{linked ? "No deliveries dispatched yet" : "Account not linked"}</p>
             <p className="mt-1 text-sm text-slate-500">
               {linked
-                ? "Your route appears here as soon as dispatch sends today's plan. This page refreshes automatically."
+                ? "Your shipment appears here as soon as the office sends it. This page refreshes automatically."
                 : "Ask your dispatcher to link your login to your driver profile."}
             </p>
+            {linked && (
+              <Link href="/driver/history" className={btn("secondary", "md", "mt-5 rounded-xl")}>
+                <History className="size-4" /> Past deliveries
+              </Link>
+            )}
           </div>
         </main>
       </div>
@@ -260,10 +264,31 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
             </div>
           </section>
         ) : (
-          <section className="rounded-2xl bg-white p-8 text-center shadow-card">
+          <section className="rounded-2xl bg-white p-6 text-center shadow-card">
             <CheckCircle2 className="mx-auto size-12 animate-check text-emerald-500" />
             <p className="mt-3 text-lg font-semibold">All stops completed</p>
             <p className="mt-1 text-sm text-slate-500">Great work today. Drive safely back to {depot?.name ?? "the depot"}.</p>
+            <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 py-3">
+              <div>
+                <p className="text-xl font-semibold tabular-nums text-emerald-600">{completedStops.filter((s) => s.status === "delivered").length}</p>
+                <p className="text-[11px] text-slate-500">Delivered</p>
+              </div>
+              <div>
+                <p className={cx("text-xl font-semibold tabular-nums", completedStops.some((s) => s.status === "failed") ? "text-red-600" : "text-slate-900")}>
+                  {completedStops.filter((s) => s.status === "failed").length}
+                </p>
+                <p className="text-[11px] text-slate-500">Problems</p>
+              </div>
+              <div>
+                <p className="text-xl font-semibold tabular-nums text-slate-900">
+                  {lastDoneAt ? new Date(lastDoneAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }) : "—"}
+                </p>
+                <p className="text-[11px] text-slate-500">Finished</p>
+              </div>
+            </div>
+            <Link href="/driver/history" className={btn("secondary", "md", "mt-4 w-full rounded-xl")}>
+              <History className="size-4" /> View delivery history
+            </Link>
           </section>
         )}
 
@@ -297,9 +322,12 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
 
         {/* All stops */}
         <section className="overflow-hidden rounded-2xl bg-white shadow-card">
-          <h3 className="border-b border-line px-4 py-2.5 text-sm font-semibold text-slate-900">Today&apos;s stops</h3>
+          <h3 className="border-b border-line px-4 py-2.5 text-sm font-semibold text-slate-900">
+            {pendingStops.length ? `To deliver · ${pendingStops.length}` : "Today's stops"}
+          </h3>
+          {pendingStops.length === 0 && <p className="px-4 py-3 text-sm text-slate-500">Nothing left to deliver.</p>}
           <ol className="divide-y divide-line">
-            {stops.map((s) => {
+            {pendingStops.map((s) => {
               const isCurrent = s.id === current?.id;
               const reload = route.reloads.find((r) => r.afterSeq === s.seq);
               return (
@@ -358,6 +386,63 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
             })}
           </ol>
         </section>
+
+        {completedStops.length > 0 && (
+          <section className="overflow-hidden rounded-2xl bg-white shadow-card">
+            <button
+              onClick={() => setShowDone(!showDone)}
+              className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm font-semibold text-slate-900"
+              aria-expanded={showDone || !pendingStops.length}
+            >
+              <span>
+                Completed · {completedStops.length}
+                {cleared.size > 0 && <span className="ml-1.5 text-xs font-normal text-slate-400">({completedStops.length - visibleDone.length} cleared)</span>}
+              </span>
+              <ChevronDown className={cx("size-4 text-slate-400 transition-transform", (showDone || !pendingStops.length) && "rotate-180")} />
+            </button>
+            {(showDone || !pendingStops.length) && (
+              <>
+                {visibleDone.length > 0 && (
+                  <ol className="divide-y divide-line border-t border-line">
+                    {visibleDone.map((s) => (
+                      <li key={s.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <span className={cx("grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white", s.status === "delivered" ? "bg-emerald-500" : "bg-red-500")}>
+                          {s.status === "delivered" ? "✓" : "!"}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm text-slate-500">{s.order.customerName || s.order.orderNumber}</span>
+                          <span className="block truncate text-xs text-slate-400">{s.order.address}</span>
+                        </span>
+                        <Badge tone={s.status === "delivered" ? "green" : "red"}>{s.status === "delivered" ? "Delivered" : "Problem"}</Badge>
+                        <button
+                          onClick={() => setCleared(new Set([...cleared, s.id]))}
+                          className="grid size-8 place-items-center rounded-full text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+                          aria-label={`Clear ${s.order.customerName || s.order.orderNumber} from my list`}
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-2.5">
+                  {visibleDone.length > 0 ? (
+                    <button onClick={() => setCleared(new Set(completedStops.map((s) => s.id)))} className="text-xs font-medium text-slate-500 hover:text-slate-800">
+                      Clear all from my list
+                    </button>
+                  ) : (
+                    <button onClick={() => setCleared(new Set())} className="text-xs font-medium text-slate-500 hover:text-slate-800">
+                      Show cleared stops
+                    </button>
+                  )}
+                  <Link href="/driver/history" className="flex items-center gap-1 text-xs font-medium text-blue-600">
+                    <History className="size-3.5" /> History
+                  </Link>
+                </div>
+              </>
+            )}
+          </section>
+        )}
       </main>
 
       <Modal open={sheet?.kind === "delivered"} onClose={() => setSheet(null)} title="Confirm delivery">
@@ -497,4 +582,41 @@ function OutcomeForm({
       </SubmitButton>
     </form>
   );
+}
+
+/**
+ * Completed stops the driver cleared from today's list. Only hidden on this phone: the delivery
+ * record, photo and signature stay in History and with the office.
+ */
+function useClearedStops(date: string): [Set<string>, (next: Set<string>) => void] {
+  const key = `dp.cleared.${date}`;
+  // Read through useSyncExternalStore so the server render (nothing cleared) and the phone agree.
+  const raw = useSyncExternalStore(
+    (onChange) => {
+      window.addEventListener("dp:cleared", onChange);
+      window.addEventListener("storage", onChange);
+      return () => {
+        window.removeEventListener("dp:cleared", onChange);
+        window.removeEventListener("storage", onChange);
+      };
+    },
+    () => {
+      try {
+        return localStorage.getItem(key) ?? "[]";
+      } catch {
+        return "[]";
+      }
+    },
+    () => "[]",
+  );
+  const cleared = useMemo(() => new Set(JSON.parse(raw) as string[]), [raw]);
+  const set = (next: Set<string>) => {
+    try {
+      localStorage.setItem(key, JSON.stringify([...next]));
+    } catch {
+      // Storage blocked: nothing to remember.
+    }
+    window.dispatchEvent(new Event("dp:cleared"));
+  };
+  return [cleared, set];
 }

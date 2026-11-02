@@ -8,6 +8,7 @@ import { getDb } from "@/lib/db";
 import { insertDemoOrders } from "@/lib/db/seed";
 import { depots, orders, routeStops } from "@/lib/db/schema";
 import { geocodeAddress } from "@/lib/geo/geocode";
+import { pruneEmptyRoutes } from "@/lib/shipments";
 import { UserError } from "@/lib/planning";
 import { geocodeQuery, type ImportRow, validateImportRow } from "@/lib/orders";
 import { inputToMinutes } from "@/lib/time";
@@ -136,16 +137,28 @@ export async function geocodeOrders(ids: string[]) {
   });
 }
 
-export async function deleteOrders(ids: string[]) {
+/**
+ * Deletes orders. Delivered or failed ones carry the proof of delivery, so only admins can
+ * delete those (e.g. test data), and only when they explicitly include them.
+ */
+export async function deleteOrders(ids: string[], opts: { includeCompleted?: boolean } = {}) {
   return attempt(async () => {
-    await assertUser(STAFF);
+    const user = await assertUser(STAFF);
+    if (opts.includeCompleted && user.role !== "admin") throw new UserError("Only an admin can delete delivered orders.");
     const db = await getDb();
-    const rows = await db.select({ id: orders.id, status: orders.status }).from(orders).where(inArray(orders.id, ids));
-    const deletable = rows.filter((r) => r.status !== "delivered").map((r) => r.id);
-    if (deletable.length) await db.delete(orders).where(inArray(orders.id, deletable));
+    const rows = await db.select({ id: orders.id, status: orders.status, deliveryDate: orders.deliveryDate }).from(orders).where(inArray(orders.id, ids));
+    const completed = (r: { status: string }) => r.status === "delivered" || r.status === "failed";
+    const deletable = rows.filter((r) => opts.includeCompleted || !completed(r));
+    if (deletable.length) {
+      // Stops, delivery events and proof photos/signatures go with the order (foreign keys cascade).
+      await db.delete(orders).where(inArray(orders.id, deletable.map((r) => r.id)));
+      await pruneEmptyRoutes(db, deletable.map((r) => r.deliveryDate));
+    }
     revalidateAll();
+    revalidatePath("/admin/shipments");
+    revalidatePath("/driver");
     const skipped = rows.length - deletable.length;
-    return { message: `Deleted ${deletable.length} order(s)${skipped ? `, kept ${skipped} delivered` : ""}` };
+    return { message: `Deleted ${deletable.length} order(s)${skipped ? `, kept ${skipped} already delivered or failed` : ""}` };
   });
 }
 
