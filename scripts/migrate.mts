@@ -13,7 +13,7 @@ if (!url) {
   process.exit(1);
 }
 
-const client = postgres(url, { max: 1, prepare: false });
+const client = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
 await migrate(drizzle(client), { migrationsFolder: "drizzle" });
 await client`insert into settings (id) values (1) on conflict do nothing`;
 

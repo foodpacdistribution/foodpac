@@ -10,8 +10,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx scripts/migrate.ts",
-    "create-admin": "tsx scripts/create-admin.ts",
+    "db:migrate": "tsx scripts/migrate.mts",
+    "create-admin": "tsx scripts/create-admin.mts",
     "reset-local": "rm -rf .data/pglite"
   },
   "dependencies": {

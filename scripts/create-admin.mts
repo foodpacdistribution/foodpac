@@ -13,7 +13,7 @@ if (!url || !email || !name || !password || password.length < 8) {
   process.exit(1);
 }
 
-const client = postgres(url, { max: 1, prepare: false });
+const client = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
 const db = drizzle(client);
 const passwordHash = await hashPassword(password);
 await db
