@@ -50,6 +50,13 @@
       "when": 1793578985629,
       "tag": "0006_shop",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793586770854,
+      "tag": "0007_lock_down_data_api",
+      "breakpoints": true
     }
   ]
 }
