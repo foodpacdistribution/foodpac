@@ -95,7 +95,7 @@ Each email gets 5 sign-in attempts and each IP gets 30 per 15 minutes. After tha
 
 ## Production setup
 
-1. Postgres: create a Supabase or Neon database and set `DATABASE_URL`. Then run:
+1. Postgres: create a Supabase or Neon database and set `DATABASE_URL`. On Vercel, migrations run automatically before each build, and the first admin is created from `ADMIN_EMAIL` / `ADMIN_PASSWORD` (optional `ADMIN_NAME`) if none exists. Elsewhere, run:
    ```bash
    npm run db:migrate
    npm run create-admin -- you@company.com "Your Name" 'a-long-password'
@@ -146,7 +146,7 @@ See `.env.example` for every variable.
   - push orders with `POST /api/v1/orders` (create or update, matched by order number + date)
   - read delivery status, recipient and failure reason with `GET /api/v1/orders?date=`
   - cancel with `DELETE /api/v1/orders/{orderNumber}?date=`
-- **Scheduled feeds.** Point at a CSV/JSON URL your system exports to. Columns are mapped automatically or with a JSON mapping. Pull it with *Sync now*, or every 15 minutes via Vercel Cron (`vercel.json`, needs `CRON_SECRET`).
+- **Scheduled feeds.** Point at a CSV/JSON URL your system exports to. Columns are mapped automatically or with a JSON mapping. Pull it with *Sync now*, or on a schedule via Vercel Cron (`vercel.json`, needs `CRON_SECRET`). The default is once a day at 5am Brisbane time (19:00 UTC), the most often Vercel's free plan allows; on Pro, change it to `*/15 * * * *` for every 15 minutes.
 - Orders already planned or out for delivery are never changed by a sync; they're reported as *locked*. Re-sending identical data is a no-op.
 - New addresses are geocoded in the background.
 

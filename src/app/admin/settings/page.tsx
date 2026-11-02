@@ -36,7 +36,7 @@ export default async function SettingsPage() {
         "map display": process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "Google Maps" : "OpenStreetMap — set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for Google Maps",
         routing: routingName(),
         "card payments": stripeEnabled() ? "Stripe" : "Off — set STRIPE_SECRET_KEY to accept cards",
-        "scheduled sync": process.env.CRON_SECRET ? "Cron enabled (every 15 min on Vercel)" : "Set CRON_SECRET to enable scheduled feed sync",
+        "scheduled sync": process.env.CRON_SECRET ? "Cron enabled (see vercel.json for the schedule)" : "Set CRON_SECRET to enable scheduled feed sync",
       }}
     >
       <ShopSettingsCard
