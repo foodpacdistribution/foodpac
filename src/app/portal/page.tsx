@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SITE } from "@/app/(site)/content";
 import { ProductCard } from "@/app/(site)/shop-ui";
-import { AutoRefresh } from "@/components/auto-refresh";
 import { cx } from "@/components/ui";
 import { initials } from "@/lib/account";
 import { getCurrentCustomer } from "@/lib/auth/dal";
@@ -51,7 +50,6 @@ export default async function PortalOverview() {
 
   return (
     <>
-      {onTheWay.length > 0 && <AutoRefresh seconds={30} />}
 
       <section className="relative overflow-hidden rounded-3xl bg-leaf-900 p-6 text-cream sm:p-8">
         <div className="relative z-10 flex flex-wrap items-center gap-5">

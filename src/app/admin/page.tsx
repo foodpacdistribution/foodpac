@@ -8,7 +8,6 @@ import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { deliveryEvents, drivers, orders } from "@/lib/db/schema";
 import { prettyDate } from "@/lib/dates";
-import { AutoRefresh } from "@/components/auto-refresh";
 import { formatAgo, vehicleMarkers } from "@/lib/live-map";
 import { getDepots, getPlanView, getSettings } from "@/lib/planning";
 import { liveFleet } from "@/lib/tracking";
@@ -87,7 +86,6 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <AutoRefresh seconds={30} />
       <PageHeader
         title={`Welcome back, ${user.name.split(" ")[0]}`}
         subtitle={`${prettyDate(today, { weekday: "long", day: "numeric", month: "long" })} · ${depotList.map((d) => d.name).join(", ") || "No depot set"}`}

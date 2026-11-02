@@ -2,18 +2,17 @@ import { ArrowLeft, Camera, CheckCircle2, Clock, MapPin, PenLine, ShieldCheck, T
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AutoRefresh } from "@/components/auto-refresh";
 import { cx } from "@/components/ui";
 import { requireUser } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { formatAgo } from "@/lib/live-map";
-import { DELIVERY_PLACE_WARN_M, describeDeliveryPlace, mapPinUrl } from "@/lib/orders";
+import { haversine } from "@/lib/geo/routing";
+import { DELIVERY_PLACE_WARN_M, describeDeliveryPlace } from "@/lib/orders";
 import { getSettings } from "@/lib/planning";
 import { getPortalOrder, type PortalOrder } from "@/lib/portal";
 import { formatClock, formatMinutesClock } from "@/lib/time";
 import { StageBadge, StageSteps } from "../../stage";
-import { OrderMap } from "./order-map";
 
 export const metadata: Metadata = { title: "Order tracking" };
 
@@ -26,11 +25,11 @@ export default async function PortalOrderPage({ params }: { params: Promise<{ id
   const o = await getPortalOrder(db, user.customerId, id, s.timezone);
   if (!o) notFound();
   const time = (iso: string) => new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, hour: "numeric", minute: "2-digit" }).format(new Date(iso));
-  const showMap = !!o.point && (o.stage === "out_for_delivery" || o.trail.length > 0 || !!o.outcome?.place);
+  // Straight-line distance from the van to the customer while theirs is the next stop (no map for customers).
+  const vanKm = o.van && o.point && !o.stopsBefore ? haversine(o.van, o.point) / 1000 : null;
 
   return (
     <>
-      {o.stage === "out_for_delivery" && <AutoRefresh seconds={20} />}
       <Link href="/portal/deliveries" className="inline-flex items-center gap-1.5 text-sm text-leaf-900/60 hover:text-leaf-900">
         <ArrowLeft className="size-4" /> All deliveries
       </Link>
@@ -50,19 +49,24 @@ export default async function PortalOrderPage({ params }: { params: Promise<{ id
         <Headline o={o} time={time} />
       </div>
 
-      {showMap && (
-        <section className="mt-4 overflow-hidden rounded-3xl border border-leaf-950/10 bg-white">
-          <OrderMap order={o} />
-          <p className="flex items-start gap-1.5 px-4 py-3 text-xs text-leaf-900/60">
-            <MapPin className="mt-px size-3.5 shrink-0" />
-            {o.stage === "out_for_delivery"
-              ? o.van
-                ? `Live position of your delivery van, updated ${formatAgo(o.van.ageS)}. The dashed line is the route driven so far to you.`
-                : o.stopsBefore
-                  ? "The live van position appears here once yours is the next stop."
-                  : "Waiting for the van's next location update."
-              : "Dashed line: the route driven to you. Green pin: where the driver confirmed the delivery."}
-          </p>
+      {o.stage === "out_for_delivery" && (
+        <section className="mt-4 flex items-center gap-3 rounded-3xl border border-leaf-950/10 bg-white p-5">
+          <span className="relative grid size-11 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-600">
+            <Truck className="size-5" />
+            <span className="absolute inset-0 animate-ping rounded-full bg-amber-400/20" />
+          </span>
+          <div className="text-sm">
+            <p className="font-semibold">
+              {o.stopsBefore
+                ? `${o.stopsBefore} stop${o.stopsBefore === 1 ? "" : "s"} before yours`
+                : vanKm !== null
+                  ? `Your van is about ${vanKm < 1 ? `${Math.max(100, Math.round((vanKm * 1000) / 100) * 100)} m` : `${vanKm.toFixed(1)} km`} away`
+                  : "You're the next stop"}
+            </p>
+            <p className="text-leaf-900/60">
+              {o.van && !o.stopsBefore ? `Updated ${formatAgo(o.van.ageS)}. ` : ""}This page updates by itself.
+            </p>
+          </div>
         </section>
       )}
 
@@ -143,7 +147,7 @@ function Headline({ o, time }: { o: PortalOrder; time: (iso: string) => string }
       <p className="font-display text-xl font-semibold">{o.stage === "scheduled" ? `Scheduled for ${prettyDate(o.deliveryDate)}` : "We've got your order"}</p>
       <p className="mt-0.5 text-sm text-leaf-900/70">
         {o.etaS !== null ? `Planned arrival around ${formatClock(o.etaS)}. ` : ""}
-        You can follow the van here once it leaves our warehouse.
+        You&apos;ll see its progress here once it leaves our warehouse.
       </p>
     </div>
   );
@@ -186,12 +190,7 @@ function Proof({ o, time }: { o: PortalOrder; time: (iso: string) => string }) {
       {out.place && (
         <p className={cx("mt-3 flex items-start gap-1.5 text-sm", far ? "text-amber-800" : "text-leaf-900/70")}>
           <MapPin className="mt-0.5 size-4 shrink-0" />
-          <span>
-            Confirmed by GPS {placeText ?? "at the delivery point"}.{" "}
-            <a href={mapPinUrl(out.place.lat, out.place.lng)} target="_blank" rel="noreferrer" className="underline">
-              Open in Google Maps
-            </a>
-          </span>
+          <span>Confirmed by GPS {placeText ?? "at the delivery point"}.</span>
         </p>
       )}
       {out.note && <p className="mt-2 text-sm text-leaf-900/70">Driver&apos;s note: {out.note}</p>}

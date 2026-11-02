@@ -1,6 +1,5 @@
 import { AlertTriangle, Gauge, Navigation, Radio, SignalZero, Timer } from "lucide-react";
 import type { Metadata } from "next";
-import { AutoRefresh } from "@/components/auto-refresh";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { Badge, Card, ColorDot, cx, EmptyState, PageHeader } from "@/components/ui";
 import { requireUser, STAFF } from "@/lib/auth/dal";
@@ -53,7 +52,6 @@ export default async function TrackingPage() {
 
   return (
     <>
-      <AutoRefresh seconds={20} />
       <PageHeader
         title="Live Tracking"
         subtitle="Driver positions from the driver app, refreshed every 20 seconds. Location is only shared while a route is in progress."

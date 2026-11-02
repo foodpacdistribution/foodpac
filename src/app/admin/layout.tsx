@@ -8,6 +8,7 @@ import { initials } from "@/lib/account";
 import { getDb } from "@/lib/db";
 import { enquiries } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
+import { AdminLive } from "./admin-live";
 import { SideNav } from "./side-nav";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
@@ -61,6 +62,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       </header>
 
       <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">{children}</main>
+      <AdminLive />
     </div>
   );
 }

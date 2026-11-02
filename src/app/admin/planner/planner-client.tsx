@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { useHoldLiveRefresh } from "@/components/live-refresh";
 import { dispatch, optimise, saveManualEdit } from "@/app/actions/planner";
 import { DateNav } from "@/components/date-nav";
 import { DeliveryMap, type MapRoute, type MapStop } from "@/components/map";
@@ -132,6 +133,8 @@ export function PlannerClient(props: Props) {
   const saved = useMemo(() => buildDraft(view, orders), [view, orders]);
   const [draft, setDraft] = useState<Draft>(saved);
   const [dirty, setDirty] = useState(false);
+  // Don't let live updates wipe unsaved drag-and-drop changes; a "Refresh" button appears instead.
+  useHoldLiveRefresh(dirty);
   // New server data (after save/optimise/refresh) replaces the local draft.
   const [prevSaved, setPrevSaved] = useState(saved);
   if (prevSaved !== saved) {

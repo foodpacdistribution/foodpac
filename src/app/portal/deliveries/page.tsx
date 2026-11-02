@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import { ChevronRight, Clock, PackageSearch } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AutoRefresh } from "@/components/auto-refresh";
 import { requireUser } from "@/lib/auth/dal";
 import { linkOrdersToCustomer } from "@/lib/customers";
 import { prettyDate } from "@/lib/dates";
@@ -26,12 +25,10 @@ export default async function PortalDeliveries() {
 
   const current = rows.filter((o) => o.deliveryDate >= today && o.stage !== "delivered" && o.stage !== "failed");
   const past = rows.filter((o) => !current.includes(o));
-  const live = current.some((o) => o.stage === "out_for_delivery");
   const fmt = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, hour: "numeric", minute: "2-digit" });
 
   return (
     <>
-      {live && <AutoRefresh seconds={30} />}
       <h1 className="font-display text-2xl font-semibold tracking-tight">Deliveries</h1>
       <p className="mt-1 text-sm text-leaf-900/60">Follow each delivery from our warehouse to your door.</p>
 

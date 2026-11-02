@@ -3,6 +3,7 @@ import { Clock, ShoppingCart, Store } from "lucide-react";
 import Link from "next/link";
 import { ViewTransition } from "react";
 import { AccountMenu } from "@/components/account-menu";
+import { LiveRefresh } from "@/components/live-refresh";
 import { Logo } from "@/components/brand";
 import { requireUser } from "@/lib/auth/dal";
 import { accountLinks } from "@/lib/account";
@@ -53,6 +54,7 @@ export default async function PortalLayout({ children }: { children: React.React
       <main className="mx-auto w-full max-w-5xl px-4 py-6">
         <ViewTransition>{children}</ViewTransition>
       </main>
+      <LiveRefresh scope="customer" />
     </div>
   );
 }

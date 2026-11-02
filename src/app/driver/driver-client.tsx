@@ -44,12 +44,6 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const clearToast = useCallback(() => setToast(null), []);
 
-  // Keep the list fresh if the dispatcher re-plans while the driver is out.
-  useEffect(() => {
-    const t = setInterval(() => router.refresh(), 60_000);
-    return () => clearInterval(t);
-  }, [router]);
-
   const stops = route?.stops ?? [];
   const pendingStops = stops.filter((s) => s.status === "pending");
   const completedStops = stops.filter((s) => s.status !== "pending");
