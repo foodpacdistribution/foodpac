@@ -11,7 +11,7 @@ export type GeocodeResult = {
 };
 
 const COUNTRY = (process.env.GEOCODE_COUNTRY ?? "au").toLowerCase();
-const USER_AGENT = process.env.GEOCODE_USER_AGENT ?? "ai-delivery-planner/0.1 (self-hosted)";
+const USER_AGENT = process.env.GEOCODE_USER_AGENT ?? "foodpac-distribution/1.0";
 
 export function geocoderName() {
   return process.env.GOOGLE_MAPS_API_KEY ? "google" : "nominatim";
@@ -57,8 +57,18 @@ export async function geocodeAddress(db: DB, address: string): Promise<GeocodeRe
 }
 
 async function lookup(address: string): Promise<GeocodeResult> {
-  return process.env.GOOGLE_MAPS_API_KEY ? google(address, process.env.GOOGLE_MAPS_API_KEY) : nominatim(address);
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) return nominatim(address);
+  try {
+    return await google(address, key);
+  } catch (err) {
+    // Key, billing or quota problem on Google's side: don't mark every address "not found".
+    console.warn(`[geocode] Google unavailable (${(err as Error).message}); using OpenStreetMap.`);
+    return nominatim(address);
+  }
 }
+
+class GoogleUnavailable extends Error {}
 
 async function google(address: string, apiKey: string): Promise<GeocodeResult> {
   const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
@@ -72,6 +82,8 @@ async function google(address: string, apiKey: string): Promise<GeocodeResult> {
     results: { formatted_address: string; partial_match?: boolean; geometry: { location: { lat: number; lng: number }; location_type: string } }[];
   };
   const r = body.results?.[0];
+  // ZERO_RESULTS is a real "not found"; REQUEST_DENIED / OVER_QUERY_LIMIT / etc. mean Google couldn't answer.
+  if (body.status !== "OK" && body.status !== "ZERO_RESULTS") throw new GoogleUnavailable(`${body.status}: ${(body as { error_message?: string }).error_message ?? ""}`.trim());
   if (body.status !== "OK" || !r) return { status: "failed", lat: null, lng: null, label: null, provider: "google" };
   const precise = !r.partial_match && ["ROOFTOP", "RANGE_INTERPOLATED"].includes(r.geometry.location_type);
   return {
