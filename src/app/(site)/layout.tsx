@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { Search, ShoppingCart, UserRound } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import Link from "next/link";
-import { BrandMark } from "@/components/brand";
+import { Logo } from "@/components/brand";
 import { getCurrentCustomer, getCurrentUser } from "@/lib/auth/dal";
 import { accountLinks } from "@/lib/account";
 import { getDb } from "@/lib/db";
@@ -22,12 +22,9 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
     <div className="min-h-dvh bg-cream text-leaf-950">
       <header className="sticky top-0 z-40 border-b border-leaf-950/10 bg-cream/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
-          <Link href="/" className="flex shrink-0 items-center gap-2.5">
-            <BrandMark className="size-9" />
-            <span className="hidden font-display text-lg font-semibold leading-none tracking-tight sm:block">
-              Foodpac
-              <span className="block text-[11px] font-medium uppercase tracking-[0.18em] text-leaf-700">Distribution</span>
-            </span>
+          <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Foodpac Distribution home">
+            <Logo className="h-9 sm:h-11" priority />
+            <span className="hidden border-l border-leaf-950/15 pl-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-leaf-800 lg:block">Distribution</span>
           </Link>
           <SearchBox className="hidden flex-1 md:flex" />
           <nav className="ml-auto flex items-center gap-1 text-sm font-medium">
@@ -86,9 +83,9 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <footer className="bg-leaf-950 text-leaf-100/70">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:grid-cols-[1.5fr_1fr_1fr] sm:px-6">
           <div className="flex items-start gap-2.5">
-            <BrandMark className="size-8" />
             <div className="leading-tight">
-              <p className="font-display font-semibold text-white">{SITE.name}</p>
+              <Logo badge className="h-12" />
+              <p className="mt-3 font-display font-semibold text-white">{SITE.name}</p>
               <p className="mt-1 text-xs">
                 {SITE.tagline} Serving {SITE.serviceArea}.
               </p>

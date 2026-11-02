@@ -3,7 +3,7 @@ import { ExternalLink, LogOut } from "lucide-react";
 import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 import { requireUser, STAFF } from "@/lib/auth/dal";
-import { BrandMark } from "@/components/brand";
+import { BrandMark, Logo } from "@/components/brand";
 import { initials } from "@/lib/account";
 import { getDb } from "@/lib/db";
 import { enquiries } from "@/lib/db/schema";
@@ -21,12 +21,9 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-dvh lg:pl-60">
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-navy-900 text-slate-300 lg:flex">
-        <div className="flex h-16 items-center gap-2.5 px-5">
-          <BrandMark className="size-8" />
-          <div className="min-w-0 leading-tight">
-            <p className="text-sm font-semibold text-white">Foodpac Distribution</p>
-            <p className="truncate text-[11px] text-slate-400">Back office · {s.companyName}</p>
-          </div>
+        <div className="px-4 pt-4 pb-2">
+          <Logo badge className="h-11" />
+          <p className="mt-2 truncate px-1 text-[11px] text-slate-400">Back office · {s.companyName}</p>
         </div>
         <SideNav role={user.role} newEnquiries={newEnquiries} />
         <Link href="/" target="_blank" className="mx-3 mb-2 flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-slate-400 hover:bg-white/5 hover:text-white">

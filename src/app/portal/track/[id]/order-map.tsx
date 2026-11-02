@@ -45,7 +45,7 @@ export function OrderMap({ order: o }: { order: PortalOrder }) {
                 id: "van",
                 lat: o.van.lat,
                 lng: o.van.lng,
-                color: "#e4572e",
+                color: "#e0620c",
                 initials: o.driverFirstName?.[0] ?? "F",
                 stale: o.van.stale,
                 heading: o.van.heading,

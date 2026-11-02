@@ -1,7 +1,7 @@
 import { ArrowLeft, Building2, ShieldCheck, Truck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BrandMark } from "@/components/brand";
+import { Logo } from "@/components/brand";
 import { LoginForm } from "./login-form";
 import { databaseUrl } from "@/lib/db/url";
 
@@ -23,11 +23,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <main className="grid min-h-dvh bg-cream text-leaf-950 lg:grid-cols-[1.05fr_1fr]">
       <section className="relative hidden overflow-hidden bg-leaf-900 p-12 text-cream lg:flex lg:flex-col lg:justify-between">
         <Link href="/" className="relative z-10 flex items-center gap-2.5">
-          <BrandMark className="size-10" />
-          <span className="leading-tight">
-            <span className="block font-display text-lg font-semibold">Foodpac Distribution</span>
-            <span className="block text-xs text-cream/60">System</span>
-          </span>
+          <Logo badge className="h-14" priority />
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-cream/70">Distribution System</span>
         </Link>
         <div className="relative z-10 max-w-md">
           <h1 className="font-display text-4xl font-semibold leading-[1.1] tracking-tight">From the order to the signature, in one place.</h1>
@@ -39,7 +36,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
         <svg className="absolute -right-24 bottom-0 h-[70%] opacity-25" viewBox="0 0 400 400" fill="none" aria-hidden>
           <path d="M40 360 C 120 300, 80 220, 170 200 S 300 160, 260 80 S 330 20, 380 40" stroke="#faf6ee" strokeWidth="4" strokeDasharray="2 10" strokeLinecap="round" />
-          <path d="M20 250 C 90 240, 140 300, 210 280 S 320 300, 380 220" stroke="#e4572e" strokeWidth="4" strokeDasharray="2 10" strokeLinecap="round" />
+          <path d="M20 250 C 90 240, 140 300, 210 280 S 320 300, 380 220" stroke="#e0620c" strokeWidth="4" strokeDasharray="2 10" strokeLinecap="round" />
           {[[40, 360], [170, 200], [260, 80], [380, 40], [20, 250], [210, 280], [380, 220]].map(([x, y]) => (
             <circle key={`${x}-${y}`} cx={x} cy={y} r="9" fill="#113a27" stroke="white" strokeWidth="3" />
           ))}
@@ -52,8 +49,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-leaf-900/60 hover:text-leaf-900">
             <ArrowLeft className="size-4" /> Back to the shop
           </Link>
-          <Link href="/" className="lg:hidden">
-            <BrandMark className="size-9" />
+          <Link href="/" className="lg:hidden" aria-label="Foodpac Distribution home">
+            <Logo className="h-9" />
           </Link>
         </div>
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-10">

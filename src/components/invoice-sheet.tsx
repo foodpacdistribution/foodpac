@@ -2,7 +2,7 @@ import { SITE } from "@/app/(site)/content";
 import { prettyDate } from "@/lib/dates";
 import type { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { aud, PAYMENT_METHOD_LABEL, PAYMENT_STATUS } from "@/lib/money";
-import { BrandMark } from "./brand";
+import { Logo } from "./brand";
 import { PrintButton } from "./print-button";
 
 /** Printable tax invoice for one shop order (customer portal and back office). */
@@ -27,8 +27,8 @@ export function InvoiceSheet({
       <article className="rounded-3xl border border-leaf-950/10 bg-white p-6 text-sm sm:p-10 print:rounded-none print:border-0 print:p-0">
         <header className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex items-center gap-3">
-            <BrandMark className="size-10" />
-            <div>
+            <Logo className="h-14" />
+            <div className="border-l border-leaf-950/10 pl-3">
               <p className="font-display text-lg font-semibold">{SITE.name}</p>
               {SITE.abn && <p className="text-xs text-leaf-900/60">ABN {SITE.abn}</p>}
               {SITE.address && <p className="text-xs text-leaf-900/60">{SITE.address}</p>}

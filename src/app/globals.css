@@ -20,8 +20,9 @@
   --color-leaf-50: #eef7f0;
   --color-cream: #faf6ee;
   --color-sand: #f1e9d8;
-  --color-tomato: #e4572e;
-  --color-tomato-dark: #c4431d;
+  /* Foodpac logo orange. */
+  --color-tomato: #e0620c;
+  --color-tomato-dark: #c0520a;
   --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
   --shadow-pop: 0 12px 32px -8px rgb(15 23 42 / 0.25);
 

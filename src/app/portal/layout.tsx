@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { Clock, ShoppingCart, Store } from "lucide-react";
 import Link from "next/link";
 import { AccountMenu } from "@/components/account-menu";
-import { BrandMark } from "@/components/brand";
+import { Logo } from "@/components/brand";
 import { requireUser } from "@/lib/auth/dal";
 import { accountLinks } from "@/lib/account";
 import { getDb } from "@/lib/db";
@@ -22,10 +22,10 @@ export default async function PortalLayout({ children }: { children: React.React
       <header className="no-print sticky top-0 z-30 border-b border-leaf-950/10 bg-cream/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-4">
           <Link href="/" className="flex min-w-0 items-center gap-2.5">
-            <BrandMark className="size-8" />
-            <span className="min-w-0 leading-tight">
-              <span className="block font-display text-sm font-semibold">Foodpac Distribution</span>
-              <span className="block truncate text-[11px] text-leaf-900/60">{c?.name ?? user.name}</span>
+            <Logo className="h-9" />
+            <span className="min-w-0 border-l border-leaf-950/15 pl-2.5 leading-tight">
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-leaf-800">My account</span>
+              <span className="block truncate text-xs text-leaf-900/60">{c?.name ?? user.name}</span>
             </span>
           </Link>
           <div className="flex items-center gap-1 text-xs font-medium">

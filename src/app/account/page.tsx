@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
 import { accountLinks, initials } from "@/lib/account";
-import { BrandMark } from "@/components/brand";
+import { Logo } from "@/components/brand";
 import { NameForm, PasswordForm, ProfileCard } from "@/components/profile-forms";
 import { requireUser } from "@/lib/auth/dal";
 import { homeFor } from "@/lib/auth/session";
@@ -23,7 +23,7 @@ export default async function AccountPage() {
           <Link href={home} className="flex items-center gap-2 text-sm text-leaf-900/70 hover:text-leaf-950">
             <ArrowLeft className="size-4" /> {user.role === "driver" ? "Driver app" : "Back office"}
           </Link>
-          <BrandMark className="size-8" />
+          <Logo className="h-8" />
           <AccountMenu name={user.name} email={user.email} role={user.role} links={accountLinks(user.role)} />
         </div>
       </header>

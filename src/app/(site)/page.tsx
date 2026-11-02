@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { listCatalog, listCategories, recentlyBought } from "@/lib/shop";
+import { siteUrl } from "@/lib/site-url";
 import { CATEGORIES, SITE } from "./content";
 import { Contact, Delivery, HowItWorks, Promises } from "./sections";
 import { ProductCard } from "./shop-ui";
@@ -18,8 +19,36 @@ export default async function HomePage() {
   ]);
   const popular = featured.length ? featured : await listCatalog(db, customer, { limit: 8 });
 
+  // Tells Google who the business is and which logo to show for it, and enables the site search box.
+  const base = siteUrl();
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${base}/#organization`,
+        name: SITE.name,
+        url: base,
+        logo: `${base}/brand/foodpac-logo-square.png`,
+        description: `${SITE.tagline} Wholesale supplier serving ${SITE.serviceArea}.`,
+        areaServed: SITE.serviceArea,
+        ...(SITE.phone ? { telephone: SITE.phone } : {}),
+        ...(SITE.email ? { email: SITE.email } : {}),
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${base}/#website`,
+        url: base,
+        name: SITE.name,
+        publisher: { "@id": `${base}/#organization` },
+        potentialAction: { "@type": "SearchAction", target: `${base}/products?q={search_term_string}`, "query-input": "required name=search_term_string" },
+      },
+    ],
+  };
+
   return (
     <main>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <section className="border-b border-leaf-950/10 bg-leaf-900 text-cream">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.3fr_1fr] lg:py-16">
           <div className="animate-rise">
