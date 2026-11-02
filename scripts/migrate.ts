@@ -5,10 +5,11 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { hashPassword } from "../src/lib/auth/password";
+import { databaseUrl } from "../src/lib/db/url";
 
-const url = process.env.DATABASE_URL;
+const url = databaseUrl();
 if (!url) {
-  console.error("DATABASE_URL is not set. Add your Postgres connection string (Supabase → Connect → Transaction pooler).");
+  console.error("DATABASE_URL (or POSTGRES_URL) is not set. Add your Postgres connection string (Supabase → Connect → Transaction pooler).");
   process.exit(1);
 }
 

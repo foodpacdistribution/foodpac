@@ -6,6 +6,7 @@ import { depots, drivers, type OrderStatus, orders } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
 import { OrdersClient } from "./orders-client";
+import { databaseUrl } from "@/lib/db/url";
 
 export const metadata: Metadata = { title: "Orders" };
 
@@ -37,7 +38,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       today={todayIn(s.timezone)}
       status={status ?? ""}
       q={q ?? ""}
-      demoMode={!process.env.DATABASE_URL}
+      demoMode={!databaseUrl()}
       defaultServiceMin={s.defaultServiceMin}
       counts={{
         all: rows.length,

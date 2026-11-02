@@ -1,5 +1,6 @@
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
+import { databaseUrl } from "./url";
 
 export type DB = PgDatabase<PgQueryResultHKT, typeof schema>;
 
@@ -18,7 +19,7 @@ export function getDb(): Promise<DB> {
 }
 
 async function init(): Promise<DB> {
-  const url = process.env.DATABASE_URL;
+  const url = databaseUrl();
   if (url) {
     const { drizzle } = await import("drizzle-orm/postgres-js");
     const postgres = (await import("postgres")).default;

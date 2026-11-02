@@ -14,6 +14,7 @@ import { getDepots, getPlanView, getSettings } from "@/lib/planning";
 import { liveFleet } from "@/lib/tracking";
 import { formatClock, nowSecondsIn, todayIn } from "@/lib/time";
 import { DemoOrdersButton } from "./demo-orders-button";
+import { databaseUrl } from "@/lib/db/url";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -154,7 +155,7 @@ export default async function DashboardPage() {
                   <Link href={`/admin/orders?date=${today}`} className={btn("secondary", "sm")}>
                     Add orders by hand
                   </Link>
-                  {!process.env.DATABASE_URL && <DemoOrdersButton date={today} />}
+                  {!databaseUrl() && <DemoOrdersButton date={today} />}
                 </div>
               </EmptyState>
             ) : routeRows.length === 0 ? (

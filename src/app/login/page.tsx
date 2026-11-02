@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand";
 import { LoginForm } from "./login-form";
+import { databaseUrl } from "@/lib/db/url";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -15,7 +16,7 @@ const DEMO = [
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; email?: string }> }) {
   const { next, email } = await searchParams;
-  const demo = !process.env.DATABASE_URL;
+  const demo = !databaseUrl();
   const toCheckout = next?.startsWith("/cart") || next?.startsWith("/checkout");
 
   return (

@@ -10,6 +10,7 @@ import { IntegrationsCard } from "./integrations";
 import { SettingsClient } from "./settings-client";
 import { ShopSettingsCard } from "./shop-settings";
 import { stripeEnabled } from "@/lib/stripe";
+import { databaseUrl } from "@/lib/db/url";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -31,7 +32,7 @@ export default async function SettingsPage() {
       users={userRows}
       depots={depotRows.map((d) => ({ id: d.id, name: d.name, address: d.address, located: d.lat !== null, active: d.active }))}
       services={{
-        database: process.env.DATABASE_URL ? "PostgreSQL (DATABASE_URL)" : "Embedded local database (.data/pglite) — set DATABASE_URL for production",
+        database: databaseUrl() ? "PostgreSQL (DATABASE_URL / POSTGRES_URL)" : "Embedded local database (.data/pglite) — set DATABASE_URL for production",
         geocoder: geocoderName() === "google" ? "Google Geocoding API" : "OpenStreetMap Nominatim (free, 1 request/sec)",
         "map display": process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "Google Maps" : "OpenStreetMap — set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for Google Maps",
         routing: routingName(),
