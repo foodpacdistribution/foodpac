@@ -9,6 +9,7 @@ import { driverHistory } from "@/lib/driver-history";
 import { DELIVERY_PLACE_WARN_M } from "@/lib/orders";
 import { getSettings } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
+import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Delivery history" };
 
@@ -30,15 +31,15 @@ export default async function DriverHistoryPage({ searchParams }: { searchParams
     <div className="min-h-dvh">
       <header className="bg-navy-900 px-4 pt-5 pb-16 text-white">
         <div className="mx-auto max-w-lg">
-          <p className="text-xs text-slate-400">Last {days} days</p>
-          <h1 className="mt-0.5 text-xl font-semibold">Delivery history</h1>
+          <p className="text-xs text-slate-400"><T>{"Last"}</T>{" "}{days} {" "}<T>{"days"}</T></p>
+          <h1 className="mt-0.5 text-xl font-semibold"><T>{"Delivery history"}</T></h1>
         </div>
       </header>
       <main className="mx-auto -mt-12 max-w-lg space-y-4 px-4">
         <section className="grid grid-cols-3 gap-2 rounded-2xl bg-white p-4 text-center shadow-card">
-          <Stat value={delivered} label="Delivered" tone="text-emerald-600" />
-          <Stat value={failed} label="Problems" tone={failed ? "text-red-600" : "text-slate-900"} />
-          <Stat value={history.length} label="Days worked" tone="text-slate-900" />
+          <Stat value={delivered} label={<T>{"Delivered"}</T>} tone="text-emerald-600" />
+          <Stat value={failed} label={<T>{"Problems"}</T>} tone={failed ? "text-red-600" : "text-slate-900"} />
+          <Stat value={history.length} label={<T>{"Days worked"}</T>} tone="text-slate-900" />
         </section>
 
         <div className="flex gap-2">
@@ -48,27 +49,26 @@ export default async function DriverHistoryPage({ searchParams }: { searchParams
               href={`/driver/history?days=${d}`}
               className={cx("rounded-full px-3.5 py-1.5 text-xs font-medium", d === days ? "bg-navy-900 text-white" : "bg-white text-slate-600 shadow-card")}
             >
-              {d} days
-            </Link>
+              {d} {" "}<T>{"days"}</T></Link>
           ))}
         </div>
 
         {history.length === 0 ? (
           <section className="rounded-2xl bg-white p-8 text-center shadow-card">
             <CheckCircle2 className="mx-auto size-10 text-slate-300" />
-            <p className="mt-3 font-semibold text-slate-900">No deliveries in this period</p>
-            <p className="mt-1 text-sm text-slate-500">Every delivery you confirm is saved here with its photo and signature.</p>
+            <p className="mt-3 font-semibold text-slate-900"><T>{"No deliveries in this period"}</T></p>
+            <p className="mt-1 text-sm text-slate-500"><T>{"Every delivery you confirm is saved here with its photo and signature."}</T></p>
           </section>
         ) : (
           history.map((day) => (
             <section key={day.date} className="overflow-hidden rounded-2xl bg-white shadow-card">
               <div className="flex items-baseline justify-between border-b border-line px-4 py-2.5">
                 <h2 className="text-sm font-semibold text-slate-900">
-                  {day.date === today ? "Today" : prettyDate(day.date, { weekday: "short", day: "numeric", month: "short" })}
+                  {day.date === today ? <T>{"Today"}</T> : <Tx>{prettyDate(day.date, { weekday: "short", day: "numeric", month: "short" })}</Tx>}
                   <span className="ml-2 font-mono text-[11px] font-normal text-slate-400">{day.shipment}</span>
                 </h2>
                 <p className="text-xs text-slate-500">
-                  {day.delivered} delivered{day.failed ? ` · ${day.failed} problem${day.failed === 1 ? "" : "s"}` : ""}
+                  {day.delivered} {" "}<T>{"delivered"}</T>{day.failed ? <> <Tx>{`· ${day.failed} problem${day.failed === 1 ? "" : "s"}`}</Tx></> : ""}
                 </p>
               </div>
               <ol className="divide-y divide-line">
@@ -84,13 +84,12 @@ export default async function DriverHistoryPage({ searchParams }: { searchParams
                       </p>
                       <p className="truncate text-xs text-slate-500">{it.address}</p>
                       <p className={cx("mt-1 text-xs", it.status === "delivered" ? "text-slate-600" : "text-red-700")}>
-                        {it.status === "delivered" ? (it.recipient ? `Received by ${it.recipient}` : "Delivered") : (it.reason ?? "Couldn't deliver")}
+                        {it.status === "delivered" ? (it.recipient ? <T vars={{ name: it.recipient }}>{"Received by {name}"}</T> : <T>{"Delivered"}</T>) : <T>{it.reason ?? "Couldn't deliver"}</T>}
                         {it.note && <span className="text-slate-500"> · “{it.note}”</span>}
                       </p>
                       {it.placeM !== null && (
                         <p className={cx("mt-0.5 flex items-center gap-1 text-[11px]", it.placeM > DELIVERY_PLACE_WARN_M ? "text-amber-700" : "text-slate-400")}>
-                          <MapPin className="size-3" /> Confirmed {it.placeM < 1000 ? `${it.placeM} m` : `${(it.placeM / 1000).toFixed(1)} km`} from the address
-                        </p>
+                          <MapPin className="size-3" /> {" "}<T>{"Confirmed"}</T>{" "}{it.placeM < 1000 ? `${it.placeM} m` : `${(it.placeM / 1000).toFixed(1)} km`} {" "}<T>{"from the address"}</T></p>
                       )}
                       {(it.photoId || it.signatureId) && (
                         <div className="mt-2 flex gap-2">
@@ -110,11 +109,11 @@ export default async function DriverHistoryPage({ searchParams }: { searchParams
   );
 }
 
-function Stat({ value, label, tone }: { value: number; label: string; tone: string }) {
+function Stat({ value, label, tone }: { value: number; label: React.ReactNode; tone: string }) {
   return (
     <div>
       <p className={cx("text-2xl font-semibold tabular-nums", tone)}>{value}</p>
-      <p className="text-xs text-slate-500">{label}</p>
+      <p className="text-xs text-slate-500">{<Tx>{label}</Tx>}</p>
     </div>
   );
 }
@@ -125,7 +124,7 @@ function Proof({ id, label, icon: Icon, contain }: { id: string; label: string; 
       {/* eslint-disable-next-line @next/next/no-img-element -- private, signed-in image */}
       <img src={`/api/proofs/${id}`} alt={label} loading="lazy" className={cx("h-16 w-full", contain ? "bg-white object-contain p-1" : "object-cover")} />
       <span className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-slate-500">
-        <Icon className="size-3" /> {label}
+        <Icon className="size-3" /> <T>{label}</T>
       </span>
     </a>
   );

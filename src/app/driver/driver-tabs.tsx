@@ -3,6 +3,7 @@
 import { History, Route, UserRound, Zap } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useT } from "@/components/i18n";
 import { cx } from "@/components/ui";
 
 const TABS = [
@@ -15,6 +16,7 @@ const TABS = [
 /** Thumb-reach tab bar for the driver's phone. */
 export function DriverTabs() {
   const pathname = usePathname();
+  const tr = useT();
   return (
     <nav className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
       <div className="mx-auto grid max-w-lg grid-cols-4">
@@ -27,7 +29,7 @@ export function DriverTabs() {
               className={cx("flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors active:scale-95", active ? "text-blue-600" : "text-slate-500")}
             >
               <Icon className={cx("size-5", active && "stroke-[2.4]")} />
-              {label}
+              {tr(label)}
             </Link>
           );
         })}

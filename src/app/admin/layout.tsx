@@ -4,12 +4,14 @@ import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { BrandMark, Logo } from "@/components/brand";
+import { LanguageSwitch } from "@/components/language-switch";
 import { initials } from "@/lib/account";
 import { getDb } from "@/lib/db";
 import { enquiries } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { AdminLive } from "./admin-live";
 import { SideNav } from "./side-nav";
+import { T } from "@/components/i18n";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser(STAFF);
@@ -24,19 +26,21 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-navy-900 text-slate-300 lg:flex">
         <div className="px-4 pt-4 pb-2">
           <Logo badge className="h-11" />
-          <p className="mt-2 truncate px-1 text-[11px] text-slate-400">Back office · {s.companyName}</p>
+          <p className="mt-2 truncate px-1 text-[11px] text-slate-400"><T>{"Back office ·"}</T>{" "}{s.companyName}</p>
         </div>
         <SideNav role={user.role} newEnquiries={newEnquiries} />
         <Link href="/" target="_blank" className="mx-3 mb-2 flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-slate-400 hover:bg-white/5 hover:text-white">
-          <ExternalLink className="size-3.5" /> View website
-        </Link>
+          <ExternalLink className="size-3.5" /> {" "}<T>{"View website"}</T></Link>
+        <div className="px-4 pb-2">
+          <LanguageSwitch tone="dark" />
+        </div>
         <div className="mt-auto border-t border-white/10 p-3">
           <div className="flex items-center gap-1 rounded-lg">
             <Link href="/account" title="Profile & password" className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-white/5">
               <span className="grid size-8 shrink-0 place-items-center rounded-full bg-navy-700 text-xs font-semibold text-white">{initials(user.name)}</span>
               <span className="min-w-0 flex-1 leading-tight">
                 <span className="block truncate text-sm font-medium text-white">{user.name}</span>
-                <span className="block text-[11px] capitalize text-slate-400">{user.role} · profile</span>
+                <span className="block text-[11px] capitalize text-slate-400"><T>{user.role}</T> {" "}<T>{"· profile"}</T></span>
               </span>
             </Link>
             <form action={logout}>
@@ -52,10 +56,9 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       <header className="no-print sticky top-0 z-30 border-b border-white/10 bg-navy-900 text-white lg:hidden">
         <div className="flex h-12 items-center justify-between px-4">
           <span className="flex items-center gap-2 text-sm font-semibold">
-            <BrandMark className="size-6" /> Foodpac Admin
-          </span>
+            <BrandMark className="size-6" /> {" "}<T>{"Foodpac Admin"}</T></span>
           <form action={logout}>
-            <button className="text-xs text-slate-300">Sign out</button>
+            <button className="text-xs text-slate-300"><T>{"Sign out"}</T></button>
           </form>
         </div>
         <SideNav role={user.role} mobile newEnquiries={newEnquiries} />

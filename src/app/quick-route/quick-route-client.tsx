@@ -27,6 +27,7 @@ import { multiStopNavigation, navigationUrls } from "@/lib/orders";
 import { parseAddressList, projectRemaining } from "@/lib/quick-route";
 import { describeAccuracy, GOOD_FIX_M, locateBest, LocationError, ROUGH_FIX_M } from "@/lib/locate";
 import { formatClock, formatDuration, formatKm } from "@/lib/time";
+import { Tx, useT } from "@/components/i18n";
 
 type StartKind = "gps" | "depot" | "address";
 type Form = { startKind: StartKind; startAddress: string; addresses: string; end: QuickEnd; serviceMin: number };
@@ -84,6 +85,7 @@ const END_OPTIONS: { value: QuickEnd; label: string; needsDepot?: boolean }[] = 
 type Props = { backHref: string; depotName: string | null; defaultServiceMin: number };
 
 export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Props) {
+  const tr = useT();
   const [state, setState] = useState(() =>
     load({ startKind: "gps", startAddress: "", addresses: "", end: "last_stop", serviceMin: defaultServiceMin }),
   );
@@ -262,12 +264,12 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
   const header = (
     <header className="bg-navy-900 px-4 pb-16 pt-5 text-white">
       <div className="mx-auto flex max-w-lg items-center gap-3">
-        <Link href={backHref} className="grid size-9 place-items-center rounded-full bg-white/10 text-slate-300" aria-label="Back">
+        <Link href={backHref} className="grid size-9 place-items-center rounded-full bg-white/10 text-slate-300" aria-label={tr("Back")}>
           <ArrowLeft className="size-4" />
         </Link>
         <div>
-          <h1 className="text-xl font-semibold">Quick route</h1>
-          <p className="text-xs text-slate-400">Enter your drops, get the fastest order, then drive it stop by stop.</p>
+          <h1 className="text-xl font-semibold">{tr("Quick route")}</h1>
+          <p className="text-xs text-slate-400">{tr("Enter your drops, get the fastest order, then drive it stop by stop.")}</p>
         </div>
       </div>
     </header>
@@ -281,7 +283,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
         <main key="enter" className="mx-auto -mt-12 max-w-lg animate-rise space-y-4 px-4">
           <section className="space-y-4 rounded-2xl bg-white p-4 shadow-card">
             <div>
-              <p className="mb-1.5 text-xs font-medium text-slate-600">Start from</p>
+              <p className="mb-1.5 text-xs font-medium text-slate-600">{tr("Start from")}</p>
               <div className="grid grid-cols-3 gap-1.5">
                 {(
                   [
@@ -302,7 +304,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                       )}
                     >
                       <Icon className="size-4" />
-                      {label}
+                      {<Tx>{label}</Tx>}
                     </button>
                   ))}
               </div>
@@ -310,7 +312,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
               {form.startKind === "address" && (
                 <input
                   className={cx(inputCls, "mt-2 h-11 text-base")}
-                  placeholder="e.g. 100 Queen St, Brisbane City"
+                  placeholder={tr("e.g. 100 Queen St, Brisbane City")}
                   value={form.startAddress}
                   onChange={(e) => setForm({ startAddress: e.target.value })}
                 />
@@ -318,11 +320,11 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             </div>
 
             <Field
-              label={`Delivery addresses (${addressList.length})`}
+              label={tr(`Delivery addresses (${addressList.length})`)}
               hint={
                 duplicates
-                  ? `One per line. ${duplicates} repeated ${duplicates === 1 ? "address" : "addresses"} will only be visited once.`
-                  : "One per line, or paste a list or spreadsheet column. Include the suburb for the best match."
+                  ? tr(duplicates === 1 ? "One per line. {n} repeated address will only be visited once." : "One per line. {n} repeated addresses will only be visited once.", { n: duplicates })
+                  : tr("One per line, or paste a list or spreadsheet column. Include the suburb for the best match.")
               }
             >
               <textarea
@@ -334,19 +336,19 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             </Field>
 
             <div>
-              <p className="mb-1.5 text-xs font-medium text-slate-600">After the last delivery</p>
+              <p className="mb-1.5 text-xs font-medium text-slate-600">{tr("After the last delivery")}</p>
               <div className="space-y-1.5">
                 {END_OPTIONS.filter((o) => !o.needsDepot || depotName).map((o) => (
                   <label key={o.value} className="flex items-center gap-2.5 text-sm text-slate-700">
                     <input type="radio" name="end" checked={form.end === o.value} onChange={() => setForm({ end: o.value })} className="size-4 accent-blue-600" />
-                    {o.label}
+                    {<Tx>{o.label}</Tx>}
                     {o.value === "depot" && <span className="text-xs text-slate-400">({depotName})</span>}
                   </label>
                 ))}
               </div>
             </div>
 
-            <Field label="Minutes spent at each stop" hint="Parking, walking to the door and handing over.">
+            <Field label={tr("Minutes spent at each stop")} hint={tr("Parking, walking to the door and handing over.")}>
               <input
                 type="number"
                 min={0}
@@ -360,7 +362,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             <FormError message={error} />
             <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || !addressList.length} onClick={checkAddresses}>
               {progress ? <Spinner className="size-5" /> : <Search className="size-5" />}
-              {progress ? `Finding address ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : "Check addresses"}
+              {progress ? `Finding address ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : tr("Check addresses")}
             </button>
             {progress && (
               <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -401,10 +403,9 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
         {header}
         <main key="review" className="mx-auto -mt-12 max-w-lg animate-rise space-y-4 px-4">
           <section className="rounded-2xl bg-white p-4 shadow-card">
-            <h2 className="font-semibold text-slate-900">Check the pins</h2>
+            <h2 className="font-semibold text-slate-900">{tr("Check the pins")}</h2>
             <p className="mt-1 text-sm text-slate-500">
-              A wrong pin means a wrong route. Drag any pin that isn&apos;t on the right building.
-              {approx > 0 && <span className="text-amber-700"> {approx} {approx === 1 ? "address is" : "addresses are"} only approximate (amber).</span>}
+              {tr("A wrong pin means a wrong route. Drag any pin that isn't on the right building.")}{approx > 0 && <span className="text-amber-700"> {approx} {tr(approx === 1 ? "address is only approximate (amber)." : "addresses are only approximate (amber).")}</span>}
             </p>
           </section>
 
@@ -440,7 +441,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                           c.status === "failed" ? "text-red-600" : c.status === "approximate" ? "text-amber-700" : c.status === "manual" ? "text-emerald-700" : "text-slate-500",
                         )}
                       >
-                        {c.status === "failed" ? "Not found" : c.status === "approximate" ? `Approximate: ${c.label}` : c.label}
+                        {c.status === "failed" ? tr("Not found") : c.status === "approximate" ? `Approximate: ${c.label}` : c.label}
                       </span>
                     </span>
                     <button className={btn("ghost", "icon")} onClick={() => setEditing({ index: i, text: c.address })} aria-label={`Edit ${c.address}`}>
@@ -464,14 +465,12 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                     >
                       <input autoFocus className={cx(inputCls, "h-10 flex-1 text-base")} value={editing.text} onChange={(e) => setEditing({ index: i, text: e.target.value })} />
                       <button className={btn("primary", "md", "h-10")} disabled={pending}>
-                        Search
-                      </button>
+                        {tr("Search")}</button>
                     </form>
                   )}
                   {c.status === "failed" && editing?.index !== i && (
                     <button className={btn("secondary", "sm", "mt-2")} onClick={() => placePin(i)}>
-                      <MapPinned className="size-3.5" /> Place a pin on the map instead
-                    </button>
+                      <MapPinned className="size-3.5" /> {" "}{tr("Place a pin on the map instead")}</button>
                   )}
                 </li>
               ))}
@@ -480,14 +479,13 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
 
           <p className={cx("flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm shadow-card", form.startKind === "gps" && "hidden")}>
             <span className="text-slate-500">
-              Starting from{" "}
+              {tr("Starting from")}{" "}
               <span className="font-medium text-slate-900">
-                {form.startKind === "gps" ? "my location" : form.startKind === "depot" ? depotName : form.startAddress || "an address"}
+                {form.startKind === "gps" ? tr("my location") : form.startKind === "depot" ? depotName : form.startAddress || tr("an address")}
               </span>
             </span>
             <button className="text-xs font-medium text-blue-600" onClick={() => update({ step: "enter" })}>
-              Change
-            </button>
+              {tr("Change")}</button>
           </p>
 
           <FormError message={error} />
@@ -502,8 +500,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                     optimise("depot");
                   }}
                 >
-                  <Warehouse className="size-4" /> Start from depot
-                </button>
+                  <Warehouse className="size-4" /> {" "}{tr("Start from depot")}</button>
               )}
               <button
                 className={btn("secondary", "md", cx("rounded-xl", !depotName && "col-span-2"))}
@@ -513,21 +510,18 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                   update({ step: "enter", form: { ...form, startKind: "address" } });
                 }}
               >
-                <MapPin className="size-4" /> Type a start address
-              </button>
+                <MapPin className="size-4" /> {" "}{tr("Type a start address")}</button>
             </div>
           )}
           {failed > 0 && (
             <p className="text-center text-sm text-red-600">
-              Fix, pin or remove the {failed} {failed === 1 ? "address" : "addresses"} not found to continue.
-            </p>
+              {tr("Fix, pin or remove the")}{" "}{failed} {failed === 1 ? tr("address") : tr("addresses")} {" "}{tr("not found to continue.")}</p>
           )}
           <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || !!locating || failed > 0 || !checks.length} onClick={() => optimise()}>
-            {pending || locating ? <Spinner className="size-5" /> : <Zap className="size-5" />} {pending ? "Calculating…" : locating ? "Finding your location…" : "Find the fastest route"}
+            {pending || locating ? <Spinner className="size-5" /> : <Zap className="size-5" />} {pending ? tr("Calculating…") : locating ? tr("Finding your location…") : tr("Find the fastest route")}
           </button>
           <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={() => update({ step: "enter" })}>
-            Back to the address list
-          </button>
+            {tr("Back to the address list")}</button>
         </main>
       </div>
     );
@@ -594,31 +588,34 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             ))}
           </div>
           <p className="mt-3 flex items-center justify-between border-t border-line pt-3 text-sm">
-            <span className="text-slate-500">{driving ? "Expected to finish" : "All done by"}</span>
+            <span className="text-slate-500">{driving ? tr("Expected to finish") : tr("All done by")}</span>
             <span className="font-semibold text-slate-900">
               {formatClock(finishS)}
               {finishS - result.finishS >= LATE_S && (
-                <span className="ml-1.5 text-xs font-normal text-amber-600">{formatDuration(finishS - result.finishS)} behind plan</span>
+                <span className="ml-1.5 text-xs font-normal text-amber-600">{formatDuration(finishS - result.finishS)} {" "}{tr("behind plan")}</span>
               )}
             </span>
           </p>
           {saved >= 60 && (
             <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-              {formatDuration(saved)} less driving than going in the order you typed ({formatDuration(result.entered.driveS)}).
+              {formatDuration(saved)} {" "}{tr("less driving than going in the order you typed (")}{formatDuration(result.entered.driveS)}).
             </p>
           )}
           <p className="mt-2 text-[11px] leading-snug text-slate-400">
-            {result.exact ? "Every possible order was compared." : "Optimised order (best found)."} Drive times{" "}
-            {result.matrixSource === "osrm" ? "from road data" : "are straight-line estimates (road data unavailable)"}, plus a{" "}
-            {Math.round((result.trafficFactor - 1) * 100)}% traffic buffer. Planned at {formatClock(result.startS)}.
+            {result.exact ? tr("Every possible order was compared.") : tr("Optimised order (best found).")}{" "}
+            {tr(
+              result.matrixSource === "osrm"
+                ? "Drive times from road data, plus a {pct}% traffic buffer. Planned at {time}."
+                : "Drive times are straight-line estimates (road data unavailable), plus a {pct}% traffic buffer. Planned at {time}.",
+              { pct: Math.round((result.trafficFactor - 1) * 100), time: formatClock(result.startS) },
+            )}
           </p>
         </section>
 
         {result.notFound.length > 0 && (
           <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <p className="flex items-center gap-2 font-semibold">
-              <TriangleAlert className="size-4" /> Not found, so left out of the route
-            </p>
+              <TriangleAlert className="size-4" /> {" "}{tr("Not found, so left out of the route")}</p>
             <ul className="mt-1 list-disc pl-5 text-xs">
               {result.notFound.map((a) => (
                 <li key={a}>{a}</li>
@@ -642,9 +639,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                   update({ driving: true, leftAtMs: now });
                 }}
               >
-                <Navigation className="size-5" /> Start navigation
-              </button>
-              <button className={btn("secondary", "lg", "rounded-xl px-4")} onClick={reset} aria-label="Edit addresses">
+                <Navigation className="size-5" /> {" "}{tr("Start navigation")}</button>
+              <button className={btn("secondary", "lg", "rounded-xl px-4")} onClick={reset} aria-label={tr("Edit addresses")}>
                 <RotateCcw className="size-5" />
               </button>
             </div>
@@ -654,7 +650,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
           <section key={next} className="animate-rise overflow-hidden rounded-2xl bg-white shadow-card">
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
-                Stop {offset + next + 1} of {total}
+                {tr("Stop")}{" "}{offset + next + 1} {" "}{tr("of")}{" "}{total}
               </p>
               <span className="text-xs text-slate-500">
                 {formatDuration(current.legDurationS)} · {formatKm(current.legDistanceM)}
@@ -663,51 +659,44 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             <div className="space-y-3 p-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">{current.address}</h2>
-                {current.label !== current.address && <p className="mt-0.5 text-xs text-slate-500">{current.label}</p>}
-                {current.approximate && <p className="mt-1 text-xs text-amber-700">Approximate location: check the address on arrival.</p>}
+                {current.label !== current.address && <p className="mt-0.5 text-xs text-slate-500">{<Tx>{current.label}</Tx>}</p>}
+                {current.approximate && <p className="mt-1 text-xs text-amber-700">{tr("Approximate location: check the address on arrival.")}</p>}
               </div>
               <p className="text-sm text-slate-600">
-                Arrive around <span className="font-semibold text-slate-900">{formatClock(projected[0].arrivalS)}</span>
-                {lateBy(0) >= LATE_S && <span className="ml-1.5 text-xs text-amber-600">(planned {formatClock(current.arrivalS)})</span>}
+                {tr("Arrive around")}{" "}<span className="font-semibold text-slate-900">{formatClock(projected[0].arrivalS)}</span>
+                {lateBy(0) >= LATE_S && <span className="ml-1.5 text-xs text-amber-600">{tr("(planned")}{" "}{formatClock(current.arrivalS)})</span>}
               </p>
               <a href={navigationUrls(current.lat, current.lng).google} target="_blank" rel="noreferrer" className={btn("primary", "lg", "w-full rounded-xl")}>
-                <Navigation className="size-5" /> Navigate (Google Maps)
-              </a>
+                <Navigation className="size-5" /> {" "}{tr("Navigate (Google Maps)")}</a>
               <a href={navigationUrls(current.lat, current.lng).apple} target="_blank" rel="noreferrer" className="block text-center text-xs text-slate-500 underline">
-                Open in Apple Maps instead
-              </a>
+                {tr("Open in Apple Maps instead")}</a>
               <div className="grid grid-cols-2 gap-2 border-t border-line pt-3">
                 <button className={btn("success", "lg", "rounded-xl")} onClick={() => finishStop("delivered")}>
-                  <CheckCircle2 className="size-5" /> Delivered
-                </button>
+                  <CheckCircle2 className="size-5" /> {" "}{tr("Delivered")}</button>
                 <button className={btn("danger", "lg", "rounded-xl")} onClick={() => finishStop("failed")}>
-                  <TriangleAlert className="size-5" /> Couldn&apos;t deliver
-                </button>
+                  <TriangleAlert className="size-5" /> {" "}{tr("Couldn't deliver")}</button>
               </div>
             </div>
           </section>
         ) : goingHome ? (
           <section className="animate-rise space-y-3 rounded-2xl bg-white p-4 shadow-card">
             <p className="flex items-center gap-2 font-semibold text-slate-900">
-              <Flag className="size-4 text-emerald-600" /> All stops done. Head back to {result.end!.label}
+              <Flag className="size-4 text-emerald-600" /> {" "}{tr("All stops done. Head back to")}{" "}{<Tx>{result.end!.label}</Tx>}
             </p>
             <p className="text-sm text-slate-500">
-              About {formatDuration(result.returnLeg?.durationS)} · {formatKm(result.returnLeg?.distanceM)}
+              {tr("About")}{" "}{formatDuration(result.returnLeg?.durationS)} · {formatKm(result.returnLeg?.distanceM)}
             </p>
             <a href={navigationUrls(result.end!.lat, result.end!.lng).google} target="_blank" rel="noreferrer" className={btn("primary", "lg", "w-full rounded-xl")}>
-              <Navigation className="size-5" /> Navigate back
-            </a>
+              <Navigation className="size-5" /> {" "}{tr("Navigate back")}</a>
             <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={startOver}>
-              Finish and plan a new route
-            </button>
+              {tr("Finish and plan a new route")}</button>
           </section>
         ) : (
           <section className="rounded-2xl bg-white p-8 text-center shadow-card">
             <CheckCircle2 className="mx-auto size-12 animate-check text-emerald-500" />
-            <p className="mt-3 text-lg font-semibold">All stops completed</p>
+            <p className="mt-3 text-lg font-semibold">{tr("All stops completed")}</p>
             <button className={btn("secondary", "md", "mt-4 rounded-xl")} onClick={startOver}>
-              Plan a new route
-            </button>
+              {tr("Plan a new route")}</button>
           </section>
         )}
 
@@ -715,14 +704,13 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
           <>
             {remaining.length > 1 && multiNav && (
               <a href={multiNav.url} target="_blank" rel="noreferrer" className={btn("secondary", "md", "w-full rounded-xl")}>
-                <Route className="size-4" /> Google Maps: next {multiNav.count} stops in this order
-              </a>
+                <Route className="size-4" /> {" "}{tr("Google Maps: next")}{" "}{multiNav.count} {" "}{tr("stops in this order")}</a>
             )}
             <button className={btn("secondary", "md", "w-full rounded-xl")} disabled={pending} onClick={replanRemaining}>
-              {pending ? <Spinner /> : <LocateFixed className="size-4" />} {pending ? "Re-planning…" : `Re-plan the ${remaining.length} remaining from my location`}
+              {pending ? <Spinner /> : <LocateFixed className="size-4" />} {pending ? tr("Re-planning…") : `Re-plan the ${remaining.length} remaining from my location`}
             </button>
             <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={() => setShowMap(!showMap)}>
-              {showMap ? "Hide route map" : "Show route map"}
+              {showMap ? tr("Hide route map") : tr("Show route map")}
             </button>
             {showMap && map}
           </>
@@ -730,11 +718,11 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
 
         {/* Stop list with per-leg times */}
         <section className="overflow-hidden rounded-2xl bg-white shadow-card">
-          <h3 className="border-b border-line px-4 py-2.5 text-sm font-semibold text-slate-900">Route order</h3>
+          <h3 className="border-b border-line px-4 py-2.5 text-sm font-semibold text-slate-900">{tr("Route order")}</h3>
           <ol className="divide-y divide-line text-sm">
             <li className="flex items-center gap-3 px-4 py-2.5 text-slate-500">
               <span className="grid size-7 shrink-0 place-items-center rounded-full bg-navy-900 text-xs font-bold text-white">S</span>
-              <span className="min-w-0 flex-1 truncate">{result.start.label}</span>
+              <span className="min-w-0 flex-1 truncate">{<Tx>{result.start.label}</Tx>}</span>
               <span className="tabular-nums">{formatClock(result.startS)}</span>
             </li>
             {done.map((d, i) => (
@@ -743,7 +731,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                   {d.status === "delivered" ? "✓" : "!"}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{d.address}</span>
-                <span className="text-xs">{d.status === "delivered" ? "Delivered" : "Not delivered"}</span>
+                <span className="text-xs">{d.status === "delivered" ? tr("Delivered") : tr("Not delivered")}</span>
               </li>
             ))}
             {remaining.map((s, k) => {
@@ -757,8 +745,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-slate-900">{s.address}</span>
                     <span className="block text-xs text-slate-500">
-                      +{formatDuration(s.legDurationS)} drive · {formatKm(s.legDistanceM)}
-                      {s.approximate && <span className="text-amber-700"> · approx. location</span>}
+                      +{formatDuration(s.legDurationS)} {" "}{tr("drive ·")}{" "}{formatKm(s.legDistanceM)}
+                      {s.approximate && <span className="text-amber-700"> {" "}{tr("· approx. location")}</span>}
                     </span>
                   </span>
                   <span className="text-right">
@@ -776,9 +764,9 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                   <Flag className="size-3.5" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate">{result.end.label}</span>
+                  <span className="block truncate">{<Tx>{result.end.label}</Tx>}</span>
                   <span className="block text-xs">
-                    +{formatDuration(result.returnLeg.durationS)} drive · {formatKm(result.returnLeg.distanceM)}
+                    +{formatDuration(result.returnLeg.durationS)} {" "}{tr("drive ·")}{" "}{formatKm(result.returnLeg.distanceM)}
                   </span>
                 </span>
                 <span className="font-semibold tabular-nums text-slate-900">{formatClock(finishS)}</span>
@@ -789,8 +777,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
 
         {driving && (
           <button className="block w-full text-center text-xs text-slate-500 underline" onClick={reset}>
-            Cancel this route and start over
-          </button>
+            {tr("Cancel this route and start over")}</button>
         )}
       </main>
       <Toast toast={toast} onDone={clearToast} />
@@ -812,6 +799,7 @@ function StartCard({
   onRefresh: () => void;
   onChange: () => void;
 }) {
+  const tr = useT();
   const quality = !here ? null : here.manual || here.accuracy <= GOOD_FIX_M ? "good" : here.accuracy <= ROUGH_FIX_M ? "fair" : "rough";
   return (
     <section
@@ -831,17 +819,17 @@ function StartCard({
           {locating && <span className="absolute inset-0 animate-ping rounded-full bg-blue-400/30" />}
         </span>
         <div className="min-w-0 flex-1 text-sm">
-          <p className="font-semibold text-slate-900">Your start</p>
+          <p className="font-semibold text-slate-900">{tr("Your start")}</p>
           {locating ? (
             <p className="text-slate-500">
-              Finding your exact location…{locating.accuracy !== null && <span className="tabular-nums"> {describeAccuracy(locating.accuracy)} so far</span>}
+              {tr("Finding your exact location…")}{locating.accuracy !== null && <span className="tabular-nums"> {describeAccuracy(locating.accuracy)} {" "}{tr("so far")}</span>}
             </p>
           ) : here ? (
             <>
               <p className="truncate text-slate-700">{here.label ? `Near ${here.label}` : `${here.lat.toFixed(5)}, ${here.lng.toFixed(5)}`}</p>
               <p className={cx("text-xs", quality === "good" ? "text-emerald-700" : quality === "fair" ? "text-amber-700" : "text-red-700")}>
                 {here.manual
-                  ? "Placed by hand on the map"
+                  ? tr("Placed by hand on the map")
                   : quality === "good"
                     ? `Precise GPS fix (${describeAccuracy(here.accuracy)})`
                     : quality === "fair"
@@ -850,17 +838,16 @@ function StartCard({
               </p>
             </>
           ) : (
-            <p className="text-slate-500">Not measured yet.</p>
+            <p className="text-slate-500">{tr("Not measured yet.")}</p>
           )}
         </div>
       </div>
       <div className="mt-3 flex gap-2">
         <button className={btn("secondary", "sm")} disabled={!!locating} onClick={onRefresh}>
-          {locating ? <Spinner className="size-3" /> : <LocateFixed className="size-3.5" />} {here ? "Measure again" : "Find my location"}
+          {locating ? <Spinner className="size-3" /> : <LocateFixed className="size-3.5" />} {here ? tr("Measure again") : tr("Find my location")}
         </button>
         <button className={btn("ghost", "sm")} onClick={onChange}>
-          Use another start
-        </button>
+          {tr("Use another start")}</button>
       </div>
     </section>
   );

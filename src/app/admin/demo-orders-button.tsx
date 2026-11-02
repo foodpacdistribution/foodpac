@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { addDemoOrders } from "@/app/actions/orders";
 import { btn, Spinner } from "@/components/ui";
+import { useT } from "@/components/i18n";
 
 /** Fills a day with sample orders so a first-time user can try the whole flow. */
 export function DemoOrdersButton({ date }: { date: string }) {
+  const tr = useT();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   return (
@@ -22,7 +24,7 @@ export function DemoOrdersButton({ date }: { date: string }) {
         })
       }
     >
-      {pending ? <Spinner className="size-3.5" /> : <Sparkles className="size-3.5" />} {pending ? "Adding…" : "Try it with demo orders"}
+      {pending ? <Spinner className="size-3.5" /> : <Sparkles className="size-3.5" />} {pending ? tr("Adding…") : tr("Try it with demo orders")}
     </button>
   );
 }

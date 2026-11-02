@@ -8,6 +8,7 @@ import { formatAgo, vehicleMarkers } from "@/lib/live-map";
 import { getDepots, getPlanView, getSettings } from "@/lib/planning";
 import { formatClock, formatDuration, formatKm, nowSecondsIn, todayIn } from "@/lib/time";
 import { liveFleet, STATIONARY_ALERT_S } from "@/lib/tracking";
+import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Live Tracking" };
 
@@ -53,14 +54,13 @@ export default async function TrackingPage() {
   return (
     <>
       <PageHeader
-        title="Live Tracking"
-        subtitle="Driver positions from the driver app, refreshed every 20 seconds. Location is only shared while a route is in progress."
+        title={<T>{"Live Tracking"}</T>}
+        subtitle={<T>{"Driver positions from the driver app, refreshed every 20 seconds. Location is only shared while a route is in progress."}</T>}
       />
       {routes.length === 0 ? (
         <Card>
-          <EmptyState icon={Radio} title="Nothing to track yet">
-            Once today&apos;s plan is dispatched and drivers start their routes, their live positions appear here.
-          </EmptyState>
+          <EmptyState icon={Radio} title={<T>{"Nothing to track yet"}</T>}>
+            <T>{"Once today's plan is dispatched and drivers start their routes, their live positions appear here."}</T></EmptyState>
         </Card>
       ) : (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
@@ -84,48 +84,43 @@ export default async function TrackingPage() {
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-semibold text-slate-900">{r.driverName}</p>
                       {r.status === "completed" ? (
-                        <Badge tone="green">Finished</Badge>
+                        <Badge tone="green"><T>{"Finished"}</T></Badge>
                       ) : r.status === "in_progress" ? (
                         v.stale ? (
                           <Badge tone="amber">
-                            <SignalZero className="size-3" /> Signal lost
-                          </Badge>
+                            <SignalZero className="size-3" /> {" "}<T>{"Signal lost"}</T></Badge>
                         ) : (
                           <Badge tone="blue">
-                            <Radio className="size-3" /> Live
-                          </Badge>
+                            <Radio className="size-3" /> {" "}<T>{"Live"}</T></Badge>
                         )
                       ) : (
-                        <Badge>Not started</Badge>
+                        <Badge><T>{"Not started"}</T></Badge>
                       )}
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      Stop {Math.min(done + 1, r.stops.length)} of {r.stops.length}
-                      {r.trips > 1 && ` · ${r.trips} trips`} · last update {formatAgo(v.ageS)}
+                      <T>{"Stop"}</T>{" "}{Math.min(done + 1, r.stops.length)} {" "}<T>{"of"}</T>{" "}{r.stops.length}
+                      {r.trips > 1 && <> <Tx>{`· ${r.trips} trips`}</Tx></>} {" "}<T>{"· last update"}</T>{" "}<Tx>{formatAgo(v.ageS)}</Tx>
                     </p>
                     {next && r.status !== "planned" && (
                       <p className="mt-2 truncate text-sm text-slate-700">
-                        Next: <span className="font-medium">{next.order.customerName || next.order.orderNumber}</span>
-                        <span className="text-slate-400"> · ETA {formatClock(next.etaS)}</span>
+                        <T>{"Next:"}</T>{" "}<span className="font-medium">{next.order.customerName || next.order.orderNumber}</span>
+                        <span className="text-slate-400"> {" "}<T>{"· ETA"}</T>{" "}{formatClock(next.etaS)}</span>
                       </p>
                     )}
                     <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
                       <div className="rounded-lg bg-slate-50 px-2 py-1.5">
                         <dt className="flex items-center gap-1 text-slate-500">
-                          <Navigation className="size-3" /> To next
-                        </dt>
+                          <Navigation className="size-3" /> {" "}<T>{"To next"}</T></dt>
                         <dd className="font-semibold tabular-nums text-slate-800">{v.toNextStopM !== null ? formatKm(v.toNextStopM) : "—"}</dd>
                       </div>
                       <div className="rounded-lg bg-slate-50 px-2 py-1.5">
                         <dt className="flex items-center gap-1 text-slate-500">
-                          <Gauge className="size-3" /> Speed
-                        </dt>
+                          <Gauge className="size-3" /> {" "}<T>{"Speed"}</T></dt>
                         <dd className="font-semibold tabular-nums text-slate-800">{v.last?.speedKmh != null && !v.stale ? `${v.last.speedKmh} km/h` : "—"}</dd>
                       </div>
                       <div className="rounded-lg bg-slate-50 px-2 py-1.5">
                         <dt className="flex items-center gap-1 text-slate-500">
-                          <Timer className="size-3" /> Driven
-                        </dt>
+                          <Timer className="size-3" /> {" "}<T>{"Driven"}</T></dt>
                         <dd className="font-semibold tabular-nums text-slate-800">
                           {formatKm(v.gpsDistanceM)}
                           <span className="font-normal text-slate-400"> / {formatKm(r.distanceM)}</span>
@@ -134,7 +129,7 @@ export default async function TrackingPage() {
                     </dl>
                     {alerts.map((a) => (
                       <p key={a} className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700">
-                        <AlertTriangle className="size-3.5" /> {a}
+                        <AlertTriangle className="size-3.5" /> <Tx>{a}</Tx>
                       </p>
                     ))}
                   </div>
@@ -142,9 +137,7 @@ export default async function TrackingPage() {
               </Card>
             ))}
             <p className="px-1 text-[11px] leading-relaxed text-slate-500">
-              Phones pause location when the driver app is in the background or the screen locks. A grey marker means the last known position.
-              Distance driven is measured from GPS points and may read slightly low.
-            </p>
+              <T>{"Phones pause location when the driver app is in the background or the screen locks. A grey marker means the last known position. Distance driven is measured from GPS points and may read slightly low."}</T></p>
           </div>
         </div>
       )}

@@ -9,6 +9,7 @@ import { aud, PAYMENT_METHOD_LABEL, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
 import { PaymentPill, Pill } from "../badges";
+import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Invoices" };
 
@@ -31,13 +32,13 @@ export default async function InvoicesPage() {
 
   return (
     <>
-      <h1 className="font-display text-2xl font-semibold tracking-tight">Invoices &amp; payments</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight"><T>{"Invoices & payments"}</T></h1>
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
-        <Stat label="Owing" value={aud(owing)} hint={`${unpaid.length} unpaid invoice${unpaid.length === 1 ? "" : "s"}`} />
-        <Stat label="Overdue" value={aud(overdue.reduce((t, r) => t + r.totalCents, 0))} hint={overdue.length ? `${overdue.length} past due` : "Nothing overdue"} warn={overdue.length > 0} />
+        <Stat label={<T>{"Owing"}</T>} value={aud(owing)} hint={`${unpaid.length} unpaid invoice${unpaid.length === 1 ? "" : "s"}`} />
+        <Stat label={<T>{"Overdue"}</T>} value={aud(overdue.reduce((t, r) => t + r.totalCents, 0))} hint={overdue.length ? `${overdue.length} past due` : "Nothing overdue"} warn={overdue.length > 0} />
         <Stat
-          label="Account terms"
-          value={PAYMENT_TERMS_LABEL[c.paymentTerms]}
+          label={<T>{"Account terms"}</T>}
+          value={<T>{PAYMENT_TERMS_LABEL[c.paymentTerms]}</T>}
           hint={c.creditLimitCents !== null ? `Credit available ${aud(Math.max(0, c.creditLimitCents - owing))}` : "No credit limit set"}
         />
       </div>
@@ -45,11 +46,11 @@ export default async function InvoicesPage() {
         <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-leaf-50/60 text-left text-xs text-leaf-900/60">
             <tr>
-              <th className="px-4 py-2.5 font-medium">Invoice</th>
-              <th className="px-2 py-2.5 font-medium">Method</th>
-              <th className="px-2 py-2.5 font-medium">Due</th>
-              <th className="px-2 py-2.5 font-medium">Status</th>
-              <th className="px-4 py-2.5 text-right font-medium">Total</th>
+              <th className="px-4 py-2.5 font-medium"><T>{"Invoice"}</T></th>
+              <th className="px-2 py-2.5 font-medium"><T>{"Method"}</T></th>
+              <th className="px-2 py-2.5 font-medium"><T>{"Due"}</T></th>
+              <th className="px-2 py-2.5 font-medium"><T>{"Status"}</T></th>
+              <th className="px-4 py-2.5 text-right font-medium"><T>{"Total"}</T></th>
             </tr>
           </thead>
           <tbody>
@@ -59,12 +60,12 @@ export default async function InvoicesPage() {
                   <Link href={`/portal/orders/${r.id}/invoice`} className="font-semibold text-leaf-700 hover:underline">
                     {r.number}
                   </Link>
-                  <span className="block text-xs text-leaf-900/50">{prettyDate(r.createdAt.toISOString().slice(0, 10))}</span>
+                  <span className="block text-xs text-leaf-900/50">{<Tx>{prettyDate(r.createdAt.toISOString().slice(0, 10))}</Tx>}</span>
                 </td>
                 <td className="px-2 py-3 text-leaf-900/70">{PAYMENT_METHOD_LABEL[r.paymentMethod]}</td>
                 <td className="px-2 py-3 text-leaf-900/70">{r.dueDate ? prettyDate(r.dueDate) : "—"}</td>
                 <td className="px-2 py-3">
-                  {r.paymentStatus === "unpaid" && r.dueDate && r.dueDate < today ? <Pill tone="red">Overdue</Pill> : <PaymentPill s={r.paymentStatus} />}
+                  {r.paymentStatus === "unpaid" && r.dueDate && r.dueDate < today ? <Pill tone="red"><T>{"Overdue"}</T></Pill> : <PaymentPill s={r.paymentStatus} />}
                 </td>
                 <td className="px-4 py-3 text-right font-medium tabular-nums">{aud(r.totalCents)}</td>
               </tr>
@@ -72,8 +73,7 @@ export default async function InvoicesPage() {
             {!rows.length && (
               <tr>
                 <td colSpan={5} className="px-4 py-10 text-center text-leaf-900/50">
-                  No invoices yet.
-                </td>
+                  <T>{"No invoices yet."}</T></td>
               </tr>
             )}
           </tbody>
@@ -83,12 +83,12 @@ export default async function InvoicesPage() {
   );
 }
 
-function Stat({ label, value, hint, warn }: { label: string; value: string; hint: string; warn?: boolean }) {
+function Stat({ label, value, hint, warn }: { label: React.ReactNode; value: React.ReactNode; hint: React.ReactNode; warn?: boolean }) {
   return (
     <div className="rounded-2xl border border-leaf-950/10 bg-white p-4">
-      <p className="text-xs font-medium text-leaf-900/55">{label}</p>
+      <p className="text-xs font-medium text-leaf-900/55">{<Tx>{label}</Tx>}</p>
       <p className={`mt-1 font-display text-xl font-semibold tabular-nums ${warn ? "text-red-700" : ""}`}>{value}</p>
-      <p className="mt-0.5 text-xs text-leaf-900/55">{hint}</p>
+      <p className="mt-0.5 text-xs text-leaf-900/55">{<Tx>{hint}</Tx>}</p>
     </div>
   );
 }

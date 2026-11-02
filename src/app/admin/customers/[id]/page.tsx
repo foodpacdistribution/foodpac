@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db";
 import { customerPrices, customers, products } from "@/lib/db/schema";
 import { PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { PriceList } from "./price-list";
+import { T } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Customer price list" };
 
@@ -26,8 +27,7 @@ export default async function CustomerPricesPage({ params }: { params: Promise<{
   return (
     <>
       <Link href="/admin/customers" className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="size-4" /> Customers
-      </Link>
+        <ArrowLeft className="size-4" /> {" "}<T>{"Customers"}</T></Link>
       <PageHeader title={`${c.name} · price list`} subtitle={`${PAYMENT_TERMS_LABEL[c.paymentTerms]}. Leave a price blank to use the list price. Prices are ex GST and only this customer sees them.`} />
       <PriceList customerId={c.id} rows={rows.map((r) => ({ ...r, ownCents: own.find((o) => o.productId === r.id)?.priceCents ?? null }))} />
     </>

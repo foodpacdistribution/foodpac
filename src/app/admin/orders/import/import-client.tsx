@@ -8,6 +8,7 @@ import { geocodeOrders, importOrders } from "@/app/actions/orders";
 import { FormError } from "@/components/client-ui";
 import { Badge, btn, Card, CardHeader, cx, Field, inputCls, PageHeader, Spinner } from "@/components/ui";
 import { guessMapping, IMPORT_FIELDS, type ImportField, type ImportRow, validateImportRow } from "@/lib/orders";
+import { Tx, useT } from "@/components/i18n";
 
 type Sheet = { headers: string[]; rows: string[][]; name: string };
 type Mapping = Partial<Record<ImportField, number>>;
@@ -52,6 +53,7 @@ function saveTemplate(headers: string[], mapping: Mapping) {
 }
 
 export function ImportClient({ defaultDate }: { defaultDate: string }) {
+  const tr = useT();
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [mapping, setMapping] = useState<Mapping>({});
   const [usedTemplate, setUsedTemplate] = useState(false);
@@ -133,32 +135,30 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
   return (
     <>
       <PageHeader
-        title="Import orders"
-        subtitle="Upload the day's order export from any system. Columns are matched automatically and you can adjust them."
+        title={tr("Import orders")}
+        subtitle={tr("Upload the day's order export from any system. Columns are matched automatically and you can adjust them.")}
         actions={
           <Link href={`/admin/orders?date=${date}`} className={btn("ghost")}>
-            <ArrowLeft className="size-4" /> Back to orders
-          </Link>
+            <ArrowLeft className="size-4" /> {" "}{tr("Back to orders")}</Link>
         }
       />
 
       {result ? (
         <Card className="mx-auto max-w-xl p-6 text-center">
           <CheckCircle2 className="mx-auto size-10 text-emerald-500" />
-          <h2 className="mt-3 text-lg font-semibold">{result.inserted} orders imported</h2>
+          <h2 className="mt-3 text-lg font-semibold">{result.inserted} {" "}{tr("orders imported")}</h2>
           <div className="mt-2 space-y-1 text-sm text-slate-600">
             {result.duplicates.length > 0 && (
               <p>
-                {result.duplicates.length} skipped as duplicates (same order number and date already in the system).
-              </p>
+                {result.duplicates.length} {" "}{tr("skipped as duplicates (same order number and date already in the system).")}</p>
             )}
-            {result.errors.length > 0 && <p>{result.errors.length} rows had problems and were not imported.</p>}
+            {result.errors.length > 0 && <p>{result.errors.length} {" "}{tr("rows had problems and were not imported.")}</p>}
           </div>
           {result.errors.length > 0 && (
             <ul className="mx-auto mt-3 max-h-40 max-w-md overflow-y-auto rounded-lg bg-red-50 p-3 text-left text-xs text-red-700">
               {result.errors.map((e) => (
                 <li key={e.row}>
-                  Row {e.row}: {e.message}
+                  {tr("Row")}{" "}{e.row}: {e.message}
                 </li>
               ))}
             </ul>
@@ -167,26 +167,23 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             {locate && locate.done === locate.total && !locate.error && !locate.failed ? (
               <Link href={`/admin/planner?date=${date}`} className={btn("primary")}>
-                <MapIcon className="size-4" /> Plan the routes
-              </Link>
+                <MapIcon className="size-4" /> {" "}{tr("Plan the routes")}</Link>
             ) : locate && locate.done === locate.total && locate.failed > 0 ? (
               <Link href={`/admin/orders?date=${date}&status=attention`} className={btn("primary")}>
-                Fix {locate.failed} {locate.failed === 1 ? "address" : "addresses"}
+                {tr("Fix")}{" "}{locate.failed} {locate.failed === 1 ? tr("address") : tr("addresses")}
               </Link>
             ) : (
               <Link href={`/admin/orders?date=${date}`} className={btn(locate && !locate.error ? "secondary" : "primary")}>
-                Review orders
-              </Link>
+                {tr("Review orders")}</Link>
             )}
             <button className={btn("secondary")} onClick={() => (setSheet(null), setResult(null), setLocate(null))}>
-              Import another file
-            </button>
+              {tr("Import another file")}</button>
           </div>
         </Card>
       ) : !sheet ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
-            <CardHeader title="Upload a file" subtitle="Excel (.xlsx) or CSV with a header row" />
+            <CardHeader title={tr("Upload a file")} subtitle={tr("Excel (.xlsx) or CSV with a header row")} />
             <label
               className="m-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-line px-6 py-12 text-center hover:border-blue-400 hover:bg-blue-50/30"
               onDragOver={(e) => e.preventDefault()}
@@ -197,13 +194,13 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
               }}
             >
               <FileSpreadsheet className="size-10 text-slate-400" />
-              <span className="mt-3 text-sm font-medium text-slate-800">Drop a file here or click to choose</span>
-              <span className="mt-1 text-xs text-slate-500">Order number, customer, address, suburb, postcode, time window…</span>
+              <span className="mt-3 text-sm font-medium text-slate-800">{tr("Drop a file here or click to choose")}</span>
+              <span className="mt-1 text-xs text-slate-500">{tr("Order number, customer, address, suburb, postcode, time window…")}</span>
               <input type="file" accept=".xlsx,.csv,.txt,.tsv" className="sr-only" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
             </label>
           </Card>
           <Card>
-            <CardHeader title="Or paste rows" subtitle="Copy cells straight from Excel or Google Sheets, including the header row" />
+            <CardHeader title={tr("Or paste rows")} subtitle={tr("Copy cells straight from Excel or Google Sheets, including the header row")} />
             <div className="space-y-3 p-4">
               <textarea
                 value={paste}
@@ -217,8 +214,7 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
                 disabled={!paste.trim()}
                 onClick={() => accept(toSheet("Pasted rows", Papa.parse<string[]>(paste.trim(), { skipEmptyLines: true }).data))}
               >
-                <ClipboardPaste className="size-4" /> Use pasted rows
-              </button>
+                <ClipboardPaste className="size-4" /> {" "}{tr("Use pasted rows")}</button>
             </div>
           </Card>
           <div className="lg:col-span-2">
@@ -229,27 +225,27 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
         <div className="grid gap-4 xl:grid-cols-[22rem_1fr]">
           <Card className="h-fit">
             <CardHeader
-              title="Match columns"
+              title={tr("Match columns")}
               subtitle={
                 <>
-                  {sheet.name} · {sheet.rows.length} rows {usedTemplate && <Badge tone="blue">Saved template applied</Badge>}
+                  {sheet.name} · {sheet.rows.length} {" "}{tr("rows")}{" "}{usedTemplate && <Badge tone="blue">{tr("Saved template applied")}</Badge>}
                 </>
               }
             />
             <div className="space-y-3 p-4">
-              <Field label="Delivery date for rows without one">
+              <Field label={tr("Delivery date for rows without one")}>
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
               </Field>
               <div className="h-px bg-line" />
               {IMPORT_FIELDS.map((f) => (
                 <div key={f.key} className="grid grid-cols-[8.5rem_1fr] items-center gap-2">
-                  <span className={cx("text-xs", f.key === "address" ? "font-semibold text-slate-800" : "text-slate-600")}>{f.label}</span>
+                  <span className={cx("text-xs", f.key === "address" ? "font-semibold text-slate-800" : "text-slate-600")}>{<Tx>{f.label}</Tx>}</span>
                   <select
                     value={mapping[f.key] ?? -1}
                     onChange={(e) => setMapping({ ...mapping, [f.key]: Number(e.target.value) < 0 ? undefined : Number(e.target.value) })}
                     className={cx(inputCls, "h-8 text-xs", mapping[f.key] === undefined && "text-slate-400")}
                   >
-                    <option value={-1}>— not in file —</option>
+                    <option value={-1}>{tr("— not in file —")}</option>
                     {sheet.headers.map((h, i) => (
                       <option key={i} value={i}>
                         {h}
@@ -258,16 +254,16 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
                   </select>
                 </div>
               ))}
-              <p className="text-[11px] text-slate-500">This matching is remembered for files with the same columns.</p>
+              <p className="text-[11px] text-slate-500">{tr("This matching is remembered for files with the same columns.")}</p>
             </div>
           </Card>
 
           <Card className="min-w-0">
             <CardHeader
-              title="Preview"
+              title={tr("Preview")}
               subtitle={
                 invalid ? (
-                  <span className="text-red-600">{invalid} row(s) have problems and will be skipped</span>
+                  <span className="text-red-600">{invalid} {" "}{tr("row(s) have problems and will be skipped")}</span>
                 ) : (
                   "All rows look good"
                 )
@@ -275,8 +271,7 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
               action={
                 <div className="flex gap-2">
                   <button className={btn("ghost", "sm")} onClick={() => setSheet(null)}>
-                    Change file
-                  </button>
+                    {tr("Change file")}</button>
                   <button className={btn("primary", "sm")} disabled={pending || mapping.address === undefined || invalid === checks.length} onClick={submit}>
                     {pending ? <Spinner className="size-3.5" /> : <Upload className="size-3.5" />}
                     {pending ? "Importing…" : `Import ${checks.length - invalid} orders`}
@@ -284,19 +279,19 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
                 </div>
               }
             />
-            {mapping.address === undefined && <p className="px-4 pt-3 text-sm text-red-600">Choose which column holds the delivery address.</p>}
+            {mapping.address === undefined && <p className="px-4 pt-3 text-sm text-red-600">{tr("Choose which column holds the delivery address.")}</p>}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[820px] text-xs">
                 <thead>
                   <tr className="border-b border-line text-left font-semibold uppercase tracking-wide text-slate-500">
                     <th className="px-3 py-2">#</th>
-                    <th className="px-3 py-2">Order</th>
-                    <th className="px-3 py-2">Customer</th>
-                    <th className="px-3 py-2">Address</th>
-                    <th className="px-3 py-2">Date</th>
-                    <th className="px-3 py-2">Window</th>
-                    <th className="px-3 py-2">Qty</th>
-                    <th className="px-3 py-2">Check</th>
+                    <th className="px-3 py-2">{tr("Order")}</th>
+                    <th className="px-3 py-2">{tr("Customer")}</th>
+                    <th className="px-3 py-2">{tr("Address")}</th>
+                    <th className="px-3 py-2">{tr("Date")}</th>
+                    <th className="px-3 py-2">{tr("Window")}</th>
+                    <th className="px-3 py-2">{tr("Qty")}</th>
+                    <th className="px-3 py-2">{tr("Check")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -313,12 +308,12 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
                         {mapped[i].timeWindow || [mapped[i].windowStart, mapped[i].windowEnd].filter(Boolean).join(" – ") || "—"}
                       </td>
                       <td className="px-3 py-2">{c.ok ? c.value.demand : mapped[i].demand}</td>
-                      <td className="px-3 py-2">{c.ok ? <Badge tone="green">OK</Badge> : <span className="text-red-600">{c.error}</span>}</td>
+                      <td className="px-3 py-2">{c.ok ? <Badge tone="green">{tr("OK")}</Badge> : <span className="text-red-600">{c.error}</span>}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {checks.length > 200 && <p className="px-3 py-2 text-xs text-slate-500">Showing first 200 of {checks.length} rows.</p>}
+              {checks.length > 200 && <p className="px-3 py-2 text-xs text-slate-500">{tr("Showing first 200 of")}{" "}{checks.length} {" "}{tr("rows.")}</p>}
             </div>
             <div className="p-4">
               <FormError message={error} />
@@ -331,18 +326,19 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
 }
 
 function LocateStatus({ locate, date }: { locate: Locate | null; date: string }) {
+  const tr = useT();
   if (!locate) return null;
   if (locate.error)
     return (
       <p className="mt-4 text-sm text-red-600">
-        {locate.error} The rest can be checked from <Link href={`/admin/orders?date=${date}&status=attention`} className="underline">Orders</Link>.
+        {locate.error} {" "}{tr("The rest can be checked from")}{" "}<Link href={`/admin/orders?date=${date}&status=attention`} className="underline">{tr("Orders")}</Link>.
       </p>
     );
   if (locate.done < locate.total)
     return (
       <div className="mx-auto mt-5 max-w-sm text-left">
         <p className="flex justify-between text-sm text-slate-600">
-          <span>Placing addresses on the map…</span>
+          <span>{tr("Placing addresses on the map…")}</span>
           <span className="tabular-nums">
             {locate.done} / {locate.total}
           </span>
@@ -350,14 +346,13 @@ function LocateStatus({ locate, date }: { locate: Locate | null; date: string })
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
           <div className="h-full rounded-full bg-blue-600 transition-[width] duration-500 ease-out" style={{ width: `${(locate.done / locate.total) * 100}%` }} />
         </div>
-        <p className="mt-1.5 text-xs text-slate-400">You can leave this page. Anything left can be checked from Orders.</p>
+        <p className="mt-1.5 text-xs text-slate-400">{tr("You can leave this page. Anything left can be checked from Orders.")}</p>
       </div>
     );
   return locate.failed ? (
     <p className="mt-4 flex animate-rise items-center justify-center gap-1.5 text-sm text-amber-700">
-      <AlertTriangle className="size-4" /> {locate.failed} of {locate.total} {locate.total === 1 ? "address" : "addresses"} couldn&apos;t be found. Fix them before planning.
-    </p>
+      <AlertTriangle className="size-4" /> {locate.failed} {" "}{tr("of")}{" "}{locate.total} {locate.total === 1 ? tr("address") : tr("addresses")} {" "}{tr("couldn't be found. Fix them before planning.")}</p>
   ) : (
-    <p className="mt-4 animate-rise text-sm text-emerald-700">All {locate.total} addresses are on the map. Ready to plan.</p>
+    <p className="mt-4 animate-rise text-sm text-emerald-700">{tr("All")}{" "}{locate.total} {" "}{tr("addresses are on the map. Ready to plan.")}</p>
   );
 }

@@ -1,3 +1,4 @@
+import { T, Tx } from "@/components/i18n";
 import { cx } from "@/components/ui";
 import { FULFILMENT, PAYMENT_STATUS, SALES_STATUS } from "@/lib/money";
 import type { PodStatus } from "@/lib/portal";
@@ -12,12 +13,12 @@ const TONE = {
 } as const;
 
 export function Pill({ tone, children }: { tone: keyof typeof TONE; children: React.ReactNode }) {
-  return <span className={cx("inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap", TONE[tone])}>{children}</span>;
+  return <span className={cx("inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap", TONE[tone])}>{typeof children === "string" ? <T>{children}</T> : children}</span>;
 }
 
-export const OrderPill = ({ s }: { s: keyof typeof SALES_STATUS }) => <Pill tone={SALES_STATUS[s].tone}>{SALES_STATUS[s].label}</Pill>;
-export const PaymentPill = ({ s }: { s: keyof typeof PAYMENT_STATUS }) => <Pill tone={PAYMENT_STATUS[s].tone}>{PAYMENT_STATUS[s].label}</Pill>;
-export const WarehousePill = ({ s }: { s: keyof typeof FULFILMENT }) => <Pill tone={FULFILMENT[s].tone}>{FULFILMENT[s].label}</Pill>;
+export const OrderPill = ({ s }: { s: keyof typeof SALES_STATUS }) => <Pill tone={SALES_STATUS[s].tone}>{<Tx>{SALES_STATUS[s].label}</Tx>}</Pill>;
+export const PaymentPill = ({ s }: { s: keyof typeof PAYMENT_STATUS }) => <Pill tone={PAYMENT_STATUS[s].tone}>{<Tx>{PAYMENT_STATUS[s].label}</Tx>}</Pill>;
+export const WarehousePill = ({ s }: { s: keyof typeof FULFILMENT }) => <Pill tone={FULFILMENT[s].tone}>{<Tx>{FULFILMENT[s].label}</Tx>}</Pill>;
 
 export const POD_LABEL: Record<PodStatus, { label: string; tone: keyof typeof TONE }> = {
   pending: { label: "Not delivered yet", tone: "slate" },

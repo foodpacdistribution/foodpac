@@ -3,6 +3,7 @@
 import { Camera, Eraser, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { btn, cx, Spinner } from "@/components/ui";
+import { useT } from "@/components/i18n";
 
 /** Resizes a camera photo on the phone so uploads stay small (~100–300 KB). */
 async function compressPhoto(file: File, maxSide = 1600, quality = 0.75): Promise<File> {
@@ -22,6 +23,7 @@ async function compressPhoto(file: File, maxSide = 1600, quality = 0.75): Promis
 }
 
 export function PhotoCapture({ value, onChange, required }: { value: File | null; onChange: (f: File | null) => void; required?: boolean }) {
+  const tr = useT();
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -35,17 +37,17 @@ export function PhotoCapture({ value, onChange, required }: { value: File | null
     return (
       <div className="relative overflow-hidden rounded-xl border border-line">
         {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
-        <img src={preview} alt="Delivery photo preview" className="max-h-56 w-full object-cover" />
-        <button type="button" onClick={() => (onChange(null), setPreview(null))} className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-black/60 text-white" aria-label="Remove photo">
+        <img src={preview} alt={tr("Delivery photo preview")} className="max-h-56 w-full object-cover" />
+        <button type="button" onClick={() => (onChange(null), setPreview(null))} className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-black/60 text-white" aria-label={tr("Remove photo")}>
           <X className="size-4" />
         </button>
-        <span className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">{Math.round(value.size / 1024)} KB</span>
+        <span className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">{Math.round(value.size / 1024)} {" "}{tr("KB")}</span>
       </div>
     );
   }
   return (
     <label className={cx(btn("secondary", "lg", "w-full cursor-pointer rounded-xl border-dashed"), busy && "opacity-60")}>
-      {busy ? <Spinner className="size-5" /> : <Camera className="size-5" />} {busy ? "Processing…" : `Take photo${required ? " (required)" : ""}`}
+      {busy ? <Spinner className="size-5" /> : <Camera className="size-5" />} {busy ? tr("Processing…") : `Take photo${required ? " (required)" : ""}`}
       <input
         type="file"
         accept="image/*"
@@ -66,6 +68,7 @@ export function PhotoCapture({ value, onChange, required }: { value: File | null
 
 /** Finger/stylus signature pad; reports a PNG after each stroke. */
 export function SignaturePad({ onChange, required }: { onChange: (f: File | null) => void; required?: boolean }) {
+  const tr = useT();
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const [empty, setEmpty] = useState(true);
@@ -101,11 +104,10 @@ export function SignaturePad({ onChange, required }: { onChange: (f: File | null
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-600">Customer signature{required ? " *" : " (optional)"}</span>
+        <span className="text-xs font-medium text-slate-600">{tr("Customer signature")}{required ? " *" : tr(" (optional)")}</span>
         {!empty && (
           <button type="button" onClick={clear} className="flex items-center gap-1 text-xs text-slate-500">
-            <Eraser className="size-3.5" /> Clear
-          </button>
+            <Eraser className="size-3.5" /> {" "}{tr("Clear")}</button>
         )}
       </div>
       <div className="relative">
@@ -136,7 +138,7 @@ export function SignaturePad({ onChange, required }: { onChange: (f: File | null
             export_();
           }}
         />
-        {empty && <span className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-slate-300">Sign here</span>}
+        {empty && <span className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-slate-300">{tr("Sign here")}</span>}
         <span className="pointer-events-none absolute bottom-8 left-6 right-6 border-b border-dashed border-slate-200" />
       </div>
     </div>

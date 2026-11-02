@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Toast, type ToastMessage } from "./client-ui";
+import { useT } from "./i18n";
 
 // Keeps a screen up to date without reloading by hand. Every few seconds (only while the tab is
 // visible) it asks /api/live for a small fingerprint of what this screen shows, and re-renders
@@ -31,6 +32,7 @@ type Live = { v: string; sales: number; stops: number; enquiries: number };
 
 export function LiveRefresh({ scope, intervalMs = 12_000, notify }: { scope: "admin" | "tracking" | "driver" | "customer"; intervalMs?: number; notify?: "staff" | "driver" }) {
   const router = useRouter();
+  const tr = useT();
   const held = useSyncExternalStore(
     (l) => (listeners.add(l), () => listeners.delete(l)),
     () => holds > 0,
@@ -111,7 +113,7 @@ export function LiveRefresh({ scope, intervalMs = 12_000, notify }: { scope: "ad
           }}
           className="no-print fixed right-4 bottom-20 z-50 flex animate-pop items-center gap-2 rounded-full bg-navy-900 px-4 py-2.5 text-sm font-medium text-white shadow-pop lg:bottom-6"
         >
-          <RefreshCw className="size-4" /> New changes · Refresh
+          <RefreshCw className="size-4" /> {tr("New changes · Refresh")}
         </button>
       )}
       <Toast toast={toast} onDone={() => setToast(null)} />

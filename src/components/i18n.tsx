@@ -24,3 +24,9 @@ export function T({ children, vars }: { children: string; vars?: Record<string, 
   const locale = use(LocaleContext);
   return translate(locale, children, vars);
 }
+
+/** Translates its content when it's plain text (a label from a list, a formatted date…), else shows it as is. */
+export function Tx({ children }: { children?: React.ReactNode }) {
+  const locale = use(LocaleContext);
+  return typeof children === "string" ? translate(locale, children) : children;
+}

@@ -9,6 +9,7 @@ import { getSettings } from "@/lib/planning";
 import { canSeePrices, getCart, quote } from "@/lib/shop";
 import { ProductImage } from "../shop-ui";
 import { CartQty } from "./cart-line";
+import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Cart" };
 
@@ -22,18 +23,16 @@ export default async function CartPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">Your cart</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight"><T>{"Your cart"}</T></h1>
       {lines.length === 0 ? (
         <div className="mt-8 rounded-3xl border border-dashed border-leaf-950/15 bg-white px-6 py-14 text-center">
           <ShoppingCart className="mx-auto size-10 text-leaf-700/60" />
-          <p className="mt-3 font-semibold">Your cart is empty</p>
+          <p className="mt-3 font-semibold"><T>{"Your cart is empty"}</T></p>
           <div className="mt-4 flex justify-center gap-2">
             <Link href="/products" className="inline-flex h-10 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white">
-              Browse products
-            </Link>
+              <T>{"Browse products"}</T></Link>
             <Link href="/portal/quick-order" className="inline-flex h-10 items-center rounded-full border border-leaf-950/15 bg-white px-5 text-sm font-semibold">
-              Quick order
-            </Link>
+              <T>{"Quick order"}</T></Link>
           </div>
         </div>
       ) : (
@@ -62,29 +61,28 @@ export default async function CartPage() {
           </section>
           <aside className="h-fit rounded-3xl border border-leaf-950/10 bg-white p-5 lg:sticky lg:top-36">
             <dl className="space-y-2 text-sm">
-              <Row label="Subtotal (ex GST)" value={aud(q.subtotalCents)} />
+              <Row label={<T>{"Subtotal (ex GST)"}</T>} value={aud(q.subtotalCents)} />
               <Row
-                label="Delivery"
+                label={<T>{"Delivery"}</T>}
                 value={q.deliveryFeeCents ? aud(q.deliveryFeeCents) : "Free"}
                 hint={q.deliveryFeeCents && s.freeDeliveryOverCents ? `Free over ${aud(s.freeDeliveryOverCents)}` : undefined}
               />
-              <Row label="GST" value={aud(q.gstCents)} />
+              <Row label={<T>{"GST"}</T>} value={aud(q.gstCents)} />
               <div className="flex justify-between border-t border-leaf-950/10 pt-3 font-display text-lg font-semibold">
-                <dt>Total</dt>
+                <dt><T>{"Total"}</T></dt>
                 <dd className="tabular-nums">{aud(q.totalCents)}</dd>
               </div>
             </dl>
-            {q.belowMinimum && <p className="mt-3 text-xs text-red-700">The minimum order is {aud(s.minOrderCents)} before GST.</p>}
+            {q.belowMinimum && <p className="mt-3 text-xs text-red-700"><T>{"The minimum order is"}</T>{" "}{aud(s.minOrderCents)} {" "}<T>{"before GST."}</T></p>}
             {blocked ? (
               <span className="mt-4 flex h-12 w-full items-center justify-center rounded-full bg-leaf-950/10 text-sm font-semibold text-leaf-900/50">
-                {canSeePrices(viewer.customer) ? "Fix the items above to continue" : "Waiting for account approval"}
+                {canSeePrices(viewer.customer) ? <T>{"Fix the items above to continue"}</T> : <T>{"Waiting for account approval"}</T>}
               </span>
             ) : (
               <Link href="/checkout" className="mt-4 flex h-12 w-full items-center justify-center rounded-full bg-tomato text-base font-semibold text-white hover:bg-tomato-dark">
-                Checkout
-              </Link>
+                <T>{"Checkout"}</T></Link>
             )}
-            <p className="mt-3 text-center text-xs text-leaf-900/50">Stock is reserved when you place the order.</p>
+            <p className="mt-3 text-center text-xs text-leaf-900/50"><T>{"Stock is reserved when you place the order."}</T></p>
           </aside>
         </div>
       )}
@@ -92,12 +90,12 @@ export default async function CartPage() {
   );
 }
 
-function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Row({ label, value, hint }: { label: React.ReactNode; value: string; hint?: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-3 text-leaf-900/75">
       <dt>
-        {label}
-        {hint && <span className="block text-[11px] text-leaf-900/45">{hint}</span>}
+        {<Tx>{label}</Tx>}
+        {hint && <span className="block text-[11px] text-leaf-900/45">{<Tx>{hint}</Tx>}</span>}
       </dt>
       <dd className="tabular-nums">{value}</dd>
     </div>

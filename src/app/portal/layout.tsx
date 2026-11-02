@@ -11,6 +11,7 @@ import { getDb } from "@/lib/db";
 import { cartItems, customers } from "@/lib/db/schema";
 import { CartBadge } from "@/app/(site)/cart-badge";
 import { PortalNav } from "./portal-nav";
+import { T } from "@/components/i18n";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser(["customer"]);
@@ -27,16 +28,16 @@ export default async function PortalLayout({ children }: { children: React.React
           <Link href="/" className="flex min-w-0 items-center gap-2.5">
             <Logo className="h-9" />
             <span className="min-w-0 border-l border-leaf-950/15 pl-2.5 leading-tight">
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-leaf-800">My account</span>
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-leaf-800"><T>{"My account"}</T></span>
               <span className="block truncate text-xs text-leaf-900/60">{c?.name ?? user.name}</span>
             </span>
           </Link>
           <div className="flex items-center gap-1 text-xs font-medium">
             <Link href="/products" className="flex h-9 items-center gap-1.5 rounded-full px-3 text-leaf-900/80 hover:bg-leaf-950/5">
-              <Store className="size-3.5" /> <span className="hidden sm:inline">Shop</span>
+              <Store className="size-3.5" /> <span className="hidden sm:inline"><T>{"Shop"}</T></span>
             </Link>
             <Link href="/cart" className="relative flex h-9 items-center gap-1.5 rounded-full px-3 text-leaf-900/80 hover:bg-leaf-950/5">
-              <ShoppingCart className="size-3.5" /> <span className="hidden sm:inline">Cart</span>
+              <ShoppingCart className="size-3.5" /> <span className="hidden sm:inline"><T>{"Cart"}</T></span>
               <CartBadge count={cartCount} />
             </Link>
             <AccountMenu name={user.name} email={user.email} role="customer" subtitle={c?.name} links={accountLinks("customer")} />
@@ -47,8 +48,7 @@ export default async function PortalLayout({ children }: { children: React.React
       {c && !c.approved && (
         <div className="no-print border-b border-amber-200 bg-amber-50">
           <p className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-2.5 text-sm text-amber-900">
-            <Clock className="size-4 shrink-0" /> Thanks for registering. We&apos;re checking your account; prices and ordering open as soon as it&apos;s approved.
-          </p>
+            <Clock className="size-4 shrink-0" /> {" "}<T>{"Thanks for registering. We're checking your account; prices and ordering open as soon as it's approved."}</T></p>
         </div>
       )}
       <main className="mx-auto w-full max-w-5xl px-4 py-6">

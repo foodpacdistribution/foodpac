@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { LinkPending } from "@/components/client-ui";
 import { cx } from "@/components/ui";
 import type { Role } from "@/lib/db/schema";
+import { useT } from "@/components/i18n";
 
 const SECTIONS = [
   { title: "Overview", items: [{ href: "/admin", label: "Dashboard", icon: LayoutDashboard }] },
@@ -40,6 +41,7 @@ const SECTIONS = [
 
 export function SideNav({ role, mobile, newEnquiries = 0 }: { role: Role; mobile?: boolean; newEnquiries?: number }) {
   const pathname = usePathname();
+  const tr = useT();
   const isActive = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname.startsWith(href));
   const count = (href: string) => (href === "/admin/enquiries" && newEnquiries > 0 ? newEnquiries : null);
   const sections = SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => !("adminOnly" in i) || role === "admin") })).filter(
@@ -59,7 +61,7 @@ export function SideNav({ role, mobile, newEnquiries = 0 }: { role: Role; mobile
             )}
           >
             <Icon className="size-3.5" />
-            {label}
+            {tr(label)}
             {count(href) && <span className="rounded-full bg-blue-500 px-1.5 text-[10px] text-white">{count(href)}</span>}
             <LinkPending className="hidden" />
           </Link>
@@ -72,7 +74,7 @@ export function SideNav({ role, mobile, newEnquiries = 0 }: { role: Role; mobile
     <nav className="flex-1 space-y-3.5 overflow-y-auto px-3 py-2">
       {sections.map((section) => (
         <div key={section.title}>
-          <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{section.title}</p>
+          <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{tr(section.title)}</p>
           <div className="space-y-0.5">
             {section.items.map(({ href, label, icon: Icon }) => (
               <Link
@@ -84,7 +86,7 @@ export function SideNav({ role, mobile, newEnquiries = 0 }: { role: Role; mobile
                 )}
               >
                 <Icon className="size-4" />
-                {label}
+                {tr(label)}
                 {count(href) && (
                   <span className="ml-auto rounded-full bg-blue-500 px-1.5 py-px text-[10px] font-semibold tabular-nums text-white">{count(href)}</span>
                 )}

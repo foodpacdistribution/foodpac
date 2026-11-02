@@ -26,6 +26,7 @@ import { Badge, btn, Card, ColorDot, cx, EmptyState, Field, GEOCODE_STATUS, inpu
 import { DELIVERY_PLACE_WARN_M, describeDeliveryPlace, mapPinUrl } from "@/lib/orders";
 import type { orders as ordersTable } from "@/lib/db/schema";
 import { formatMinutesClock, minutesToInput } from "@/lib/time";
+import { Tx, useT } from "@/components/i18n";
 
 type Order = Omit<typeof ordersTable.$inferSelect, "createdAt" | "updatedAt"> & { createdAt: string; updatedAt: string };
 type Driver = { id: string; name: string; color: string };
@@ -45,6 +46,7 @@ export function OrdersClient(props: {
   drivers: Driver[];
   depots: Depot[];
 }) {
+  const tr = useT();
   const { date, orders, drivers } = props;
   const [record, setRecord] = useState<Order | null>(null);
   const router = useRouter();
@@ -109,17 +111,15 @@ export function OrdersClient(props: {
   return (
     <>
       <PageHeader
-        title="Orders"
-        subtitle="Everything that needs delivering on the selected day."
+        title={tr("Orders")}
+        subtitle={tr("Everything that needs delivering on the selected day.")}
         actions={
           <>
             <DateNav date={date} today={props.today} basePath="/admin/orders" />
             <Link href={`/admin/orders/import?date=${date}`} className={btn("secondary")}>
-              <Upload className="size-4" /> Import
-            </Link>
+              <Upload className="size-4" /> {" "}{tr("Import")}</Link>
             <button className={btn("primary")} onClick={() => setEditing("new")}>
-              <Plus className="size-4" /> Add order
-            </button>
+              <Plus className="size-4" /> {" "}{tr("Add order")}</button>
           </>
         }
       />
@@ -132,10 +132,9 @@ export function OrdersClient(props: {
             notice.tone === "ok" ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200",
           )}
         >
-          {notice.text}
+          {<Tx>{notice.text}</Tx>}
           <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setNotice(null)}>
-            Dismiss
-          </button>
+            {tr("Dismiss")}</button>
         </div>
       )}
 
@@ -144,13 +143,13 @@ export function OrdersClient(props: {
           <div className="flex items-center gap-2.5 text-sm text-amber-900">
             <AlertTriangle className="size-4 shrink-0" />
             <span>
-              <strong>{needGeocode.length}</strong> address{needGeocode.length === 1 ? "" : "es"} not yet located. Orders without a verified
-              location can&apos;t be routed.
+              <strong>{needGeocode.length}</strong>{" "}
+              {tr(needGeocode.length === 1 ? "address not yet located. Orders without a verified location can't be routed." : "addresses not yet located. Orders without a verified location can't be routed.")}
             </span>
           </div>
           <button className={btn("primary", "sm")} disabled={!!geo} onClick={() => runGeocode(needGeocode.map((o) => o.id))}>
             {geo ? <Spinner /> : <MapPinCheck className="size-4" />}
-            {geo ? `Checking ${geo.done}/${geo.total}…` : "Verify addresses"}
+            {geo ? `Checking ${geo.done}/${geo.total}…` : tr("Verify addresses")}
           </button>
         </Card>
       )}
@@ -160,22 +159,19 @@ export function OrdersClient(props: {
           <div className="flex items-center gap-2.5 text-sm text-blue-950">
             <Send className="size-4 shrink-0 text-blue-600" />
             <span>
-              <strong>{notSent}</strong> order{notSent === 1 ? " isn't" : "s aren't"} on a driver&apos;s phone yet. Drivers receive orders once they&apos;re on a shipment (or
-              the day&apos;s plan) that has been sent to them{props.depots.length === 0 ? ", which needs a depot (where routes start)" : ""}.
+              <strong>{notSent}</strong>{" "}
+              {tr(notSent === 1 ? "order isn't on a driver's phone yet. Drivers receive orders once they're on a shipment (or the day's plan) that has been sent to them" : "orders aren't on a driver's phone yet. Drivers receive orders once they're on a shipment (or the day's plan) that has been sent to them")}{props.depots.length === 0 ? tr(", which needs a depot (where routes start)") : ""}.
             </span>
           </div>
           {props.depots.length === 0 ? (
             <Link href="/admin/settings" className={btn("primary", "sm")}>
-              Add a depot
-            </Link>
+              {tr("Add a depot")}</Link>
           ) : (
             <div className="flex gap-2">
               <Link href={`/admin/planner?date=${date}`} className={btn("secondary", "sm")}>
-                Route Planner
-              </Link>
+                {tr("Route Planner")}</Link>
               <Link href={`/admin/shipments?date=${date}`} className={btn("primary", "sm")}>
-                <Send className="size-4" /> Create shipments
-              </Link>
+                <Send className="size-4" /> {" "}{tr("Create shipments")}</Link>
             </div>
           )}
         </Card>
@@ -193,7 +189,7 @@ export function OrdersClient(props: {
                   props.status === key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
                 )}
               >
-                {label}
+                {<Tx>{label}</Tx>}
                 <span className={cx("tabular-nums", props.status === key ? "text-slate-300" : "text-slate-400")}>{n}</span>
               </Link>
             ))}
@@ -202,20 +198,19 @@ export function OrdersClient(props: {
             <input type="hidden" name="date" value={date} />
             {props.status && <input type="hidden" name="status" value={props.status} />}
             <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-slate-400" />
-            <input name="q" defaultValue={props.q} placeholder="Search order, customer, address" className={cx(inputCls, "pl-8")} />
+            <input name="q" defaultValue={props.q} placeholder={tr("Search order, customer, address")} className={cx(inputCls, "pl-8")} />
           </form>
         </div>
 
         {selected.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-line bg-blue-50/60 px-3 py-2 text-sm">
-            <span className="font-medium text-blue-900">{selected.size} selected</span>
+            <span className="font-medium text-blue-900">{selected.size} {" "}{tr("selected")}</span>
             <button
               className={btn("secondary", "sm")}
               disabled={!!geo}
               onClick={() => runGeocode([...selected])}
             >
-              <MapPinCheck className="size-3.5" /> Re-check address
-            </button>
+              <MapPinCheck className="size-3.5" /> {" "}{tr("Re-check address")}</button>
             <span className="flex items-center gap-1">
               <input type="date" value={rescheduleTo} onChange={(e) => setRescheduleTo(e.target.value)} className={cx(inputCls, "h-8 w-36 text-xs")} />
               <button
@@ -229,8 +224,7 @@ export function OrdersClient(props: {
                   })
                 }
               >
-                Move to date
-              </button>
+                {tr("Move to date")}</button>
             </span>
             <button
               className={btn("danger", "sm")}
@@ -251,8 +245,7 @@ export function OrdersClient(props: {
                 });
               }}
             >
-              <Trash2 className="size-3.5" /> Delete
-            </button>
+              <Trash2 className="size-3.5" /> {" "}{tr("Delete")}</button>
           </div>
         )}
 
@@ -261,19 +254,16 @@ export function OrdersClient(props: {
             {!props.counts.all && (
               <div className="mt-3 flex flex-wrap justify-center gap-2">
                 <Link href={`/admin/orders/import?date=${date}`} className={btn("primary", "sm")}>
-                  <Upload className="size-3.5" /> Import a spreadsheet
-                </Link>
+                  <Upload className="size-3.5" /> {" "}{tr("Import a spreadsheet")}</Link>
                 <button className={btn("secondary", "sm")} onClick={() => setEditing("new")}>
-                  <Plus className="size-3.5" /> Add manually
-                </button>
+                  <Plus className="size-3.5" /> {" "}{tr("Add manually")}</button>
                 {props.demoMode && (
                   <button
                     className={btn("ghost", "sm")}
                     disabled={pending}
                     onClick={() => startTransition(async () => (report(await addDemoOrders(date)), router.refresh()))}
                   >
-                    <Sparkles className="size-3.5" /> Load demo orders
-                  </button>
+                    <Sparkles className="size-3.5" /> {" "}{tr("Load demo orders")}</button>
                 )}
               </div>
             )}
@@ -288,17 +278,17 @@ export function OrdersClient(props: {
                       type="checkbox"
                       checked={allSelected}
                       onChange={() => setSelected(allSelected ? new Set() : new Set(orders.map((o) => o.id)))}
-                      aria-label="Select all"
+                      aria-label={tr("Select all")}
                     />
                   </th>
-                  <th className="px-3 py-2.5">Order</th>
-                  <th className="px-3 py-2.5">Customer</th>
-                  <th className="px-3 py-2.5">Delivery address</th>
-                  <th className="px-3 py-2.5">Window</th>
-                  <th className="px-3 py-2.5 text-right">Unload</th>
-                  <th className="px-3 py-2.5 text-right">Qty</th>
-                  <th className="px-3 py-2.5">Driver</th>
-                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5">{tr("Order")}</th>
+                  <th className="px-3 py-2.5">{tr("Customer")}</th>
+                  <th className="px-3 py-2.5">{tr("Delivery address")}</th>
+                  <th className="px-3 py-2.5">{tr("Window")}</th>
+                  <th className="px-3 py-2.5 text-right">{tr("Unload")}</th>
+                  <th className="px-3 py-2.5 text-right">{tr("Qty")}</th>
+                  <th className="px-3 py-2.5">{tr("Driver")}</th>
+                  <th className="px-3 py-2.5">{tr("Status")}</th>
                   <th className="w-10 px-3 py-2.5" />
                 </tr>
               </thead>
@@ -326,7 +316,7 @@ export function OrdersClient(props: {
                         <div className="flex items-center gap-1.5 font-medium text-slate-900">
                           {o.orderNumber}
                           {o.priority > 0 && (
-                            <span title="High priority">
+                            <span title={tr("High priority")}>
                               <Zap className="size-3.5 fill-amber-400 text-amber-500" />
                             </span>
                           )}
@@ -342,13 +332,13 @@ export function OrdersClient(props: {
                         </div>
                         {o.geocodeStatus !== "ok" && (
                           <Badge tone={geoS.tone} className="mt-1">
-                            {geoS.label}
+                            {<Tx>{geoS.label}</Tx>}
                           </Badge>
                         )}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-slate-700">
                         {o.windowStartMin === null && o.windowEndMin === null ? (
-                          <span className="text-slate-400">Any time</span>
+                          <span className="text-slate-400">{tr("Any time")}</span>
                         ) : (
                           `${o.windowStartMin !== null ? formatMinutesClock(o.windowStartMin) : "…"} – ${o.windowEndMin !== null ? formatMinutesClock(o.windowEndMin) : "…"}`
                         )}
@@ -364,7 +354,7 @@ export function OrdersClient(props: {
                             {driver.name}
                           </span>
                         ) : pinned ? (
-                          <span className="flex items-center gap-1 whitespace-nowrap text-xs text-slate-500" title="Pinned driver">
+                          <span className="flex items-center gap-1 whitespace-nowrap text-xs text-slate-500" title={tr("Pinned driver")}>
                             <Pin className="size-3" />
                             {pinned.name}
                           </span>
@@ -374,13 +364,13 @@ export function OrdersClient(props: {
                       </td>
                       <td className="px-3 py-2.5">
                         {o.status === "delivered" || o.status === "failed" ? (
-                          <button onClick={() => setRecord(o)} title="View delivery record" className="flex items-center gap-1">
+                          <button onClick={() => setRecord(o)} title={tr("View delivery record")} className="flex items-center gap-1">
                             <Badge tone={ORDER_STATUS[o.status].tone}>
-                              {ORDER_STATUS[o.status].label} <FileImage className="size-3" />
+                              {<Tx>{ORDER_STATUS[o.status].label}</Tx>} <FileImage className="size-3" />
                             </Badge>
                           </button>
                         ) : (
-                          <Badge tone={ORDER_STATUS[o.status].tone}>{ORDER_STATUS[o.status].label}</Badge>
+                          <Badge tone={ORDER_STATUS[o.status].tone}>{<Tx>{ORDER_STATUS[o.status].label}</Tx>}</Badge>
                         )}
                       </td>
                       <td className="px-3 py-2.5">
@@ -435,6 +425,7 @@ type RecordEvent = {
 };
 
 function DeliveryRecord({ orderId }: { orderId: string }) {
+  const tr = useT();
   const [events, setEvents] = useState<RecordEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -444,15 +435,15 @@ function DeliveryRecord({ orderId }: { orderId: string }) {
       .catch(() => setError("Couldn't load the delivery record."));
   }, [orderId]);
   if (error) return <FormError message={error} />;
-  if (!events) return <p className="py-6 text-center text-sm text-slate-400">Loading…</p>;
-  if (!events.length) return <p className="py-6 text-center text-sm text-slate-500">No driver activity recorded for this order.</p>;
+  if (!events) return <p className="py-6 text-center text-sm text-slate-400">{tr("Loading…")}</p>;
+  if (!events.length) return <p className="py-6 text-center text-sm text-slate-500">{tr("No driver activity recorded for this order.")}</p>;
   return (
     <ol className="space-y-4">
       {events.map((e) => (
         <li key={e.id} className="rounded-lg border border-line p-3">
           <div className="flex items-center justify-between gap-2">
             <Badge tone={e.type === "delivered" ? "green" : e.type === "failed" ? "red" : "blue"}>
-              {e.type === "delivered" ? "Delivered" : e.type === "failed" ? "Delivery failed" : "Route started"}
+              {e.type === "delivered" ? tr("Delivered") : e.type === "failed" ? tr("Delivery failed") : tr("Route started")}
             </Badge>
             <span className="text-xs text-slate-500">
               {new Date(e.at).toLocaleString("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
@@ -462,24 +453,24 @@ function DeliveryRecord({ orderId }: { orderId: string }) {
           <dl className="mt-2 space-y-0.5 text-sm">
             {e.recipient && (
               <p>
-                <span className="text-slate-500">Received by:</span> {e.recipient}
+                <span className="text-slate-500">{tr("Received by:")}</span> {e.recipient}
               </p>
             )}
             {e.reason && (
               <p>
-                <span className="text-slate-500">Reason:</span> {e.reason}
+                <span className="text-slate-500">{tr("Reason:")}</span> {<Tx>{e.reason}</Tx>}
               </p>
             )}
             {e.note && (
               <p>
-                <span className="text-slate-500">Note:</span> {e.note}
+                <span className="text-slate-500">{tr("Note:")}</span> {e.note}
               </p>
             )}
             {e.place && (
               <p className={cx((e.place.distanceM ?? 0) > DELIVERY_PLACE_WARN_M && "text-amber-700")}>
-                <span className="text-slate-500">Confirmed at:</span>{" "}
+                <span className="text-slate-500">{tr("Confirmed at:")}</span>{" "}
                 <a href={mapPinUrl(e.place.lat, e.place.lng)} target="_blank" rel="noreferrer" className="underline">
-                  {describeDeliveryPlace(e.place.distanceM, e.place.accuracyM) ?? "view on map"}
+                  {describeDeliveryPlace(e.place.distanceM, e.place.accuracyM) ?? tr("view on map")}
                 </a>
               </p>
             )}
@@ -490,7 +481,7 @@ function DeliveryRecord({ orderId }: { orderId: string }) {
                 <a key={p.id} href={`/api/proofs/${p.id}`} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-line bg-slate-50">
                   {/* eslint-disable-next-line @next/next/no-img-element -- authenticated private image */}
                   <img src={`/api/proofs/${p.id}`} alt={p.kind === "photo" ? "Delivery photo" : "Customer signature"} className={cx("w-full", p.kind === "photo" ? "h-40 object-cover" : "h-28 object-contain bg-white")} />
-                  <span className="block px-2 py-1 text-[11px] text-slate-500">{p.kind === "photo" ? "Photo" : "Signature"}</span>
+                  <span className="block px-2 py-1 text-[11px] text-slate-500">{p.kind === "photo" ? tr("Photo") : tr("Signature")}</span>
                 </a>
               ))}
             </div>
@@ -516,6 +507,7 @@ function OrderForm({
   defaultServiceMin: number;
   onDone: (msg: string) => void;
 }) {
+  const tr = useT();
   const [state, action] = useActionState(saveOrder, undefined);
   useEffect(() => {
     if (state?.ok) onDone(state.message ?? "Saved");
@@ -525,60 +517,60 @@ function OrderForm({
     <form action={action} className="space-y-4">
       {order && <input type="hidden" name="id" value={order.id} />}
       <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Order number" hint={order ? undefined : "Leave blank to generate"}>
+        <Field label={tr("Order number")} hint={order ? undefined : "Leave blank to generate"}>
           <input name="orderNumber" defaultValue={order?.orderNumber} className={inputCls} />
         </Field>
-        <Field label="Delivery date">
+        <Field label={tr("Delivery date")}>
           <input name="deliveryDate" type="date" required defaultValue={order?.deliveryDate ?? date} className={inputCls} />
         </Field>
-        <Field label="Priority">
+        <Field label={tr("Priority")}>
           <select name="priority" defaultValue={String(order?.priority ?? 0)} className={inputCls}>
-            <option value="0">Normal</option>
-            <option value="1">High — serve early</option>
+            <option value="0">{tr("Normal")}</option>
+            <option value="1">{tr("High — serve early")}</option>
           </select>
         </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Customer">
+        <Field label={tr("Customer")}>
           <input name="customerName" defaultValue={order?.customerName} className={inputCls} />
         </Field>
-        <Field label="Phone">
+        <Field label={tr("Phone")}>
           <input name="phone" type="tel" defaultValue={order?.phone ?? ""} className={inputCls} />
         </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-[1fr_10rem_7rem]">
-        <Field label="Street address *">
-          <input name="address" required defaultValue={order?.address} placeholder="12 Example St" className={inputCls} />
+        <Field label={tr("Street address *")}>
+          <input name="address" required defaultValue={order?.address} placeholder={tr("12 Example St")} className={inputCls} />
         </Field>
-        <Field label="Suburb">
+        <Field label={tr("Suburb")}>
           <input name="suburb" defaultValue={order?.suburb ?? ""} className={inputCls} />
         </Field>
-        <Field label="Postcode">
+        <Field label={tr("Postcode")}>
           <input name="postcode" defaultValue={order?.postcode ?? ""} className={inputCls} />
         </Field>
       </div>
       {order?.geocodeLabel && (
         <p className="-mt-2 text-xs text-slate-500">
-          Located as: <span className="text-slate-700">{order.geocodeLabel}</span>
+          {tr("Located as:")}{" "}<span className="text-slate-700">{order.geocodeLabel}</span>
         </p>
       )}
       <div className="grid gap-3 sm:grid-cols-4">
-        <Field label="Window from">
+        <Field label={tr("Window from")}>
           <input name="windowStart" type="time" defaultValue={minutesToInput(order?.windowStartMin)} className={inputCls} />
         </Field>
-        <Field label="Window until">
+        <Field label={tr("Window until")}>
           <input name="windowEnd" type="time" defaultValue={minutesToInput(order?.windowEndMin)} className={inputCls} />
         </Field>
-        <Field label="Unload (min)">
+        <Field label={tr("Unload (min)")}>
           <input name="serviceMin" type="number" min={0} placeholder={String(defaultServiceMin)} defaultValue={order?.serviceMin ?? ""} className={inputCls} />
         </Field>
-        <Field label="Quantity (units)">
+        <Field label={tr("Quantity (units)")}>
           <input name="demand" type="number" min={0} defaultValue={order?.demand ?? 1} className={inputCls} />
         </Field>
       </div>
-      <Field label="Always deliver with" hint="The planner gives this order to this driver. It reaches their phone once the day's route is planned and dispatched.">
+      <Field label={tr("Always deliver with")} hint={tr("The planner gives this order to this driver. It reaches their phone once the day's route is planned and dispatched.")}>
         <select name="pinnedDriverId" defaultValue={order?.pinnedDriverId ?? ""} className={inputCls}>
-          <option value="">Any driver</option>
+          <option value="">{tr("Any driver")}</option>
           {drivers.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
@@ -587,9 +579,9 @@ function OrderForm({
         </select>
       </Field>
       {depots.length > 1 && (
-        <Field label="Ship from depot" hint="Only drivers based at this depot will be given the order.">
+        <Field label={tr("Ship from depot")} hint={tr("Only drivers based at this depot will be given the order.")}>
           <select name="depotId" defaultValue={order?.depotId ?? ""} className={inputCls}>
-            <option value="">Any depot</option>
+            <option value="">{tr("Any depot")}</option>
             {depots.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
@@ -598,12 +590,12 @@ function OrderForm({
           </select>
         </Field>
       )}
-      <Field label="Delivery notes">
+      <Field label={tr("Delivery notes")}>
         <textarea name="notes" rows={2} defaultValue={order?.notes ?? ""} className={cx(inputCls, "h-auto py-2")} />
       </Field>
       <FormError message={state && !state.ok ? state.error : null} />
       <div className="flex justify-end gap-2 border-t border-line pt-4">
-        <SubmitButton pendingText="Saving & locating…">{order ? "Save changes" : "Add order"}</SubmitButton>
+        <SubmitButton pendingText={tr("Saving & locating…")}>{order ? tr("Save changes") : tr("Add order")}</SubmitButton>
       </div>
     </form>
   );

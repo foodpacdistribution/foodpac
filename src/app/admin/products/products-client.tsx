@@ -9,6 +9,7 @@ import { FormError, Modal, SubmitButton, Toast, type ToastMessage } from "@/comp
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import { aud } from "@/lib/money";
 import { TEMPLATE_HEADERS, toCsv } from "@/lib/product-import";
+import { useT } from "@/components/i18n";
 
 type Product = {
   id: string;
@@ -31,6 +32,7 @@ type Product = {
 const LOW_STOCK = 10;
 
 export function ProductsClient({ products, categories, isAdmin }: { products: Product[]; categories: string[]; isAdmin: boolean }) {
+  const tr = useT();
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "low" | "inactive">("all");
@@ -49,42 +51,38 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
   return (
     <>
       <PageHeader
-        title="Products & Stock"
-        subtitle="What customers can order in the online shop. Stock is reserved when an order is placed and returned if it's cancelled."
+        title={tr("Products & Stock")}
+        subtitle={tr("What customers can order in the online shop. Stock is reserved when an order is placed and returned if it's cancelled.")}
         actions={
           <>
             {products.length > 0 && (
-              <button className={btn("secondary")} onClick={() => exportCsv(products)} title="Edit in Excel and import again to update in bulk">
-                <Download className="size-4" /> Export CSV
-              </button>
+              <button className={btn("secondary")} onClick={() => exportCsv(products)} title={tr("Edit in Excel and import again to update in bulk")}>
+                <Download className="size-4" /> {" "}{tr("Export CSV")}</button>
             )}
             <Link href="/admin/products/import" className={btn("secondary")}>
-              <FileUp className="size-4" /> Import
-            </Link>
+              <FileUp className="size-4" /> {" "}{tr("Import")}</Link>
             <button className={btn("primary")} onClick={() => setEditing("new")}>
-              <Plus className="size-4" /> Add product
-            </button>
+              <Plus className="size-4" /> {" "}{tr("Add product")}</button>
           </>
         }
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-72">
           <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-slate-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, SKU, barcode" className={cx(inputCls, "pl-9")} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search name, SKU, barcode")} className={cx(inputCls, "pl-9")} />
         </div>
         {(["all", "low", "inactive"] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)} className={cx(btn(filter === f ? "primary" : "ghost", "sm"))}>
-            {f === "all" ? `All (${products.length})` : f === "low" ? `Low stock (${low})` : "Hidden"}
+            {f === "all" ? tr(`All (${products.length})`) : f === "low" ? tr(`Low stock (${low})`) : tr("Hidden")}
           </button>
         ))}
       </div>
       {products.length === 0 ? (
         <Card>
-          <EmptyState icon={PackagePlus} title="No products yet">
-            Add your range so customers can order online, one by one or{" "}
+          <EmptyState icon={PackagePlus} title={tr("No products yet")}>
+            {tr("Add your range so customers can order online, one by one or")}{" "}
             <Link href="/admin/products/import" className="font-medium text-blue-700 hover:underline">
-              all at once from a spreadsheet
-            </Link>
+              {tr("all at once from a spreadsheet")}</Link>
             .
           </EmptyState>
         </Card>
@@ -93,11 +91,11 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
           <table className="w-full min-w-[760px] text-sm">
             <thead className="border-b border-line bg-slate-50 text-left text-xs text-slate-500">
               <tr>
-                <th className="px-4 py-2.5 font-medium">Product</th>
-                <th className="px-2 py-2.5 font-medium">Category</th>
-                <th className="px-2 py-2.5 text-right font-medium">Price ex GST</th>
-                <th className="px-2 py-2.5 text-right font-medium">Stock</th>
-                <th className="px-2 py-2.5 font-medium">Receive / adjust</th>
+                <th className="px-4 py-2.5 font-medium">{tr("Product")}</th>
+                <th className="px-2 py-2.5 font-medium">{tr("Category")}</th>
+                <th className="px-2 py-2.5 text-right font-medium">{tr("Price ex GST")}</th>
+                <th className="px-2 py-2.5 text-right font-medium">{tr("Stock")}</th>
+                <th className="px-2 py-2.5 font-medium">{tr("Receive / adjust")}</th>
                 <th className="w-20" />
               </tr>
             </thead>
@@ -112,19 +110,19 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
                       </span>
                       <div className="min-w-0">
                         <p className="font-medium text-slate-900">
-                          {p.name} {p.featured && <Badge tone="violet">Featured</Badge>} {!p.active && <Badge>Hidden</Badge>}
+                          {p.name} {p.featured && <Badge tone="violet">{tr("Featured")}</Badge>} {!p.active && <Badge>{tr("Hidden")}</Badge>}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {p.sku} · {p.packSize} · per {p.unit}
-                          {p.minQty > 1 && ` · min ${p.minQty}`}
+                          {p.sku} · {p.packSize} {" "}{tr("· per")}{" "}{tr(p.unit)}
+                          {p.minQty > 1 && <> {tr(`· min ${p.minQty}`)}</>}
                         </p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-2 py-2.5 text-slate-600">{p.category}</td>
+                  <td className="px-2 py-2.5 text-slate-600">{tr(p.category)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums">
                     {aud(p.priceCents)}
-                    {!p.gst && <span className="block text-[11px] text-slate-400">GST free</span>}
+                    {!p.gst && <span className="block text-[11px] text-slate-400">{tr("GST free")}</span>}
                   </td>
                   <td className={cx("px-2 py-2.5 text-right font-semibold tabular-nums", p.stock <= 0 ? "text-red-600" : p.stock < LOW_STOCK ? "text-amber-700" : "text-slate-900")}>{p.stock}</td>
                   <td className="px-2 py-2.5">
@@ -187,6 +185,7 @@ function exportCsv(products: Product[]) {
 }
 
 function StockAdjust({ id, onResult }: { id: string; onResult: (t: ToastMessage) => void }) {
+  const tr = useT();
   const [v, setV] = useState("");
   const [pending, start] = useTransition();
   return (
@@ -204,13 +203,13 @@ function StockAdjust({ id, onResult }: { id: string; onResult: (t: ToastMessage)
     >
       <input value={v} onChange={(e) => setV(e.target.value)} placeholder="+24 / −2" inputMode="numeric" className={cx(inputCls, "h-8 w-24")} />
       <button disabled={pending || !v} className={btn("secondary", "sm")}>
-        Apply
-      </button>
+        {tr("Apply")}</button>
     </form>
   );
 }
 
 function ProductForm({ product: p, categories, onDone }: { product: Product | null; categories: string[]; onDone: () => void }) {
+  const tr = useT();
   const [state, action] = useActionState(saveProduct, undefined);
   useEffect(() => {
     if (state?.ok) onDone();
@@ -218,16 +217,16 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
       {p && <input type="hidden" name="id" value={p.id} />}
-      <Field label="Product name" className="sm:col-span-2">
+      <Field label={tr("Product name")} className="sm:col-span-2">
         <input name="name" required defaultValue={p?.name} className={inputCls} />
       </Field>
-      <Field label="SKU">
+      <Field label={tr("SKU")}>
         <input name="sku" required defaultValue={p?.sku} className={cx(inputCls, "uppercase")} />
       </Field>
-      <Field label="Barcode (optional)">
+      <Field label={tr("Barcode (optional)")}>
         <input name="barcode" defaultValue={p?.barcode ?? ""} className={inputCls} />
       </Field>
-      <Field label="Category">
+      <Field label={tr("Category")}>
         <input name="category" list="categories" defaultValue={p?.category ?? categories[0]} className={inputCls} />
         <datalist id="categories">
           {categories.map((c) => (
@@ -235,47 +234,43 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
           ))}
         </datalist>
       </Field>
-      <Field label="Pack size" hint="e.g. 10 kg / carton, 500 pcs / carton">
+      <Field label={tr("Pack size")} hint={tr("e.g. 10 kg / carton, 500 pcs / carton")}>
         <input name="packSize" defaultValue={p?.packSize} className={inputCls} />
       </Field>
-      <Field label="Sold by (unit)">
+      <Field label={tr("Sold by (unit)")}>
         <input name="unit" defaultValue={p?.unit ?? "carton"} className={inputCls} />
       </Field>
-      <Field label="List price per unit, ex GST ($)" hint="Customers with their own price see that instead.">
+      <Field label={tr("List price per unit, ex GST ($)")} hint={tr("Customers with their own price see that instead.")}>
         <input name="price" required inputMode="decimal" defaultValue={p ? (p.priceCents / 100).toFixed(2) : ""} className={inputCls} />
       </Field>
-      <Field label="Minimum order (units)">
+      <Field label={tr("Minimum order (units)")}>
         <input name="minQty" type="number" min={1} defaultValue={p?.minQty ?? 1} className={inputCls} />
       </Field>
-      <Field label="Stock on hand" hint="Available to sell. Orders reserve from this.">
+      <Field label={tr("Stock on hand")} hint={tr("Available to sell. Orders reserve from this.")}>
         <input name="stock" type="number" min={0} defaultValue={p?.stock ?? 0} className={inputCls} />
       </Field>
-      <Field label="Description" className="sm:col-span-2">
+      <Field label={tr("Description")} className="sm:col-span-2">
         <textarea name="description" rows={3} defaultValue={p?.description} className={cx(inputCls, "h-auto py-2")} />
       </Field>
-      <Field label="Photo (JPEG, PNG or WebP, max 4 MB)" className="sm:col-span-2">
+      <Field label={tr("Photo (JPEG, PNG or WebP, max 4 MB)")} className="sm:col-span-2">
         <input name="image" type="file" accept="image/jpeg,image/png,image/webp" className="text-sm" />
       </Field>
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm sm:col-span-2">
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="gst" defaultChecked={p?.gst ?? true} /> GST applies
-        </label>
+          <input type="checkbox" name="gst" defaultChecked={p?.gst ?? true} /> {" "}{tr("GST applies")}</label>
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="featured" defaultChecked={p?.featured ?? false} /> Featured on homepage
-        </label>
+          <input type="checkbox" name="featured" defaultChecked={p?.featured ?? false} /> {" "}{tr("Featured on homepage")}</label>
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="active" defaultChecked={p?.active ?? true} /> Show in shop
-        </label>
+          <input type="checkbox" name="active" defaultChecked={p?.active ?? true} /> {" "}{tr("Show in shop")}</label>
         {p?.hasImage && (
           <label className="flex items-center gap-2">
-            <input type="checkbox" name="removeImage" /> Remove photo
-          </label>
+            <input type="checkbox" name="removeImage" /> {" "}{tr("Remove photo")}</label>
         )}
       </div>
       <div className="sm:col-span-2">
         <FormError message={state && !state.ok ? state.error : null} />
       </div>
-      <SubmitButton className="sm:col-span-2">{p ? "Save product" : "Add product"}</SubmitButton>
+      <SubmitButton className="sm:col-span-2">{p ? tr("Save product") : tr("Add product")}</SubmitButton>
     </form>
   );
 }

@@ -1,7 +1,11 @@
 import clsx from "clsx";
 import type { LucideIcon } from "lucide-react";
+import { T } from "./i18n";
 
 export { clsx as cx };
+
+/** Plain text passed to these building blocks is shown in the viewer's language. */
+const tx = (n: React.ReactNode) => (typeof n === "string" ? <T>{n}</T> : n);
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "success";
 // "icon" / "icon-sm" are square icon-only buttons (no horizontal padding).
@@ -41,8 +45,8 @@ export function CardHeader({ title, subtitle, action }: { title: React.ReactNode
   return (
     <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
       <div className="min-w-0">
-        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-        {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+        <h2 className="text-sm font-semibold text-slate-900">{tx(title)}</h2>
+        {subtitle && <p className="mt-0.5 text-xs text-slate-500">{tx(subtitle)}</p>}
       </div>
       {action}
     </div>
@@ -62,7 +66,7 @@ export type Tone = keyof typeof tones;
 export function Badge({ tone = "slate", children, className }: { tone?: Tone; children: React.ReactNode; className?: string }) {
   return (
     <span className={clsx("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset whitespace-nowrap", tones[tone], className)}>
-      {children}
+      {tx(children)}
     </span>
   );
 }
@@ -99,7 +103,7 @@ export function Stat({
   icon: Icon,
   tone = "blue",
 }: {
-  label: string;
+  label: React.ReactNode;
   value: React.ReactNode;
   hint?: React.ReactNode;
   icon?: LucideIcon;
@@ -116,7 +120,7 @@ export function Stat({
   return (
     <Card className="p-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium text-slate-500">{label}</p>
+        <p className="text-xs font-medium text-slate-500">{tx(label)}</p>
         {Icon && (
           <span className={clsx("grid size-8 place-items-center rounded-lg", iconTone)}>
             <Icon className="size-4" />
@@ -124,31 +128,31 @@ export function Stat({
         )}
       </div>
       <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-slate-500">{tx(hint)}</p>}
     </Card>
   );
 }
 
-export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: React.ReactNode; actions?: React.ReactNode }) {
+export function PageHeader({ title, subtitle, actions }: { title: React.ReactNode; subtitle?: React.ReactNode; actions?: React.ReactNode }) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+        <h1 className="text-xl font-semibold tracking-tight text-slate-900">{tx(title)}</h1>
+        {subtitle && <p className="mt-1 text-sm text-slate-500">{tx(subtitle)}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
 
-export function EmptyState({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children?: React.ReactNode }) {
+export function EmptyState({ icon: Icon, title, children }: { icon: LucideIcon; title: React.ReactNode; children?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
       <span className="grid size-12 place-items-center rounded-full bg-slate-100 text-slate-500">
         <Icon className="size-6" />
       </span>
-      <p className="mt-3 text-sm font-semibold text-slate-900">{title}</p>
-      {children && <div className="mt-1 max-w-sm text-sm text-slate-500">{children}</div>}
+      <p className="mt-3 text-sm font-semibold text-slate-900">{tx(title)}</p>
+      {children && <div className="mt-1 max-w-sm text-sm text-slate-500">{tx(children)}</div>}
     </div>
   );
 }
@@ -156,12 +160,12 @@ export function EmptyState({ icon: Icon, title, children }: { icon: LucideIcon; 
 export const inputCls =
   "h-9 w-full rounded-lg border border-line bg-white px-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50";
 
-export function Field({ label, hint, children, className }: { label: string; hint?: string; children: React.ReactNode; className?: string }) {
+export function Field({ label, hint, children, className }: { label: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
     <label className={clsx("block", className)}>
-      <span className="mb-1 block text-xs font-medium text-slate-600">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-slate-600">{tx(label)}</span>
       {children}
-      {hint && <span className="mt-1 block text-[11px] text-slate-500">{hint}</span>}
+      {hint && <span className="mt-1 block text-[11px] text-slate-500">{tx(hint)}</span>}
     </label>
   );
 }

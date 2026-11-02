@@ -7,6 +7,7 @@ import { productImageUrl } from "@/lib/product-image";
 import type { CatalogItem } from "@/lib/shop";
 import { AddToCart } from "./add-to-cart";
 import { categoryInfo } from "./content";
+import { T, Tx } from "@/components/i18n";
 
 /**
  * Product photo (optimised and cached for good), or the category icon when there's none.
@@ -48,7 +49,7 @@ export function ProductImage({
 export function StockLabel({ stock, className }: { stock: number; className?: string }) {
   return (
     <span className={cx("text-xs font-medium", stock <= 0 ? "text-red-600" : stock < 10 ? "text-amber-700" : "text-leaf-700", className)}>
-      {stock <= 0 ? "Out of stock" : stock < 10 ? `Only ${stock} left` : "In stock"}
+      {stock <= 0 ? <T>{"Out of stock"}</T> : stock < 10 ? <T vars={{ n: stock }}>{"Only {n} left"}</T> : <T>{"In stock"}</T>}
     </span>
   );
 }
@@ -56,20 +57,19 @@ export function StockLabel({ stock, className }: { stock: number; className?: st
 export function Price({ p, signedIn }: { p: Pick<CatalogItem, "priceCents" | "listPriceCents" | "unit" | "gst">; signedIn: boolean }) {
   if (p.priceCents === null) {
     return signedIn ? (
-      <p className="text-sm text-leaf-900/60">Price shown once your account is approved</p>
+      <p className="text-sm text-leaf-900/60"><T>{"Price shown once your account is approved"}</T></p>
     ) : (
       <Link href="/login?next=%2Fproducts" className="text-sm font-semibold text-leaf-700 underline-offset-2 hover:underline">
-        Sign in for your price
-      </Link>
+        <T>{"Sign in for your price"}</T></Link>
     );
   }
   const special = p.listPriceCents !== null && p.priceCents < p.listPriceCents;
   return (
     <p className="leading-tight">
       <span className="font-display text-xl font-semibold tabular-nums">{aud(p.priceCents)}</span>
-      <span className="text-xs text-leaf-900/60"> / {p.unit}</span>
+      <span className="text-xs text-leaf-900/60"> / <T>{p.unit}</T></span>
       {special && <span className="ml-1.5 text-xs text-leaf-900/45 line-through">{aud(p.listPriceCents)}</span>}
-      <span className="block text-[11px] text-leaf-900/50">{p.gst ? "+ GST" : "GST free"}{special && " · your price"}</span>
+      <span className="block text-[11px] text-leaf-900/50">{p.gst ? <T>{"+ GST"}</T> : <T>{"GST free"}</T>}{special && <T>{" · your price"}</T>}</span>
     </p>
   );
 }
@@ -87,7 +87,7 @@ export function ProductCard({ p, signedIn, morph }: { p: CatalogItem; signedIn: 
         </Link>
         <p className="mt-0.5 text-xs text-leaf-900/60">
           {p.packSize}
-          {p.minQty > 1 && ` · min ${p.minQty}`}
+          {p.minQty > 1 && <> <Tx>{`· min ${p.minQty}`}</Tx></>}
         </p>
         <div className="mt-3 flex items-end justify-between gap-2">
           <Price p={p} signedIn={signedIn} />

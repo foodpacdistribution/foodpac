@@ -6,6 +6,7 @@ import { requireUser, STAFF } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
+import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Pick list" };
 
@@ -36,9 +37,9 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Pick list</h1>
+          <h1 className="text-xl font-semibold tracking-tight"><T>{"Pick list"}</T></h1>
           <p className="text-sm text-slate-500">
-            {so.length} confirmed order{so.length === 1 ? "" : "s"}
+            {so.length} {" "}<T>{"confirmed order"}</T>{so.length === 1 ? "" : "s"}
             {date && !ids.length && ` for delivery ${prettyDate(date)}`}
           </p>
         </div>
@@ -49,9 +50,9 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
           <thead className="border-b border-line bg-slate-50 text-left text-xs text-slate-500">
             <tr>
               <th className="w-10 px-4 py-2" />
-              <th className="px-2 py-2 font-medium">SKU</th>
-              <th className="px-2 py-2 font-medium">Product</th>
-              <th className="px-4 py-2 text-right font-medium">Total to pick</th>
+              <th className="px-2 py-2 font-medium"><T>{"SKU"}</T></th>
+              <th className="px-2 py-2 font-medium"><T>{"Product"}</T></th>
+              <th className="px-4 py-2 text-right font-medium"><T>{"Total to pick"}</T></th>
             </tr>
           </thead>
           <tbody>
@@ -72,8 +73,7 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
             {!totals.size && (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
-                  Nothing to pick.
-                </td>
+                  <T>{"Nothing to pick."}</T></td>
               </tr>
             )}
           </tbody>
@@ -86,7 +86,7 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
               {o.number} · {customer}
             </p>
             <p className="text-xs text-slate-500">
-              {prettyDate(o.deliveryDate)} · {o.address}
+              {<Tx>{prettyDate(o.deliveryDate)}</Tx>} · {o.address}
             </p>
             <ul className="mt-2 space-y-1 text-sm">
               {items

@@ -8,6 +8,7 @@ import { getSettings } from "@/lib/planning";
 import { allowedMethods, canSeePrices, deliveryDates, getCart, openBalance, quote } from "@/lib/shop";
 import { stripeEnabled } from "@/lib/stripe";
 import { CheckoutForm } from "./checkout-form";
+import { T } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Checkout" };
 
@@ -28,7 +29,7 @@ export default async function CheckoutPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">Checkout</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight"><T>{"Checkout"}</T></h1>
       <CheckoutForm
         idempotencyKey={crypto.randomUUID()}
         lines={lines.map((l) => ({ id: l.id, name: l.name, sku: l.sku, qty: l.qty, unit: l.unit, lineCents: l.lineCents }))}

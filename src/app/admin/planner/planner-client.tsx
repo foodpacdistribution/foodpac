@@ -30,6 +30,7 @@ import type { Objective } from "@/lib/vrp/types";
 import type { PlanView, RouteView, StopView } from "@/lib/planning";
 import { formatClock, formatDuration, formatKm, formatMinutesClock, inputToMinutes, minutesToInput } from "@/lib/time";
 import { ComparisonCard, SummaryCard } from "./summary-cards";
+import { Tx, useT } from "@/components/i18n";
 
 type Driver = {
   id: string;
@@ -98,6 +99,7 @@ function windowLabel(o: { windowStartMin: number | null; windowEndMin: number | 
 }
 
 export function PlannerClient(props: Props) {
+  const tr = useT();
   const { date, view, drivers, orders, defaults } = props;
   const plan = view.plan;
   const router = useRouter();
@@ -286,12 +288,12 @@ export function PlannerClient(props: Props) {
   return (
     <>
       <PageHeader
-        title="Route Planner"
+        title={tr("Route Planner")}
         subtitle={
           plan ? (
             <span className="flex flex-wrap items-center gap-2">
-              {plan.status === "dispatched" ? <Badge tone="blue">Dispatched to drivers</Badge> : <Badge tone="violet">Draft plan</Badge>}
-              <span>Last updated {new Date(plan.updatedAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}</span>
+              {plan.status === "dispatched" ? <Badge tone="blue">{tr("Dispatched to drivers")}</Badge> : <Badge tone="violet">{tr("Draft plan")}</Badge>}
+              <span>{tr("Last updated")}{" "}{new Date(plan.updatedAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}</span>
             </span>
           ) : (
             "Set the day's conditions, then let the optimiser build the routes."
@@ -302,17 +304,15 @@ export function PlannerClient(props: Props) {
             <DateNav date={date} today={props.today} basePath="/admin/planner" />
             {plan && (
               <a href={`/api/plans/${date}/export`} className={btn("secondary")}>
-                <Download className="size-4" /> Export
-              </a>
+                <Download className="size-4" /> {" "}{tr("Export")}</a>
             )}
             {plan &&
               (plan.status === "dispatched" ? (
-                <button className={btn("secondary")} disabled={pending || startedRoutes > 0} onClick={() => toggleDispatch(false)} title={startedRoutes ? "Drivers have started" : undefined}>
-                  <Undo2 className="size-4" /> Recall
-                </button>
+                <button className={btn("secondary")} disabled={pending || startedRoutes > 0} onClick={() => toggleDispatch(false)} title={startedRoutes ? tr("Drivers have started") : undefined}>
+                  <Undo2 className="size-4" /> {" "}{tr("Recall")}</button>
               ) : (
                 <button className={btn("success")} disabled={pending || dirty || !view.routes.length} onClick={() => toggleDispatch(true)}>
-                  {busy === "dispatch" ? <Spinner /> : <Send className="size-4" />} {busy === "dispatch" ? "Sending…" : "Dispatch to drivers"}
+                  {busy === "dispatch" ? <Spinner /> : <Send className="size-4" />} {busy === "dispatch" ? tr("Sending…") : tr("Dispatch to drivers")}
                 </button>
               ))}
           </>
@@ -327,10 +327,9 @@ export function PlannerClient(props: Props) {
             notice.tone === "ok" ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200",
           )}
         >
-          {notice.text}
+          {<Tx>{notice.text}</Tx>}
           <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setNotice(null)}>
-            Dismiss
-          </button>
+            {tr("Dismiss")}</button>
         </div>
       )}
 
@@ -338,7 +337,7 @@ export function PlannerClient(props: Props) {
         {/* ---------------- Left: conditions ---------------- */}
         <div className="space-y-4">
           <Card>
-            <CardHeader title="Today's orders" />
+            <CardHeader title={tr("Today's orders")} />
             <dl className="grid grid-cols-2 gap-px bg-line text-center">
               {[
                 ["Open", open.length, "text-slate-900"],
@@ -348,25 +347,24 @@ export function PlannerClient(props: Props) {
               ].map(([label, n, tone]) => (
                 <div key={label as string} className="bg-white px-3 py-2.5">
                   <dd className={cx("text-xl font-semibold tabular-nums", tone as string)}>{n}</dd>
-                  <dt className="text-[11px] text-slate-500">{label}</dt>
+                  <dt className="text-[11px] text-slate-500">{<Tx>{label}</Tx>}</dt>
                 </div>
               ))}
             </dl>
             {notLocated.length > 0 && (
               <Link href={`/admin/orders?date=${date}&status=attention`} className="flex items-center gap-2 border-t border-line px-4 py-2.5 text-xs font-medium text-amber-700 hover:bg-amber-50">
-                <AlertTriangle className="size-3.5" /> Fix {notLocated.length} address(es) before planning
-              </Link>
+                <AlertTriangle className="size-3.5" /> {" "}{tr("Fix")}{" "}{notLocated.length} {" "}{tr("address(es) before planning")}</Link>
             )}
           </Card>
 
           <Card>
             <CardHeader
-              title="Planning conditions"
+              title={tr("Planning conditions")}
               subtitle={props.depots.length ? `${props.depots.length === 1 ? "Depot" : "Depots"}: ${props.depots.map((d) => d.name).join(", ")}` : undefined}
             />
             <div className="space-y-4 p-4">
               <div>
-                <p className="mb-1.5 text-xs font-medium text-slate-600">Drivers on shift</p>
+                <p className="mb-1.5 text-xs font-medium text-slate-600">{tr("Drivers on shift")}</p>
                 <div className="space-y-1">
                   {drivers.map((d) => (
                     <label key={d.id} className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-slate-50">
@@ -381,7 +379,7 @@ export function PlannerClient(props: Props) {
                         <span className="block truncate text-sm text-slate-800">{d.name}</span>
                         <span className="block truncate text-[11px] text-slate-400">
                           {[
-                            d.capacity !== null ? `${d.capacity} units${d.maxTrips > 1 ? ` × ${d.maxTrips} trips` : ""}` : d.vehicle,
+                            d.capacity !== null ? tr(`${d.capacity} units${d.maxTrips > 1 ? ` × ${d.maxTrips} trips` : ""}`) : d.vehicle,
                             props.depots.length > 1 && props.depots.find((x) => x.id === d.depotId)?.name,
                           ]
                             .filter(Boolean)
@@ -392,16 +390,15 @@ export function PlannerClient(props: Props) {
                   ))}
                   {drivers.length === 0 && (
                     <Link href="/admin/drivers" className="text-xs text-blue-600">
-                      Add drivers first →
-                    </Link>
+                      {tr("Add drivers first →")}</Link>
                   )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Start time" hint="Unless set per driver">
+                <Field label={tr("Start time")} hint={tr("Unless set per driver")}>
                   <input type="time" value={minutesToInput(startMin)} onChange={(e) => setStartMin(inputToMinutes(e.target.value) ?? startMin)} className={inputCls} />
                 </Field>
-                <Field label="Unload / stop" hint="Default minutes">
+                <Field label={tr("Unload / stop")} hint={tr("Default minutes")}>
                   <input type="number" min={0} max={240} value={serviceMin} onChange={(e) => setServiceMin(Number(e.target.value))} className={inputCls} />
                 </Field>
               </div>
@@ -409,16 +406,16 @@ export function PlannerClient(props: Props) {
               <details className="group rounded-lg border border-line">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-slate-800">More options</span>
+                    <span className="block text-sm font-medium text-slate-800">{tr("More options")}</span>
                     <span className="block truncate text-[11px] text-slate-500">
-                      {OBJECTIVES.find(([v]) => v === objective)?.[1]} · {traffic === 1 ? "no traffic buffer" : `+${Math.round((traffic - 1) * 100)}% traffic`} ·{" "}
-                      {returnToDepot ? "back to depot" : "end at last stop"}
+                      {tr(OBJECTIVES.find(([v]) => v === objective)?.[1] ?? "")} · {traffic === 1 ? tr("no traffic buffer") : tr(`+${Math.round((traffic - 1) * 100)}% traffic`)} ·{" "}
+                      {returnToDepot ? tr("back to depot") : tr("end at last stop")}
                     </span>
                   </span>
                   <ChevronDown className="size-4 shrink-0 text-slate-400 transition group-open:rotate-180" />
                 </summary>
                 <div className="animate-rise space-y-4 border-t border-line p-3">
-                  <Field label="Optimise for">
+                  <Field label={tr("Optimise for")}>
                     <div className="space-y-1">
                       {OBJECTIVES.map(([value, label, hint]) => (
                         <label
@@ -430,26 +427,25 @@ export function PlannerClient(props: Props) {
                         >
                           <input type="radio" name="objective" checked={objective === value} onChange={() => setObjective(value)} className="mt-0.5" />
                           <span>
-                            <span className="block text-sm font-medium text-slate-800">{label}</span>
-                            <span className="block text-[11px] text-slate-500">{hint}</span>
+                            <span className="block text-sm font-medium text-slate-800">{<Tx>{label}</Tx>}</span>
+                            <span className="block text-[11px] text-slate-500">{<Tx>{hint}</Tx>}</span>
                           </span>
                         </label>
                       ))}
                     </div>
                   </Field>
-                  <Field label="Traffic buffer" hint="Road times are free-flow; add a margin for traffic and parking.">
+                  <Field label={tr("Traffic buffer")} hint={tr("Road times are free-flow; add a margin for traffic and parking.")}>
                     <select value={traffic} onChange={(e) => setTraffic(Number(e.target.value))} className={inputCls}>
                       {[1, 1.1, 1.15, 1.25, 1.35, 1.5].map((f) => (
                         <option key={f} value={f}>
-                          {f === 1 ? "None" : `+${Math.round((f - 1) * 100)}%`}
+                          {f === 1 ? tr("None") : `+${Math.round((f - 1) * 100)}%`}
                         </option>
                       ))}
                     </select>
                   </Field>
                   <label className="flex items-center gap-2 text-sm text-slate-700">
                     <input type="checkbox" checked={returnToDepot} onChange={(e) => setReturnToDepot(e.target.checked)} />
-                    Drivers return to depot
-                  </label>
+                    {tr("Drivers return to depot")}</label>
                 </div>
               </details>
               {blocker?.href ? (
@@ -460,20 +456,18 @@ export function PlannerClient(props: Props) {
                 <button className={btn("primary", "lg", "w-full")} disabled={pending || !!blocker} onClick={runOptimise}>
                   {busy === "optimise" ? (
                     <>
-                      <Spinner /> Optimising…
-                    </>
+                      <Spinner /> {" "}{tr("Optimising…")}</>
                   ) : (
                     <>
-                      <Sparkles className="size-4" /> {plan ? "Re-optimise routes" : "Optimise routes"}
+                      <Sparkles className="size-4" /> {plan ? tr("Re-optimise routes") : tr("Optimise routes")}
                     </>
                   )}
                 </button>
               )}
-              {blocker && <p className="text-center text-xs text-slate-500">{blocker.text}</p>}
+              {blocker && <p className="text-center text-xs text-slate-500">{<Tx>{blocker.text}</Tx>}</p>}
               {plan?.status === "dispatched" && done.length > 0 && (
                 <p className="text-[11px] leading-relaxed text-slate-500">
-                  Completed stops stay as they are. Remaining orders are re-planned from each driver&apos;s last stop.
-                </p>
+                  {tr("Completed stops stay as they are. Remaining orders are re-planned from each driver's last stop.")}</p>
               )}
             </div>
           </Card>
@@ -490,26 +484,24 @@ export function PlannerClient(props: Props) {
                 ] as const
               ).map(([m, label, Icon]) => (
                 <button key={m} onClick={() => setMode(m)} className={cx(btn(mode === m ? "primary" : "ghost", "sm"), mode !== m && "shadow-none")}>
-                  <Icon className="size-3.5" /> {label}
+                  <Icon className="size-3.5" /> {<Tx>{label}</Tx>}
                 </button>
               ))}
             </div>
             {focusRouteId && (
               <button className={btn("ghost", "sm")} onClick={() => setFocusRouteId(null)}>
-                Show all routes
-              </button>
+                {tr("Show all routes")}</button>
             )}
           </div>
 
           {dirty && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-navy-900 px-4 py-2.5 text-sm text-white shadow-pop">
-              <span>Unsaved changes — arrival times will update when you recalculate.</span>
+              <span>{tr("Unsaved changes — arrival times will update when you recalculate.")}</span>
               <span className="flex gap-2">
                 <button className={btn("ghost", "sm", "text-slate-200 hover:bg-white/10")} onClick={() => (setDraft(saved), setDirty(false))}>
-                  <RotateCcw className="size-3.5" /> Discard
-                </button>
+                  <RotateCcw className="size-3.5" /> {" "}{tr("Discard")}</button>
                 <button className={btn("primary", "sm")} disabled={pending} onClick={saveDraft}>
-                  {busy === "save" ? <Spinner className="size-3.5" /> : <Check className="size-3.5" />} {busy === "save" ? "Recalculating…" : "Recalculate & save"}
+                  {busy === "save" ? <Spinner className="size-3.5" /> : <Check className="size-3.5" />} {busy === "save" ? tr("Recalculating…") : tr("Recalculate & save")}
                 </button>
               </span>
             </div>
@@ -517,8 +509,7 @@ export function PlannerClient(props: Props) {
 
           {plan?.matrixSource === "estimate" && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
-              Road routing was unreachable, so times and distances are straight-line estimates. Re-optimise when online for real road data.
-            </p>
+              {tr("Road routing was unreachable, so times and distances are straight-line estimates. Re-optimise when online for real road data.")}</p>
           )}
 
           {mode === "map" ? (
@@ -535,8 +526,7 @@ export function PlannerClient(props: Props) {
               {busy === "optimise" && (
                 <div className="absolute inset-0 z-[500] grid animate-fade-in place-items-center bg-white/55 backdrop-blur-[2px]" role="status">
                   <p className="flex items-center gap-2.5 rounded-full bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-pop">
-                    <Spinner className="text-blue-600" /> Finding the best routes with real road times…
-                  </p>
+                    <Spinner className="text-blue-600" /> {" "}{tr("Finding the best routes with real road times…")}</p>
                 </div>
               )}
             </Card>
@@ -559,15 +549,13 @@ export function PlannerClient(props: Props) {
           {!plan ? (
             <Card className="p-6 text-center">
               <Sparkles className="mx-auto size-8 text-blue-500" />
-              <p className="mt-3 text-sm font-semibold text-slate-900">No routes yet</p>
+              <p className="mt-3 text-sm font-semibold text-slate-900">{tr("No routes yet")}</p>
               <p className="mt-1 text-sm text-slate-500">
                 {blocker ? (
                   blocker.text
                 ) : (
                   <>
-                    Tick the drivers on shift, then press <strong>Optimise routes</strong>. The planner uses real road travel times to decide the
-                    stop order and which driver takes each order.
-                  </>
+                    {tr("Tick the drivers on shift, then press")}{" "}<strong>{tr("Optimise routes")}</strong>{tr(". The planner uses real road travel times to decide the stop order and which driver takes each order.")}</>
                 )}
               </p>
             </Card>
@@ -577,26 +565,25 @@ export function PlannerClient(props: Props) {
               {plan.status === "dispatched" ? (
                 <div className="flex animate-rise items-center gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900 ring-1 ring-emerald-200">
                   <Check className="size-5 shrink-0 text-emerald-600" />
-                  <span className="min-w-0 flex-1">Sent. Drivers see their route when they open the app.</span>
+                  <span className="min-w-0 flex-1">{tr("Sent. Drivers see their route when they open the app.")}</span>
                   <Link href="/admin/tracking" className={btn("secondary", "sm")}>
-                    Live tracking →
-                  </Link>
+                    {tr("Live tracking →")}</Link>
                 </div>
               ) : (
                 view.routes.length > 0 && (
                   <div className="animate-rise rounded-xl bg-blue-600 p-4 text-white shadow-sm">
-                    <p className="font-semibold">Routes are ready</p>
+                    <p className="font-semibold">{tr("Routes are ready")}</p>
                     <p className="mt-0.5 text-sm text-blue-100">
                       {dirty
-                        ? "Save your changes first, then send the routes."
-                        : "Look them over (drag stops on the Dispatch board to change them), then send them to the drivers' phones."}
+                        ? tr("Save your changes first, then send the routes.")
+                        : tr("Look them over (drag stops on the Dispatch board to change them), then send them to the drivers' phones.")}
                     </p>
                     <button
                       className={btn("secondary", "md", "mt-3 w-full border-0")}
                       disabled={pending || dirty}
                       onClick={() => toggleDispatch(true)}
                     >
-                      {busy === "dispatch" ? <Spinner /> : <Send className="size-4" />} {busy === "dispatch" ? "Sending…" : "Dispatch to drivers"}
+                      {busy === "dispatch" ? <Spinner /> : <Send className="size-4" />} {busy === "dispatch" ? tr("Sending…") : tr("Dispatch to drivers")}
                     </button>
                   </div>
                 )
@@ -609,8 +596,7 @@ export function PlannerClient(props: Props) {
                   <CardHeader
                     title={
                       <span className="flex items-center gap-1.5 text-amber-800">
-                        <AlertTriangle className="size-4" /> {draft.unassigned.length} not on any route
-                      </span>
+                        <AlertTriangle className="size-4" /> {draft.unassigned.length} {" "}{tr("not on any route")}</span>
                     }
                   />
                   <ul className="divide-y divide-line">
@@ -623,7 +609,7 @@ export function PlannerClient(props: Props) {
                             <p className="truncate text-sm font-medium text-slate-800">
                               {o.orderNumber} <span className="font-normal text-slate-500">· {o.customerName}</span>
                             </p>
-                            <p className="truncate text-[11px] text-amber-700">{UNASSIGNED_REASON[unassignedReasons.get(id) ?? ""] ?? "Added after the last optimisation"}</p>
+                            <p className="truncate text-[11px] text-amber-700">{UNASSIGNED_REASON[unassignedReasons.get(id) ?? ""] ?? tr("Added after the last optimisation")}</p>
                           </div>
                           <MoveSelect drivers={planDriverIds.map((d) => driverById.get(d)!).filter(Boolean)} value="" onChange={(to) => moveOrder(id, to)} />
                         </li>
@@ -655,12 +641,12 @@ export function PlannerClient(props: Props) {
 
               {view.runs.length > 0 && (
                 <Card>
-                  <CardHeader title="Plan history" subtitle="Every optimisation and manual change is kept" />
+                  <CardHeader title={tr("Plan history")} subtitle={tr("Every optimisation and manual change is kept")} />
                   <ul className="divide-y divide-line text-xs">
                     {view.runs.map((r) => (
                       <li key={r.id} className="flex items-center justify-between gap-2 px-4 py-2">
                         <span className="text-slate-700">
-                          {r.kind === "optimise" ? "Optimised" : "Manual edit"}
+                          {r.kind === "optimise" ? tr("Optimised") : tr("Manual edit")}
                           <span className="text-slate-400"> · {r.userName ?? "—"}</span>
                         </span>
                         <span className="text-right text-slate-500 tabular-nums">
@@ -681,13 +667,14 @@ export function PlannerClient(props: Props) {
 }
 
 function MoveSelect({ drivers, value, onChange, label = "Assign…" }: { drivers: Driver[]; value: string; onChange: (to: string) => void; label?: string }) {
+  const tr = useT();
   return (
     <select
       value={value}
       onChange={(e) => e.target.value && onChange(e.target.value)}
       // inputCls is full-width; this compact select must not grow over the row text.
       className={cx(inputCls.replace("w-full", ""), "h-7 w-28 shrink-0 px-1.5 text-[11px]")}
-      aria-label="Move to driver"
+      aria-label={tr("Move to driver")}
     >
       <option value="">{label}</option>
       {drivers.map((d) => (
@@ -715,6 +702,7 @@ function RouteCard(props: {
   onShift: (i: number, delta: number) => void;
   onMove: (orderId: string, to: string) => void;
 }) {
+  const tr = useT();
   const { driver, route, pendingIds } = props;
   // Folded by default when there are several routes, so the summary of every driver fits on screen.
   const [open, setOpen] = useState(props.single);
@@ -739,15 +727,15 @@ function RouteCard(props: {
             props.onFocus();
             if (!props.focused) setOpen(true);
           }}
-          title="Show this route on the map"
+          title={tr("Show this route on the map")}
         >
           <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             {driver.name}
-            {route?.status === "in_progress" && <Badge tone="blue">On the road</Badge>}
-            {route?.status === "completed" && <Badge tone="green">Finished</Badge>}
+            {route?.status === "in_progress" && <Badge tone="blue">{tr("On the road")}</Badge>}
+            {route?.status === "completed" && <Badge tone="green">{tr("Finished")}</Badge>}
           </p>
           <p className="mt-0.5 text-xs text-slate-500 tabular-nums">
-            {total} {total === 1 ? "stop" : "stops"}
+            {total} {total === 1 ? tr("stop") : tr("stops")}
             {route && !props.dirty && (
               <>
                 {" "}
@@ -756,14 +744,14 @@ function RouteCard(props: {
             )}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1">
-            {route && route.overtimeS > 0 && <Badge tone="red">Over shift by {formatDuration(route.overtimeS)}</Badge>}
-            {route && route.overCapacity > 0 && <Badge tone="red">Over capacity by {route.overCapacity}</Badge>}
-            {route && route.trips > 1 && !props.dirty && <Badge tone="violet">{route.trips} trips · reloads at depot</Badge>}
-            {late > 0 && <Badge tone="amber">{late} late</Badge>}
+            {route && route.overtimeS > 0 && <Badge tone="red">{tr("Over shift by")}{" "}{formatDuration(route.overtimeS)}</Badge>}
+            {route && route.overCapacity > 0 && <Badge tone="red">{tr("Over capacity by")}{" "}{route.overCapacity}</Badge>}
+            {route && route.trips > 1 && !props.dirty && <Badge tone="violet">{route.trips} {" "}{tr("trips · reloads at depot")}</Badge>}
+            {late > 0 && <Badge tone="amber">{late} {" "}{tr("late")}</Badge>}
           </div>
         </button>
         <button className={btn("ghost", "sm", "px-2 text-xs")} onClick={() => setOpen(!open)} aria-expanded={open}>
-          {open ? "Hide" : "Stops"}
+          {open ? tr("Hide") : tr("Stops")}
           <ChevronDown className={cx("size-3.5 transition", open && "rotate-180")} />
         </button>
       </div>
@@ -778,7 +766,7 @@ function RouteCard(props: {
               <span className="min-w-0 flex-1 truncate line-through decoration-slate-300">
                 {s.order.orderNumber} · {s.order.customerName}
               </span>
-              <span>{s.status === "delivered" ? "Delivered" : "Failed"}</span>
+              <span>{s.status === "delivered" ? tr("Delivered") : tr("Failed")}</span>
             </li>
           ))}
           {pendingIds.map((orderId, i) => {
@@ -812,14 +800,14 @@ function RouteCard(props: {
                 </div>
                 {/* Phones: inline. Larger screens: float over the row on hover so names and times keep their space. */}
                 <div className="flex shrink-0 items-center gap-0.5 sm:absolute sm:right-2 sm:top-1/2 sm:hidden sm:-translate-y-1/2 sm:rounded-lg sm:bg-white sm:p-0.5 sm:shadow-pop sm:ring-1 sm:ring-line sm:group-focus-within:flex sm:group-hover:flex">
-                  <button className={btn("ghost", "icon-sm")} onClick={() => props.onShift(i, -1)} disabled={i === 0} aria-label="Move earlier">
+                  <button className={btn("ghost", "icon-sm")} onClick={() => props.onShift(i, -1)} disabled={i === 0} aria-label={tr("Move earlier")}>
                     <ArrowUp className="size-3" />
                   </button>
-                  <button className={btn("ghost", "icon-sm")} onClick={() => props.onShift(i, 1)} disabled={i === pendingIds.length - 1} aria-label="Move later">
+                  <button className={btn("ghost", "icon-sm")} onClick={() => props.onShift(i, 1)} disabled={i === pendingIds.length - 1} aria-label={tr("Move later")}>
                     <ArrowDown className="size-3" />
                   </button>
-                  <MoveSelect drivers={props.otherDrivers} value="" onChange={(to) => props.onMove(orderId, to)} label="Move…" />
-                  <button className={btn("ghost", "icon-sm")} onClick={() => props.onMove(orderId, "unassigned")} aria-label="Remove from route">
+                  <MoveSelect drivers={props.otherDrivers} value="" onChange={(to) => props.onMove(orderId, to)} label={tr("Move…")} />
+                  <button className={btn("ghost", "icon-sm")} onClick={() => props.onMove(orderId, "unassigned")} aria-label={tr("Remove from route")}>
                     <X className="size-3" />
                   </button>
                 </div>
@@ -828,8 +816,7 @@ function RouteCard(props: {
               reload ? (
                 <li key={`reload-${orderId}`} className="flex items-center justify-between bg-violet-50/60 px-4 py-1.5 text-[11px] text-violet-800">
                   <span className="flex items-center gap-1.5">
-                    <RefreshCcw className="size-3" /> Back to depot to reload
-                  </span>
+                    <RefreshCcw className="size-3" /> {" "}{tr("Back to depot to reload")}</span>
                   <span className="tabular-nums">
                     {formatClock(reload.arrivalS)}–{formatClock(reload.departureS)}
                   </span>
@@ -839,7 +826,7 @@ function RouteCard(props: {
           })}
           {route && !props.dirty && pendingIds.length > 0 && route.endS > 0 && (
             <li className="flex items-center justify-between px-4 py-2 text-[11px] text-slate-500">
-              <span>Finish{route.stops.length ? " (back at depot if returning)" : ""}</span>
+              <span>{tr("Finish")}{route.stops.length ? tr(" (back at depot if returning)") : ""}</span>
               <span className="font-semibold tabular-nums text-slate-700">{formatClock(route.endS)}</span>
             </li>
           )}
@@ -859,6 +846,7 @@ function Board(props: {
   reasons: Map<string, string>;
   onMove: (orderId: string, to: string, index?: number) => void;
 }) {
+  const tr = useT();
   const [over, setOver] = useState<string | null>(null);
   const columns = [
     { id: "unassigned", title: "Unassigned", color: "#94a3b8", ids: props.draft.unassigned },
@@ -898,7 +886,7 @@ function Board(props: {
           >
             <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
               <ColorDot color={col.color} />
-              <span className="flex-1 truncate text-sm font-semibold text-slate-800">{col.title}</span>
+              <span className="flex-1 truncate text-sm font-semibold text-slate-800">{<Tx>{col.title}</Tx>}</span>
               <span className="text-[11px] text-slate-500 tabular-nums">
                 {col.ids.length}
                 {completed ? ` +${completed} done` : ""}
@@ -936,7 +924,7 @@ function Board(props: {
                         <span>{o.orderNumber}</span>
                         {windowLabel(o) && <span>{windowLabel(o)}</span>}
                         {st && !props.dirty && col.id !== "unassigned" && st.status === "pending" && (
-                          <span className={st.lateS ? "font-semibold text-red-600" : "text-slate-600"}>ETA {formatClock(st.etaS)}</span>
+                          <span className={st.lateS ? "font-semibold text-red-600" : "text-slate-600"}>{tr("ETA")}{" "}{formatClock(st.etaS)}</span>
                         )}
                         {col.id === "unassigned" && props.reasons.get(id) && (
                           <span className="text-amber-700">{UNASSIGNED_REASON[props.reasons.get(id)!]}</span>
@@ -946,7 +934,7 @@ function Board(props: {
                   </div>
                 );
               })}
-              {col.ids.length === 0 && <p className="px-2 py-6 text-center text-xs text-slate-400">Drop orders here</p>}
+              {col.ids.length === 0 && <p className="px-2 py-6 text-center text-xs text-slate-400">{tr("Drop orders here")}</p>}
             </div>
           </div>
         );

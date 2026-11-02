@@ -6,6 +6,7 @@ import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { canSeePrices, listCatalog, listCategories, type Sort, SORTS } from "@/lib/shop";
 import { ProductCard } from "../shop-ui";
+import { T } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Products" };
 
@@ -30,27 +31,25 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   return (
     <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[220px_1fr]">
       <aside className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-leaf-900/50">Categories</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-leaf-900/50"><T>{"Categories"}</T></p>
         <nav className="mt-3 flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
-          <CatLink href="/products" active={!category} label="All products" n={total} />
+          <CatLink href="/products" active={!category} label={<T>{"All products"}</T>} n={total} />
           {categories.map((c) => (
             <CatLink key={c.name} href={`/products?category=${encodeURIComponent(c.name)}`} active={category === c.name} label={c.name} n={c.n} />
           ))}
         </nav>
       </aside>
       <section className="min-w-0">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">{q ? `Results for “${q}”` : (category ?? "All products")}</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">{q ? `Results for “${q}”` : (category ?? <T>{"All products"}</T>)}</h1>
         <p className="mt-1 text-sm text-leaf-900/60">
-          {items.length} product{items.length === 1 ? "" : "s"}
+          {items.length} {" "}<T>{"product"}</T>{items.length === 1 ? "" : "s"}
           {q && category && ` in ${category}`}
           {!viewer && (
             <>
               {" · "}
               <Link href="/login?next=%2Fproducts" className="font-semibold text-leaf-700 hover:underline">
-                Sign in
-              </Link>{" "}
-              to see your prices
-            </>
+                <T>{"Sign in"}</T></Link>{" "}
+              <T>{"to see your prices"}</T></>
           )}
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
@@ -66,7 +65,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                   (sort ?? "name") === k ? "bg-leaf-950 font-medium text-white" : "bg-white text-leaf-900/75 ring-1 ring-leaf-950/10 hover:ring-leaf-700/30",
                 )}
               >
-                {SORTS[k]}
+                <T>{SORTS[k]}</T>
               </Link>
             ))}
           <Link
@@ -80,14 +79,13 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             <span className={cx("grid size-4 place-items-center rounded-full border", inStock ? "border-white bg-white text-leaf-700" : "border-leaf-900/30")}>
               {inStock && <Check className="size-3" strokeWidth={3} />}
             </span>
-            In stock only
-          </Link>
+            <T>{"In stock only"}</T></Link>
         </div>
         {items.length === 0 ? (
           <div className="mt-8 rounded-3xl border border-dashed border-leaf-950/15 bg-white px-6 py-14 text-center">
             <PackageSearch className="mx-auto size-10 text-leaf-700/60" />
-            <p className="mt-3 font-semibold">Nothing found</p>
-            <p className="mt-1 text-sm text-leaf-900/60">Try another word or SKU, or ask us — we can usually source it.</p>
+            <p className="mt-3 font-semibold"><T>{"Nothing found"}</T></p>
+            <p className="mt-1 text-sm text-leaf-900/60"><T>{"Try another word or SKU, or ask us — we can usually source it."}</T></p>
           </div>
         ) : (
           <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -101,7 +99,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-function CatLink({ href, active, label, n }: { href: string; active: boolean; label: string; n: number }) {
+function CatLink({ href, active, label, n }: { href: string; active: boolean; label: React.ReactNode; n: number }) {
   return (
     <Link
       href={href}
@@ -110,7 +108,7 @@ function CatLink({ href, active, label, n }: { href: string; active: boolean; la
         active ? "bg-leaf-700 font-semibold text-white" : "text-leaf-900/75 hover:bg-leaf-950/5",
       )}
     >
-      {label}
+      {typeof label === "string" ? <T>{label}</T> : label}
       <span className={cx("text-xs tabular-nums", active ? "text-white/70" : "text-leaf-900/40")}>{n}</span>
     </Link>
   );

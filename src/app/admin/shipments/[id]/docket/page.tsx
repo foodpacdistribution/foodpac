@@ -13,6 +13,7 @@ import { getDb } from "@/lib/db";
 import { drivers, orders, plans, routes, routeStops, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { depotFor, getDepots, getSettings } from "@/lib/planning";
 import { formatClock, formatKm, formatMinutesClock } from "@/lib/time";
+import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Shipment docket" };
 
@@ -57,9 +58,8 @@ export default async function DocketPage({ params }: { params: Promise<{ id: str
     <div className="mx-auto max-w-5xl">
       <div className="no-print mb-4 flex items-center justify-between">
         <Link href={`/admin/shipments?date=${date}`} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
-          <ArrowLeft className="size-4" /> Shipments
-        </Link>
-        <PrintButton className={btn("primary")} label="Print docket" />
+          <ArrowLeft className="size-4" /> {" "}<T>{"Shipments"}</T></Link>
+        <PrintButton className={btn("primary")} label={<T>{"Print docket"}</T>} />
       </div>
 
       <article className="rounded-xl border border-line bg-white p-6 text-sm text-slate-900 sm:p-8 print:rounded-none print:border-0 print:p-0">
@@ -67,31 +67,31 @@ export default async function DocketPage({ params }: { params: Promise<{ id: str
           <div className="flex items-center gap-4">
             <Logo className="h-14" />
             <div>
-              <p className="text-xl font-bold tracking-tight">Shipment docket</p>
+              <p className="text-xl font-bold tracking-tight"><T>{"Shipment docket"}</T></p>
               <p className="text-slate-600">{SITE.name}</p>
             </div>
           </div>
           <div className="text-right">
             <p className="font-mono text-2xl font-bold">{route.number}</p>
-            <p className="font-medium">{prettyDate(date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+            <p className="font-medium">{<Tx>{prettyDate(date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</Tx>}</p>
           </div>
         </header>
 
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
-          <Info label="Driver" value={driver.name} />
-          <Info label="Vehicle" value={driver.vehicle ?? "—"} />
-          <Info label="Depot" value={depot ? `${depot.name}` : "—"} sub={depot?.address} />
-          <Info label="Departs → returns" value={`${formatClock(route.startS)} → ${formatClock(route.endS)}`} sub={`${stops.length} stops · ${units} units · ${formatKm(route.distanceM)}`} />
+          <Info label={<T>{"Driver"}</T>} value={driver.name} />
+          <Info label={<T>{"Vehicle"}</T>} value={driver.vehicle ?? "—"} />
+          <Info label={<T>{"Depot"}</T>} value={depot ? `${depot.name}` : "—"} sub={depot?.address} />
+          <Info label={<T>{"Departs → returns"}</T>} value={`${formatClock(route.startS)} → ${formatClock(route.endS)}`} sub={`${stops.length} stops · ${units} units · ${formatKm(route.distanceM)}`} />
         </dl>
 
         <table className="mt-6 w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-y border-slate-900 text-left text-[11px] uppercase tracking-wide">
               <th className="w-8 py-2">#</th>
-              <th className="w-20 py-2">ETA</th>
-              <th className="py-2">Deliver to</th>
-              <th className="py-2">Goods</th>
-              <th className="w-44 py-2">Received by / signature</th>
+              <th className="w-20 py-2"><T>{"ETA"}</T></th>
+              <th className="py-2"><T>{"Deliver to"}</T></th>
+              <th className="py-2"><T>{"Goods"}</T></th>
+              <th className="w-44 py-2"><T>{"Received by / signature"}</T></th>
             </tr>
           </thead>
           <tbody>
@@ -126,12 +126,12 @@ export default async function DocketPage({ params }: { params: Promise<{ id: str
                         ))}
                       </ul>
                     ) : (
-                      <span>Qty {order.demand}</span>
+                      <span><T>{"Qty"}</T>{" "}{order.demand}</span>
                     )}
                   </td>
                   <td className="py-2.5">
                     <div className="h-12 rounded border border-slate-300" />
-                    <p className="mt-0.5 text-[10px] text-slate-400">Name · signature · time</p>
+                    <p className="mt-0.5 text-[10px] text-slate-400"><T>{"Name · signature · time"}</T></p>
                   </td>
                 </tr>
               );
@@ -148,17 +148,16 @@ export default async function DocketPage({ params }: { params: Promise<{ id: str
           ))}
         </div>
         <p className="mt-6 text-[11px] text-slate-400">
-          Printed {printed}. Deliveries are also confirmed on the driver&apos;s phone with a photo, signature and GPS location.
-        </p>
+          <T>{"Printed"}</T>{" "}{printed}<T>{". Deliveries are also confirmed on the driver's phone with a photo, signature and GPS location."}</T></p>
       </article>
     </div>
   );
 }
 
-function Info({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Info({ label, value, sub }: { label: React.ReactNode; value: string; sub?: string }) {
   return (
     <div>
-      <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
+      <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{<Tx>{label}</Tx>}</dt>
       <dd className="font-semibold">{value}</dd>
       {sub && <dd className="text-[12px] text-slate-600">{sub}</dd>}
     </div>

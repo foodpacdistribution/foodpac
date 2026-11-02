@@ -5,19 +5,21 @@ import { setCustomerPrice } from "@/app/actions/products";
 import { Toast, type ToastMessage } from "@/components/client-ui";
 import { Card, cx, inputCls, Spinner } from "@/components/ui";
 import { aud } from "@/lib/money";
+import { useT } from "@/components/i18n";
 
 type Row = { id: string; sku: string; name: string; category: string; priceCents: number; unit: string; ownCents: number | null };
 
 export function PriceList({ customerId, rows }: { customerId: string; rows: Row[] }) {
+  const tr = useT();
   const [toast, setToast] = useState<ToastMessage | null>(null);
   return (
     <Card className="overflow-x-auto">
       <table className="w-full min-w-[600px] text-sm">
         <thead className="border-b border-line bg-slate-50 text-left text-xs text-slate-500">
           <tr>
-            <th className="px-4 py-2.5 font-medium">Product</th>
-            <th className="px-2 py-2.5 text-right font-medium">List price</th>
-            <th className="px-4 py-2.5 font-medium">Customer price</th>
+            <th className="px-4 py-2.5 font-medium">{tr("Product")}</th>
+            <th className="px-2 py-2.5 text-right font-medium">{tr("List price")}</th>
+            <th className="px-4 py-2.5 font-medium">{tr("Customer price")}</th>
           </tr>
         </thead>
         <tbody>
@@ -32,6 +34,7 @@ export function PriceList({ customerId, rows }: { customerId: string; rows: Row[
 }
 
 function PriceRow({ customerId, row: r, onResult }: { customerId: string; row: Row; onResult: (t: ToastMessage) => void }) {
+  const tr = useT();
   const initial = r.ownCents !== null ? (r.ownCents / 100).toFixed(2) : "";
   const [v, setV] = useState(initial);
   const [saved, setSaved] = useState(initial);
@@ -63,14 +66,14 @@ function PriceRow({ customerId, row: r, onResult }: { customerId: string; row: R
             onChange={(e) => setV(e.target.value)}
             onBlur={save}
             onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
-            placeholder="List price"
+            placeholder={tr("List price")}
             inputMode="decimal"
             className={cx(inputCls, "w-28")}
           />
           {pending && <Spinner className="text-slate-400" />}
           {own !== null && !pending && (
             <span className={cx("text-xs", own < r.priceCents ? "text-emerald-700" : "text-slate-500")}>
-              {own < r.priceCents ? `${Math.round((1 - own / r.priceCents) * 100)}% off` : own > r.priceCents ? "above list" : ""}
+              {own < r.priceCents ? `${Math.round((1 - own / r.priceCents) * 100)}% off` : own > r.priceCents ? tr("above list") : ""}
             </span>
           )}
         </div>

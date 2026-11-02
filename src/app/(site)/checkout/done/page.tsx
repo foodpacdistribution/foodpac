@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db";
 import { salesOrders } from "@/lib/db/schema";
 import { aud } from "@/lib/money";
 import { confirmCardReturn } from "@/lib/payments";
+import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Order placed" };
 
@@ -34,31 +35,29 @@ export default async function DonePage({ searchParams }: { searchParams: Promise
     <main className="mx-auto max-w-xl px-4 py-16 text-center sm:px-6">
       <Icon className={`mx-auto size-14 ${paidOrConfirmed ? "animate-check text-leaf-600" : waitingCard && !sp.cancelled ? "text-amber-500" : "text-red-500"}`} />
       <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight">
-        {paidOrConfirmed ? "Thanks — your order is in" : sp.cancelled ? "Payment not completed" : waitingCard ? "Waiting for payment" : "Order cancelled"}
+        {paidOrConfirmed ? <T>{"Thanks — your order is in"}</T> : sp.cancelled ? <T>{"Payment not completed"}</T> : waitingCard ? <T>{"Waiting for payment"}</T> : <T>{"Order cancelled"}</T>}
       </h1>
       <p className="mt-2 text-leaf-900/70">
-        Order <span className="font-semibold">{so.number}</span> · {aud(so.totalCents)} · delivery {prettyDate(so.deliveryDate)}
+        <T>{"Order"}</T>{" "}<span className="font-semibold">{so.number}</span> · {aud(so.totalCents)} {" "}<T>{"· delivery"}</T>{" "}{<Tx>{prettyDate(so.deliveryDate)}</Tx>}
       </p>
       <p className="mt-3 text-sm text-leaf-900/60">
         {paidOrConfirmed
           ? so.paymentMethod === "card"
-            ? "Payment received. You can follow packing and delivery from your account."
+            ? <T>{"Payment received. You can follow packing and delivery from your account."}</T>
             : so.paymentMethod === "bank_transfer"
-              ? "Please pay by bank transfer using your order number as the reference."
-              : "We'll invoice your account. You can follow packing and delivery from your account."
+              ? <T>{"Please pay by bank transfer using your order number as the reference."}</T>
+              : <T>{"We'll invoice your account. You can follow packing and delivery from your account."}</T>
           : sp.cancelled
-            ? "Your items are held for 30 minutes. Go back to your order to try paying again, or choose another payment method."
+            ? <T>{"Your items are held for 30 minutes. Go back to your order to try paying again, or choose another payment method."}</T>
             : waitingCard
-              ? "We're confirming your payment with the bank. This page updates when you refresh."
-              : "This order was cancelled and the stock released."}
+              ? <T>{"We're confirming your payment with the bank. This page updates when you refresh."}</T>
+              : <T>{"This order was cancelled and the stock released."}</T>}
       </p>
       <div className="mt-8 flex justify-center gap-2">
         <Link href={`/portal/orders/${so.id}`} className="inline-flex h-11 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white">
-          View order
-        </Link>
+          <T>{"View order"}</T></Link>
         <Link href="/products" className="inline-flex h-11 items-center rounded-full border border-leaf-950/15 bg-white px-5 text-sm font-semibold">
-          Keep shopping
-        </Link>
+          <T>{"Keep shopping"}</T></Link>
       </div>
     </main>
   );

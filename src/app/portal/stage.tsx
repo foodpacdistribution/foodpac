@@ -1,4 +1,5 @@
 import { Check, TriangleAlert } from "lucide-react";
+import { T } from "@/components/i18n";
 import { cx } from "@/components/ui";
 import { type PortalStage, STAGES } from "@/lib/portal";
 
@@ -12,7 +13,7 @@ export const STAGE_LABEL: Record<PortalStage, { label: string; className: string
 
 export function StageBadge({ stage }: { stage: PortalStage }) {
   const s = STAGE_LABEL[stage];
-  return <span className={cx("inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap", s.className)}>{s.label}</span>;
+  return <span className={cx("inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap", s.className)}><T>{s.label}</T></span>;
 }
 
 /** Four-step progress: received → scheduled → out for delivery → delivered. */
@@ -42,7 +43,7 @@ export function StageSteps({ stage, compact }: { stage: PortalStage; compact?: b
             </span>
             {!compact && (
               <span className={cx("mt-2 px-1 text-[11px] font-medium leading-tight", done || active || isFail ? "text-leaf-950" : "text-leaf-900/45")}>
-                {isFail ? "Couldn't deliver" : s.label}
+                <T>{isFail ? "Couldn't deliver" : s.label}</T>
               </span>
             )}
           </li>

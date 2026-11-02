@@ -5,6 +5,7 @@ import { aud } from "@/lib/money";
 import { OrderPill, PaymentPill } from "../badges";
 import { StageBadge } from "../stage";
 import type { listSalesOrders } from "./data";
+import { T, Tx } from "@/components/i18n";
 
 export function SalesOrderList({ rows }: { rows: Awaited<ReturnType<typeof listSalesOrders>> }) {
   return (
@@ -13,9 +14,9 @@ export function SalesOrderList({ rows }: { rows: Awaited<ReturnType<typeof listS
         <Link key={o.id} href={`/portal/orders/${o.id}`} className="group flex items-center gap-3 border-b border-leaf-950/5 px-4 py-3.5 last:border-0 hover:bg-leaf-50/50">
           <div className="min-w-0 flex-1">
             <p className="font-semibold">
-              {o.number} <span className="font-normal text-leaf-900/50">· {o.items} item{o.items === 1 ? "" : "s"}</span>
+              {o.number} <span className="font-normal text-leaf-900/50">· {o.items} {" "}<T>{"item"}</T>{o.items === 1 ? "" : "s"}</span>
             </p>
-            <p className="text-xs text-leaf-900/60">Delivery {prettyDate(o.deliveryDate)}</p>
+            <p className="text-xs text-leaf-900/60"><T>{"Delivery"}</T>{" "}{<Tx>{prettyDate(o.deliveryDate)}</Tx>}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <OrderPill s={o.status} />
               {o.status !== "cancelled" && <PaymentPill s={o.paymentStatus} />}

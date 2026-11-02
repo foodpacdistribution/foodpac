@@ -2,6 +2,7 @@ import { TrendingDown } from "lucide-react";
 import { Badge, Card, CardHeader, cx } from "@/components/ui";
 import type { PlanSummary } from "@/lib/db/schema";
 import { formatClock, formatDuration, formatKm } from "@/lib/time";
+import { T, Tx } from "@/components/i18n";
 
 export function SummaryCard({ summary, matrixSource }: { summary: PlanSummary | null; matrixSource: "osrm" | "estimate" | null }) {
   if (!summary) return null;
@@ -16,23 +17,23 @@ export function SummaryCard({ summary, matrixSource }: { summary: PlanSummary | 
   return (
     <Card>
       <CardHeader
-        title="Optimisation results"
+        title={<T>{"Optimisation results"}</T>}
         subtitle={`Total driver time ${formatDuration(summary.driverTime)} across all routes`}
-        action={matrixSource === "estimate" ? <Badge tone="amber">Estimated</Badge> : <Badge tone="green">Road times</Badge>}
+        action={matrixSource === "estimate" ? <Badge tone="amber"><T>{"Estimated"}</T></Badge> : <Badge tone="green"><T>{"Road times"}</T></Badge>}
       />
       <dl className="grid grid-cols-2 gap-px bg-line">
         {items.map(([label, value, hint]) => (
           <div key={label} className="bg-white px-4 py-3">
-            <dt className="text-[11px] text-slate-500">{label}</dt>
+            <dt className="text-[11px] text-slate-500">{<Tx>{label}</Tx>}</dt>
             <dd className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 tabular-nums">{value}</dd>
-            {hint && <p className="text-[11px] text-slate-400">{hint}</p>}
+            {hint && <p className="text-[11px] text-slate-400">{<Tx>{hint}</Tx>}</p>}
           </div>
         ))}
       </dl>
       {(summary.lateStops > 0 || summary.overtimeRoutes > 0) && (
         <div className="flex flex-wrap gap-1.5 border-t border-line px-4 py-2.5">
-          {summary.lateStops > 0 && <Badge tone="red">{summary.lateStops} stop(s) outside their window</Badge>}
-          {summary.overtimeRoutes > 0 && <Badge tone="red">{summary.overtimeRoutes} route(s) over shift length</Badge>}
+          {summary.lateStops > 0 && <Badge tone="red">{summary.lateStops} {" "}<T>{"stop(s) outside their window"}</T></Badge>}
+          {summary.overtimeRoutes > 0 && <Badge tone="red">{summary.overtimeRoutes} {" "}<T>{"route(s) over shift length"}</T></Badge>}
         </div>
       )}
     </Card>
@@ -52,25 +53,24 @@ export function ComparisonCard({ before, after }: { before: PlanSummary | null; 
   return (
     <Card>
       <CardHeader
-        title="Before vs after"
-        subtitle="“Before” = orders driven in spreadsheet order, split evenly between the same drivers, same road times."
+        title={<T>{"Before vs after"}</T>}
+        subtitle={<T>{"“Before” = orders driven in spreadsheet order, split evenly between the same drivers, same road times."}</T>}
       />
       {saved > 0 && (
         <div className="flex items-center gap-2 border-b border-line bg-emerald-50/60 px-4 py-2.5 text-sm text-emerald-800">
           <TrendingDown className="size-4" />
           <span>
-            <strong>{formatDuration(saved)}</strong> less driving ({Math.round((saved / Math.max(1, before.driveTime)) * 100)}%) and{" "}
-            <strong>{formatKm(before.distance - after.distance)}</strong> fewer
-          </span>
+            <strong>{formatDuration(saved)}</strong> {" "}<T>{"less driving ("}</T>{Math.round((saved / Math.max(1, before.driveTime)) * 100)}<T>{"%) and"}</T>{" "}
+            <strong>{formatKm(before.distance - after.distance)}</strong> {" "}<T>{"fewer"}</T></span>
         </div>
       )}
       <table className="w-full text-xs">
         <thead>
           <tr className="text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            <th className="px-4 py-2">Metric</th>
-            <th className="px-2 py-2 text-right">Before</th>
-            <th className="px-2 py-2 text-right">After</th>
-            <th className="px-4 py-2 text-right">Change</th>
+            <th className="px-4 py-2"><T>{"Metric"}</T></th>
+            <th className="px-2 py-2 text-right"><T>{"Before"}</T></th>
+            <th className="px-2 py-2 text-right"><T>{"After"}</T></th>
+            <th className="px-4 py-2 text-right"><T>{"Change"}</T></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
@@ -79,7 +79,7 @@ export function ComparisonCard({ before, after }: { before: PlanSummary | null; 
             const pct = diff !== null && r.b && r.label !== "All done by" && r.label !== "Late deliveries" ? Math.round((diff / r.b) * 100) : null;
             return (
               <tr key={r.label}>
-                <td className="px-4 py-2 text-slate-600">{r.label}</td>
+                <td className="px-4 py-2 text-slate-600">{<Tx>{r.label}</Tx>}</td>
                 <td className="px-2 py-2 text-right tabular-nums text-slate-500">{r.fmt(r.b)}</td>
                 <td className="px-2 py-2 text-right font-semibold tabular-nums text-slate-900">{r.fmt(r.a)}</td>
                 <td className={cx("px-4 py-2 text-right tabular-nums", diff !== null && diff < 0 ? "text-emerald-600" : diff ? "text-red-600" : "text-slate-400")}>

@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 import { getProductBySku, listCatalog } from "@/lib/shop";
 import { AddToCart } from "../../add-to-cart";
 import { Price, ProductCard, ProductImage, StockLabel } from "../../shop-ui";
+import { T, Tx } from "@/components/i18n";
 
 export async function generateMetadata({ params }: { params: Promise<{ sku: string }> }): Promise<Metadata> {
   const { sku } = await params;
@@ -30,7 +31,7 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
       <div className="mt-4 grid gap-8 lg:grid-cols-2">
         <ProductImage p={p} morph priority sizes="(min-width: 1024px) 560px, 100vw" className="aspect-square rounded-3xl border border-leaf-950/10" />
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-leaf-900/50">SKU {p.sku}</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-leaf-900/50"><T>{"SKU"}</T>{" "}{p.sku}</p>
           <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">{p.name}</h1>
           <div className="mt-4 flex items-end justify-between gap-3 border-y border-leaf-950/10 py-4">
             <Price p={p} signedIn={!!viewer} />
@@ -39,31 +40,29 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
           {p.priceCents !== null && (
             <div className="mt-5 max-w-sm">
               <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} size="lg" />
-              {p.minQty > 1 && <p className="mt-2 text-xs text-leaf-900/60">Minimum order {p.minQty} {p.unit}s.</p>}
+              {p.minQty > 1 && <p className="mt-2 text-xs text-leaf-900/60"><T>{"Minimum order"}</T>{" "}{p.minQty} <T>{p.unit}</T>.</p>}
             </div>
           )}
           {!viewer && (
             <div className="mt-5 flex flex-wrap gap-2">
               <Link href="/login" className="inline-flex h-11 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white hover:bg-leaf-800">
-                Sign in to order
-              </Link>
+                <T>{"Sign in to order"}</T></Link>
               <Link href="/register" className="inline-flex h-11 items-center rounded-full border border-leaf-950/15 bg-white px-5 text-sm font-semibold">
-                Open an account
-              </Link>
+                <T>{"Open an account"}</T></Link>
             </div>
           )}
           <dl className="mt-6 grid grid-cols-2 gap-3 text-sm">
-            <Spec icon={Box} label="Pack size" value={p.packSize || "—"} />
-            <Spec icon={Layers} label="Sold by" value={`${p.unit}${p.minQty > 1 ? ` · min ${p.minQty}` : ""}`} />
-            <Spec icon={Barcode} label="GST" value={p.gst ? "GST applies" : "GST free"} />
-            <Spec icon={Truck} label="Delivery" value="On our next scheduled run" />
+            <Spec icon={Box} label={<T>{"Pack size"}</T>} value={p.packSize || "—"} />
+            <Spec icon={Layers} label={<T>{"Sold by"}</T>} value={<><T>{p.unit}</T>{p.minQty > 1 ? <> <Tx>{`· min ${p.minQty}`}</Tx></> : ""}</>} />
+            <Spec icon={Barcode} label={<T>{"GST"}</T>} value={<T>{p.gst ? "GST applies" : "GST free"}</T>} />
+            <Spec icon={Truck} label={<T>{"Delivery"}</T>} value={<T>{"On our next scheduled run"}</T>} />
           </dl>
-          {p.description && <p className="mt-6 leading-relaxed whitespace-pre-line text-leaf-900/80">{p.description}</p>}
+          {p.description && <p className="mt-6 leading-relaxed whitespace-pre-line text-leaf-900/80">{<Tx>{p.description}</Tx>}</p>}
         </div>
       </div>
       {related.length > 0 && (
         <section className="mt-14">
-          <h2 className="font-display text-xl font-semibold tracking-tight">More in {p.category}</h2>
+          <h2 className="font-display text-xl font-semibold tracking-tight"><T>{"More in"}</T>{" "}{p.category}</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {related.map((r) => (
               <ProductCard key={r.id} p={r} signedIn={!!viewer} />
@@ -75,11 +74,11 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
   );
 }
 
-function Spec({ icon: Icon, label, value }: { icon: typeof Box; label: string; value: string }) {
+function Spec({ icon: Icon, label, value }: { icon: typeof Box; label: React.ReactNode; value: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-leaf-950/10 bg-white p-3">
       <dt className="flex items-center gap-1.5 text-xs text-leaf-900/55">
-        <Icon className="size-3.5" /> {label}
+        <Icon className="size-3.5" /> {<Tx>{label}</Tx>}
       </dt>
       <dd className="mt-0.5 font-medium capitalize">{value}</dd>
     </div>

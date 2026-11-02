@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useT } from "@/components/i18n";
 import { cx } from "@/components/ui";
 
 const TABS = [
@@ -16,6 +17,7 @@ const TABS = [
 
 export function PortalNav() {
   const pathname = usePathname();
+  const tr = useT();
   const active = (href: string) => (href === "/portal" ? pathname === "/portal" : pathname.startsWith(href) || (href === "/portal/deliveries" && pathname.startsWith("/portal/track")));
   return (
     <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 pb-2">
@@ -28,7 +30,7 @@ export function PortalNav() {
             active(t.href) ? "bg-leaf-700 text-white" : "text-leaf-900/70 hover:bg-leaf-950/5",
           )}
         >
-          {t.label}
+          {tr(t.label)}
         </Link>
       ))}
     </nav>

@@ -5,29 +5,29 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { login } from "@/app/actions/auth";
 import { FormError, SubmitButton } from "@/components/client-ui";
+import { useT } from "@/components/i18n";
 
 const input =
   "h-12 w-full rounded-xl border border-leaf-950/15 bg-white pr-3.5 pl-10 text-[15px] text-leaf-950 placeholder:text-leaf-900/35 focus:border-leaf-600 focus:ring-2 focus:ring-leaf-600/20 focus:outline-none";
 
 export function LoginForm({ next, defaultEmail }: { next?: string; defaultEmail?: string }) {
+  const tr = useT();
   const [state, action] = useActionState(login, undefined);
   const [show, setShow] = useState(false);
   return (
     <form action={action} className="mt-8 space-y-4">
       {next && <input type="hidden" name="next" value={next} />}
       <label className="block">
-        <span className="mb-1.5 block text-sm font-medium text-leaf-900/80">Email</span>
+        <span className="mb-1.5 block text-sm font-medium text-leaf-900/80">{tr("Email")}</span>
         <span className="relative block">
           <Mail className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-leaf-900/35" />
-          <input name="email" type="email" autoComplete="email" required autoFocus defaultValue={defaultEmail} placeholder="you@business.com.au" className={input} />
+          <input name="email" type="email" autoComplete="email" required autoFocus defaultValue={defaultEmail} placeholder={tr("you@business.com.au")} className={input} />
         </span>
       </label>
       <label className="block">
         <span className="mb-1.5 flex items-baseline justify-between text-sm font-medium text-leaf-900/80">
-          Password
-          <Link href="/#contact" className="text-xs font-normal text-leaf-700 hover:underline">
-            Forgot password?
-          </Link>
+          {tr("Password")}<Link href="/#contact" className="text-xs font-normal text-leaf-700 hover:underline">
+            {tr("Forgot password?")}</Link>
         </span>
         <span className="relative block">
           <Lock className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-leaf-900/35" />
@@ -43,9 +43,8 @@ export function LoginForm({ next, defaultEmail }: { next?: string; defaultEmail?
         </span>
       </label>
       <FormError message={state?.error} />
-      <SubmitButton size="lg" pendingText="Signing in…" className="w-full rounded-xl bg-leaf-700 hover:bg-leaf-800">
-        Sign in
-      </SubmitButton>
+      <SubmitButton size="lg" pendingText={tr("Signing in…")} className="w-full rounded-xl bg-leaf-700 hover:bg-leaf-800">
+        {tr("Sign in")}</SubmitButton>
     </form>
   );
 }

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { logout } from "@/app/actions/auth";
 import { type AccountLink, initials, ROLE_LABEL } from "@/lib/account";
+import { useT } from "./i18n";
+import { LanguageSwitch } from "./language-switch";
 import { cx } from "./ui";
 
 /** Avatar button with the signed-in person's links, switch account and sign out. */
@@ -24,6 +26,7 @@ export function AccountMenu({
   tone?: "light" | "dark";
 }) {
   const [open, setOpen] = useState(false);
+  const tr = useT();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,7 +65,7 @@ export function AccountMenu({
               <span className="block truncate font-semibold">{name}</span>
               <span className="block truncate text-xs text-leaf-900/60">{email}</span>
               <span className="mt-1 inline-flex rounded-full bg-leaf-50 px-2 py-0.5 text-[11px] font-semibold text-leaf-700">
-                {ROLE_LABEL[role]}
+                {tr(ROLE_LABEL[role])}
                 {subtitle && ` · ${subtitle}`}
               </span>
             </span>
@@ -70,16 +73,20 @@ export function AccountMenu({
           <nav className="py-1.5">
             {links.map((l) => (
               <Link key={l.href} href={l.href} role="menuitem" onClick={() => setOpen(false)} className="block px-4 py-2 text-sm hover:bg-leaf-50">
-                {l.label}
+                {tr(l.label)}
               </Link>
             ))}
           </nav>
+          <div className="flex items-center justify-between border-t border-leaf-950/10 px-4 py-2">
+            <span className="text-xs text-leaf-900/60">{tr("Language")} · 语言</span>
+            <LanguageSwitch />
+          </div>
           <form action={logout} className="border-t border-leaf-950/10 py-1.5">
             <button name="switch" value="1" role="menuitem" className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-leaf-50">
-              <RefreshCw className="size-4 text-leaf-900/50" /> Switch account
+              <RefreshCw className="size-4 text-leaf-900/50" /> {tr("Switch account")}
             </button>
             <button role="menuitem" className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50">
-              <LogOut className="size-4" /> Sign out
+              <LogOut className="size-4" /> {tr("Sign out")}
             </button>
           </form>
         </div>

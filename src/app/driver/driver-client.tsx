@@ -7,6 +7,7 @@ import { useActionState, useCallback, useEffect, useMemo, useState, useSyncExter
 import { logout } from "@/app/actions/auth";
 import { markDelivered, markFailed, startRoute } from "@/app/actions/driver";
 import { FormError, Modal, SubmitButton, Toast, type ToastMessage } from "@/components/client-ui";
+import { LanguageSwitch } from "@/components/language-switch";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { Badge, btn, cx, Field, inputCls, Spinner } from "@/components/ui";
 import { prettyDate } from "@/lib/dates";
@@ -15,6 +16,7 @@ import type { RouteView, StopView } from "@/lib/planning";
 import { formatClock, formatMinutesClock } from "@/lib/time";
 import { PhotoCapture, SignaturePad } from "./proof-inputs";
 import { readSharePref, useBestFix, useLocationSharing, writeSharePref } from "./use-location-sharing";
+import { Tx, useT } from "@/components/i18n";
 
 type Props = {
   name: string;
@@ -33,6 +35,7 @@ function greeting(nowS: number) {
 }
 
 export function DriverClient({ name, linked, date, nowS, depot, route, requirePhoto, requireSignature }: Props) {
+  const tr = useT();
   const router = useRouter();
   const [sharePref, setSharePref] = useState(readSharePref);
   const sharing = useLocationSharing(route?.status === "in_progress" && sharePref);
@@ -81,14 +84,15 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
     <header className="bg-navy-900 px-4 pb-16 pt-5 text-white">
       <div className="mx-auto flex max-w-lg items-start justify-between">
         <div>
-          <p className="text-xs text-slate-400">{prettyDate(date, { weekday: "long", day: "numeric", month: "long" })}</p>
+          <p className="text-xs text-slate-400">{<Tx>{prettyDate(date, { weekday: "long", day: "numeric", month: "long" })}</Tx>}</p>
           <h1 className="mt-0.5 text-xl font-semibold">
-            {greeting(nowS)}, {name}
+            {tr(greeting(nowS))}, {name}
           </h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <LanguageSwitch tone="dark" />
           <form action={logout}>
-            <button className="grid size-9 place-items-center rounded-full bg-white/10 text-slate-300" aria-label="Sign out">
+            <button className="grid size-9 place-items-center rounded-full bg-white/10 text-slate-300" aria-label={tr("Sign out")}>
               <LogOut className="size-4" />
             </button>
           </form>
@@ -104,16 +108,15 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
         <main className="mx-auto -mt-10 max-w-lg px-4">
           <div className="rounded-2xl bg-white p-8 text-center shadow-card">
             <Truck className="mx-auto size-10 text-slate-300" />
-            <p className="mt-3 font-semibold text-slate-900">{linked ? "No deliveries dispatched yet" : "Account not linked"}</p>
+            <p className="mt-3 font-semibold text-slate-900">{linked ? tr("No deliveries dispatched yet") : tr("Account not linked")}</p>
             <p className="mt-1 text-sm text-slate-500">
               {linked
-                ? "Your shipment appears here as soon as the office sends it. This page refreshes automatically."
-                : "Ask your dispatcher to link your login to your driver profile."}
+                ? tr("Your shipment appears here as soon as the office sends it. This page refreshes automatically.")
+                : tr("Ask your dispatcher to link your login to your driver profile.")}
             </p>
             {linked && (
               <Link href="/driver/history" className={btn("secondary", "md", "mt-5 rounded-xl")}>
-                <History className="size-4" /> Past deliveries
-              </Link>
+                <History className="size-4" /> {" "}{tr("Past deliveries")}</Link>
             )}
           </div>
         </main>
@@ -148,7 +151,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
             ].map(([l, n]) => (
               <div key={l}>
                 <p className="text-2xl font-semibold tabular-nums text-slate-900">{n}</p>
-                <p className="text-xs text-slate-500">{l}</p>
+                <p className="text-xs text-slate-500">{tr(l as string)}</p>
               </div>
             ))}
           </div>
@@ -156,10 +159,10 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
             <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${(doneCount / Math.max(1, stops.length)) * 100}%` }} />
           </div>
           <p className="mt-3 flex items-center justify-between text-sm">
-            <span className="text-slate-500">Estimated finish</span>
+            <span className="text-slate-500">{tr("Estimated finish")}</span>
             <span className="font-semibold text-slate-900">
               {formatClock(projectedFinish)}
-              {delay > 600 && route.status === "in_progress" && <span className="ml-1.5 text-xs font-normal text-amber-600">running late</span>}
+              {delay > 600 && route.status === "in_progress" && <span className="ml-1.5 text-xs font-normal text-amber-600">{tr("running late")}</span>}
             </span>
           </p>
         </section>
@@ -180,8 +183,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
           <p className="flex items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
             <PlayCircle className="size-5 shrink-0 text-blue-600" />
             <span>
-              Tap <strong>Start route &amp; navigate</strong> when you set off. Dispatch will see you&apos;re on the road.
-            </span>
+              {tr("Tap")}{" "}<strong>{tr("Start route & navigate")}</strong> {" "}{tr("when you set off. Dispatch will see you're on the road.")}</span>
           </p>
         )}
 
@@ -191,13 +193,13 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
           <section key={current.id} className="animate-rise overflow-hidden rounded-2xl bg-white shadow-card">
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
-                {current.id === pendingStops[0]?.id ? "Next delivery" : "Selected stop"} · Stop {current.seq}
+                {current.id === pendingStops[0]?.id ? tr("Next delivery") : tr("Selected stop")} {" "}{tr("· Stop")}{" "}{current.seq}
               </p>
               <span className="text-xs text-slate-500">{current.order.orderNumber}</span>
             </div>
             <div className="space-y-3 p-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">{current.order.customerName || "Customer"}</h2>
+                <h2 className="text-lg font-semibold text-slate-900">{current.order.customerName || tr("Customer")}</h2>
                 <p className="mt-0.5 flex items-start gap-1.5 text-sm text-slate-600">
                   <MapPin className="mt-0.5 size-4 shrink-0 text-slate-400" />
                   {current.order.address}
@@ -205,14 +207,14 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
               </div>
               <div className="flex flex-wrap gap-2 text-sm">
                 <span className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700">
-                  <Clock className="size-3.5" /> ETA {formatClock(current.etaS)}
+                  <Clock className="size-3.5" /> {" "}{tr("ETA")}{" "}{formatClock(current.etaS)}
                 </span>
                 {(current.order.windowStartMin !== null || current.order.windowEndMin !== null) && (
                   <span className="rounded-lg bg-amber-50 px-2.5 py-1 text-amber-800">
-                    Window {formatMinutesClock(current.order.windowStartMin)}–{formatMinutesClock(current.order.windowEndMin)}
+                    {tr("Window")}{" "}{formatMinutesClock(current.order.windowStartMin)}–{formatMinutesClock(current.order.windowEndMin)}
                   </span>
                 )}
-                {current.order.demand > 1 && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700">{current.order.demand} units</span>}
+                {current.order.demand > 1 && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700">{current.order.demand} {" "}{tr("units")}</span>}
               </div>
               {current.order.notes && (
                 <p className="flex gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">
@@ -229,79 +231,72 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
                   // Setting off is when the route starts: one tap instead of a separate "Start" step.
                   onClick={() => route.status === "planned" && startTransition(async () => (await startRoute(route.id), router.refresh()))}
                 >
-                  {pending ? <Spinner className="size-5" /> : <Navigation className="size-5" />} {route.status === "planned" ? (pending ? "Starting…" : "Start route & navigate") : "Navigate"}
+                  {pending ? <Spinner className="size-5" /> : <Navigation className="size-5" />} {route.status === "planned" ? (pending ? tr("Starting…") : tr("Start route & navigate")) : tr("Navigate")}
                 </a>
                 {current.order.phone && (
-                  <a href={`tel:${current.order.phone.replace(/\s+/g, "")}`} className={btn("secondary", "lg", "rounded-xl px-4")} aria-label="Call customer">
+                  <a href={`tel:${current.order.phone.replace(/\s+/g, "")}`} className={btn("secondary", "lg", "rounded-xl px-4")} aria-label={tr("Call customer")}>
                     <Phone className="size-5" />
                   </a>
                 )}
               </div>
               <p className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
                 <a href={navigationUrls(current.order.lat, current.order.lng).apple} target="_blank" rel="noreferrer" className="underline">
-                  Use Apple Maps
-                </a>
+                  {tr("Use Apple Maps")}</a>
                 {multiNav && (
                   <a href={multiNav.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 underline">
-                    <Route className="size-3.5" /> Next {multiNav.count} stops in Google Maps
-                  </a>
+                    <Route className="size-3.5" /> {" "}{tr("Next")}{" "}{multiNav.count} {" "}{tr("stops in Google Maps")}</a>
                 )}
               </p>
               <div className="grid grid-cols-2 gap-2 border-t border-line pt-3">
                 <button className={btn("success", "lg", "rounded-xl")} onClick={() => openSheet("delivered")}>
-                  <CheckCircle2 className="size-5" /> Delivered
-                </button>
+                  <CheckCircle2 className="size-5" /> {" "}{tr("Delivered")}</button>
                 <button className={btn("danger", "lg", "rounded-xl")} onClick={() => openSheet("failed")}>
-                  <TriangleAlert className="size-5" /> Problem
-                </button>
+                  <TriangleAlert className="size-5" /> {" "}{tr("Problem")}</button>
               </div>
             </div>
           </section>
         ) : (
           <section className="rounded-2xl bg-white p-6 text-center shadow-card">
             <CheckCircle2 className="mx-auto size-12 animate-check text-emerald-500" />
-            <p className="mt-3 text-lg font-semibold">All stops completed</p>
-            <p className="mt-1 text-sm text-slate-500">Great work today. Drive safely back to {depot?.name ?? "the depot"}.</p>
+            <p className="mt-3 text-lg font-semibold">{tr("All stops completed")}</p>
+            <p className="mt-1 text-sm text-slate-500">{tr("Great work today. Drive safely back to")}{" "}{depot?.name ?? tr("the depot")}.</p>
             <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 py-3">
               <div>
                 <p className="text-xl font-semibold tabular-nums text-emerald-600">{completedStops.filter((s) => s.status === "delivered").length}</p>
-                <p className="text-[11px] text-slate-500">Delivered</p>
+                <p className="text-[11px] text-slate-500">{tr("Delivered")}</p>
               </div>
               <div>
                 <p className={cx("text-xl font-semibold tabular-nums", completedStops.some((s) => s.status === "failed") ? "text-red-600" : "text-slate-900")}>
                   {completedStops.filter((s) => s.status === "failed").length}
                 </p>
-                <p className="text-[11px] text-slate-500">Problems</p>
+                <p className="text-[11px] text-slate-500">{tr("Problems")}</p>
               </div>
               <div>
                 <p className="text-xl font-semibold tabular-nums text-slate-900">
                   {lastDoneAt ? new Date(lastDoneAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }) : "—"}
                 </p>
-                <p className="text-[11px] text-slate-500">Finished</p>
+                <p className="text-[11px] text-slate-500">{tr("Finished")}</p>
               </div>
             </div>
             <Link href="/driver/history" className={btn("secondary", "md", "mt-4 w-full rounded-xl")}>
-              <History className="size-4" /> View delivery history
-            </Link>
+              <History className="size-4" /> {" "}{tr("View delivery history")}</Link>
           </section>
         )}
 
         {current && reloadBefore && depot && (
           <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
-              <Warehouse className="size-4" /> Reload at {depot.name} before this stop
-            </p>
+              <Warehouse className="size-4" /> {" "}{tr("Reload at")}{" "}{depot.name} {" "}{tr("before this stop")}</p>
             <p className="mt-1 text-xs text-amber-800">
-              Trip {current.trip}: be at the depot around {formatClock(reloadBefore.arrivalS)}, leave by {formatClock(reloadBefore.departureS)}.
+              {tr("Trip")}{" "}{current.trip}{tr(": be at the depot around")}{" "}{formatClock(reloadBefore.arrivalS)}{tr(", leave by")}{" "}{formatClock(reloadBefore.departureS)}.
             </p>
             <a href={navigationUrls(depot.lat, depot.lng).google} target="_blank" rel="noreferrer" className={btn("secondary", "sm", "mt-2.5")}>
-              <Navigation className="size-3.5" /> Navigate to depot
-            </a>
+              <Navigation className="size-3.5" /> {" "}{tr("Navigate to depot")}</a>
           </section>
         )}
 
         <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={() => setShowMap(!showMap)}>
-          {showMap ? "Hide route map" : "Show route map"}
+          {showMap ? tr("Hide route map") : tr("Show route map")}
         </button>
         {showMap && (
           <div className="h-72 overflow-hidden rounded-2xl shadow-card">
@@ -317,9 +312,9 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
         {/* All stops */}
         <section className="overflow-hidden rounded-2xl bg-white shadow-card">
           <h3 className="border-b border-line px-4 py-2.5 text-sm font-semibold text-slate-900">
-            {pendingStops.length ? `To deliver · ${pendingStops.length}` : "Today's stops"}
+            {pendingStops.length ? tr(`To deliver · ${pendingStops.length}`) : tr("Today's stops")}
           </h3>
-          {pendingStops.length === 0 && <p className="px-4 py-3 text-sm text-slate-500">Nothing left to deliver.</p>}
+          {pendingStops.length === 0 && <p className="px-4 py-3 text-sm text-slate-500">{tr("Nothing left to deliver.")}</p>}
           <ol className="divide-y divide-line">
             {pendingStops.map((s) => {
               const isCurrent = s.id === current?.id;
@@ -353,7 +348,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
                     {s.status === "pending" ? (
                       <span className="text-sm font-semibold tabular-nums text-slate-700">{formatClock(s.etaS)}</span>
                     ) : (
-                      <Badge tone={s.status === "delivered" ? "green" : "red"}>{s.status === "delivered" ? "Delivered" : "Failed"}</Badge>
+                      <Badge tone={s.status === "delivered" ? "green" : "red"}>{s.status === "delivered" ? tr("Delivered") : tr("Failed")}</Badge>
                     )}
                   </button>
                   {s.status === "pending" ? (
@@ -372,7 +367,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
                   </div>
                   {reload && (
                     <p className="flex items-center gap-2 bg-amber-50/70 px-4 py-2 text-xs text-amber-800">
-                      <RefreshCcw className="size-3.5" /> Reload at depot · {formatClock(reload.arrivalS)}–{formatClock(reload.departureS)}
+                      <RefreshCcw className="size-3.5" /> {" "}{tr("Reload at depot ·")}{" "}{formatClock(reload.arrivalS)}–{formatClock(reload.departureS)}
                     </p>
                   )}
                 </li>
@@ -389,8 +384,8 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
               aria-expanded={showDone || !pendingStops.length}
             >
               <span>
-                Completed · {completedStops.length}
-                {cleared.size > 0 && <span className="ml-1.5 text-xs font-normal text-slate-400">({completedStops.length - visibleDone.length} cleared)</span>}
+                {tr("Completed ·")}{" "}{completedStops.length}
+                {cleared.size > 0 && <span className="ml-1.5 text-xs font-normal text-slate-400">({completedStops.length - visibleDone.length} {" "}{tr("cleared)")}</span>}
               </span>
               <ChevronDown className={cx("size-4 text-slate-400 transition-transform", (showDone || !pendingStops.length) && "rotate-180")} />
             </button>
@@ -407,7 +402,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
                           <span className="block truncate text-sm text-slate-500">{s.order.customerName || s.order.orderNumber}</span>
                           <span className="block truncate text-xs text-slate-400">{s.order.address}</span>
                         </span>
-                        <Badge tone={s.status === "delivered" ? "green" : "red"}>{s.status === "delivered" ? "Delivered" : "Problem"}</Badge>
+                        <Badge tone={s.status === "delivered" ? "green" : "red"}>{s.status === "delivered" ? tr("Delivered") : tr("Problem")}</Badge>
                         <button
                           onClick={() => setCleared(new Set([...cleared, s.id]))}
                           className="grid size-8 place-items-center rounded-full text-slate-300 hover:bg-slate-100 hover:text-slate-600"
@@ -422,16 +417,13 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
                 <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-2.5">
                   {visibleDone.length > 0 ? (
                     <button onClick={() => setCleared(new Set(completedStops.map((s) => s.id)))} className="text-xs font-medium text-slate-500 hover:text-slate-800">
-                      Clear all from my list
-                    </button>
+                      {tr("Clear all from my list")}</button>
                   ) : (
                     <button onClick={() => setCleared(new Set())} className="text-xs font-medium text-slate-500 hover:text-slate-800">
-                      Show cleared stops
-                    </button>
+                      {tr("Show cleared stops")}</button>
                   )}
                   <Link href="/driver/history" className="flex items-center gap-1 text-xs font-medium text-blue-600">
-                    <History className="size-3.5" /> History
-                  </Link>
+                    <History className="size-3.5" /> {" "}{tr("History")}</Link>
                 </div>
               </>
             )}
@@ -439,7 +431,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
         )}
       </main>
 
-      <Modal open={sheet?.kind === "delivered"} onClose={() => setSheet(null)} title="Confirm delivery">
+      <Modal open={sheet?.kind === "delivered"} onClose={() => setSheet(null)} title={tr("Confirm delivery")}>
         {sheet && (
           <OutcomeForm
             kind="delivered"
@@ -450,7 +442,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
           />
         )}
       </Modal>
-      <Modal open={sheet?.kind === "failed"} onClose={() => setSheet(null)} title="Report a delivery problem">
+      <Modal open={sheet?.kind === "failed"} onClose={() => setSheet(null)} title={tr("Report a delivery problem")}>
         {sheet && <OutcomeForm kind="failed" stopId={sheet.stopId} onDone={() => finishSheet({ tone: "warn", text: `Problem reported · ${sheet.name}` })} />}
       </Modal>
       <Toast toast={toast} onDone={clearToast} />
@@ -469,6 +461,7 @@ function LocationBar({
   enabled: boolean;
   onToggle: (on: boolean) => void;
 }) {
+  const tr = useT();
   const [, tick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 10_000);
@@ -492,11 +485,11 @@ function LocationBar({
     <section className={cx("flex items-center gap-3 rounded-2xl px-4 py-3 text-sm shadow-card", good ? "bg-emerald-50 text-emerald-900" : "bg-white text-slate-600")}>
       {good ? <LocateFixed className="size-5 shrink-0 text-emerald-600" /> : <LocateOff className="size-5 shrink-0 text-slate-400" />}
       <span className="min-w-0 flex-1">
-        {text}
-        {good && <span className="block text-[11px] text-emerald-700/80">Keep this page open while driving. Sharing stops when your route is finished.</span>}
+        {<Tx>{text}</Tx>}
+        {good && <span className="block text-[11px] text-emerald-700/80">{tr("Keep this page open while driving. Sharing stops when your route is finished.")}</span>}
       </span>
       <label className="relative inline-flex shrink-0 cursor-pointer items-center">
-        <input type="checkbox" className="peer sr-only" checked={enabled} onChange={(e) => onToggle(e.target.checked)} aria-label="Share live location" />
+        <input type="checkbox" className="peer sr-only" checked={enabled} onChange={(e) => onToggle(e.target.checked)} aria-label={tr("Share live location")} />
         <span className="h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-emerald-500" />
         <span className="absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
       </label>
@@ -517,6 +510,7 @@ function OutcomeForm({
   requirePhoto?: boolean;
   requireSignature?: boolean;
 }) {
+  const tr = useT();
   const [state, action] = useActionState(kind === "delivered" ? markDelivered : markFailed, undefined);
   const [photo, setPhoto] = useState<File | null>(null);
   const [signature, setSignature] = useState<File | null>(null);
@@ -552,27 +546,27 @@ function OutcomeForm({
       ) : (
         <>
           <fieldset className="grid grid-cols-2 gap-2">
-            <legend className="mb-1.5 text-xs font-medium text-slate-600">What happened?</legend>
+            <legend className="mb-1.5 text-xs font-medium text-slate-600">{tr("What happened?")}</legend>
             {FAILURE_REASONS.map((r, i) => (
               <label key={r} className="flex items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-sm has-[:checked]:border-red-400 has-[:checked]:bg-red-50">
                 <input type="radio" name="reason" value={r} required defaultChecked={i === 0} />
-                {r}
+                {tr(r)}
               </label>
             ))}
           </fieldset>
           <PhotoCapture value={photo} onChange={setPhoto} />
         </>
       )}
-      <Field label="Note (optional)">
+      <Field label={tr("Note (optional)")}>
         <textarea name="note" rows={2} className={cx(inputCls, "h-auto py-2 text-base")} />
       </Field>
       <p className={cx("flex items-center gap-1.5 text-xs", fix && fix.accuracy <= 30 ? "text-emerald-700" : "text-slate-500")}>
         {fix ? <LocateFixed className="size-3.5" /> : <Spinner className="size-3" />}
-        {fix ? `Location recorded with this delivery · ±${Math.round(fix.accuracy)} m` : "Getting your exact location…"}
+        {fix ? `Location recorded with this delivery · ±${Math.round(fix.accuracy)} m` : tr("Getting your exact location…")}
       </p>
       <FormError message={state && !state.ok ? state.error : null} />
-      <SubmitButton disabled={missing} variant={kind === "delivered" ? "success" : "primary"} size="lg" className="w-full rounded-xl" pendingText="Uploading…">
-        {kind === "delivered" ? "Confirm delivered" : "Report problem"}
+      <SubmitButton disabled={missing} variant={kind === "delivered" ? "success" : "primary"} size="lg" className="w-full rounded-xl" pendingText={tr("Uploading…")}>
+        {kind === "delivered" ? tr("Confirm delivered") : tr("Report problem")}
       </SubmitButton>
     </form>
   );

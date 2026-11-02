@@ -4,6 +4,7 @@ import { CheckCircle2, TriangleAlert, X } from "lucide-react";
 import { useLinkStatus } from "next/link";
 import { useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
+import { useT } from "./i18n";
 import { btn, cx, Spinner, TopProgress } from "./ui";
 
 export function SubmitButton({
@@ -21,12 +22,13 @@ export function SubmitButton({
   className?: string;
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const { pending } = useFormStatus();
+  const tr = useT();
   return (
     <button type="submit" disabled={pending || rest.disabled} className={btn(variant, size, className)} {...rest}>
       {pending ? (
         <>
           <Spinner className="size-3.5" />
-          {pendingText ?? "Saving…"}
+          {tr(pendingText ?? "Saving…")}
         </>
       ) : (
         children
@@ -99,6 +101,7 @@ export type ToastMessage ={ id: number; text: string; tone: "ok" | "warn" };
 
 /** Brief confirmation at the bottom of the screen ("Delivered · Acme"), gone after a moment. */
 export function Toast({ toast, onDone }: { toast: ToastMessage | null; onDone: () => void }) {
+  const tr = useT();
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(onDone, 2600);
@@ -115,13 +118,14 @@ export function Toast({ toast, onDone }: { toast: ToastMessage | null; onDone: (
         )}
       >
         {toast.tone === "ok" ? <CheckCircle2 className="size-4" /> : <TriangleAlert className="size-4" />}
-        {toast.text}
+        {tr(toast.text)}
       </p>
     </div>
   );
 }
 
 export function FormError({ message }: { message?: string | null }) {
+  const tr = useT();
   if (!message) return null;
-  return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">{message}</p>;
+  return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">{tr(message)}</p>;
 }

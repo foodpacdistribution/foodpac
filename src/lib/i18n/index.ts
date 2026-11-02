@@ -3,6 +3,7 @@
 // entries never break a screen. Client-safe.
 
 import { ZH, ZH_PATTERNS } from "./zh";
+import { zhDates } from "./zh-dates";
 
 export type Locale = "en" | "zh";
 export const LOCALES: { code: Locale; label: string }[] = [
@@ -29,6 +30,8 @@ export function translate(locale: Locale, text: string, vars?: Record<string, st
           break;
         }
       }
+      // Dates, times and durations inside the text, e.g. "Est. finish 2:44pm".
+      out = zhDates(out);
     }
   }
   if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));

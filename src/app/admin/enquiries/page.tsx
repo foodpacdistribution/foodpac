@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 import { enquiries } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { StatusSelect } from "./status-select";
+import { T } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Website Enquiries" };
 
@@ -20,14 +21,13 @@ export default async function EnquiriesPage() {
   return (
     <>
       <PageHeader
-        title="Website Enquiries"
+        title={<T>{"Website Enquiries"}</T>}
         subtitle={fresh ? `${fresh} new message${fresh === 1 ? "" : "s"} from the contact form` : "Messages sent from the contact form on your website"}
       />
       {rows.length === 0 ? (
         <Card>
-          <EmptyState icon={Inbox} title="No enquiries yet">
-            When someone fills in the contact form on the website, it shows up here.
-          </EmptyState>
+          <EmptyState icon={Inbox} title={<T>{"No enquiries yet"}</T>}>
+            <T>{"When someone fills in the contact form on the website, it shows up here."}</T></EmptyState>
         </Card>
       ) : (
         <div className="space-y-3">
@@ -38,7 +38,7 @@ export default async function EnquiriesPage() {
                   <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                     {e.name}
                     {e.business && <span className="font-normal text-slate-500">· {e.business}</span>}
-                    {e.status === "new" && <Badge tone="blue">New</Badge>}
+                    {e.status === "new" && <Badge tone="blue"><T>{"New"}</T></Badge>}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                     <a href={`mailto:${e.email}`} className="flex items-center gap-1 text-blue-700 hover:underline">

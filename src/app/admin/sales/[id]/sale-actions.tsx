@@ -7,8 +7,10 @@ import { Toast, type ToastMessage } from "@/components/client-ui";
 import { btn } from "@/components/ui";
 import type { FulfilmentStatus, PaymentMethod, PaymentStatus, SalesStatus } from "@/lib/db/schema";
 import { FULFILMENT } from "@/lib/money";
+import { useT } from "@/components/i18n";
 
 export function SaleActions(p: { id: string; status: SalesStatus; paymentStatus: PaymentStatus; paymentMethod: PaymentMethod; fulfilment: FulfilmentStatus; canCancel: boolean; isAdmin: boolean }) {
+  const tr = useT();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -25,17 +27,16 @@ export function SaleActions(p: { id: string; status: SalesStatus; paymentStatus:
     <div className="flex flex-wrap gap-2">
       {p.status === "pending" && (
         <button disabled={pending} onClick={() => run(() => confirmSale(p.id))} className={btn("primary")}>
-          Confirm order
-        </button>
+          {tr("Confirm order")}</button>
       )}
       {p.status === "confirmed" && next && (
         <button disabled={pending} onClick={() => run(() => setFulfilment([p.id], next))} className={btn("primary")}>
-          Mark {FULFILMENT[next].label.toLowerCase()}
+          {tr("Mark")}{" "}{FULFILMENT[next].label.toLowerCase()}
         </button>
       )}
       {p.status !== "cancelled" && p.paymentMethod !== "card" && (
         <button disabled={pending} onClick={() => run(() => markPaid(p.id, p.paymentStatus !== "paid"))} className={btn(p.paymentStatus === "paid" ? "ghost" : "success")}>
-          {p.paymentStatus === "paid" ? "Mark unpaid" : "Record payment"}
+          {p.paymentStatus === "paid" ? tr("Mark unpaid") : tr("Record payment")}
         </button>
       )}
       {p.canCancel && (
@@ -44,8 +45,7 @@ export function SaleActions(p: { id: string; status: SalesStatus; paymentStatus:
           onClick={() => confirm("Cancel this order? Stock goes back on the shelf, the delivery is removed and card payments are refunded.") && run(() => cancelSale(p.id))}
           className={btn("danger")}
         >
-          Cancel order
-        </button>
+          {tr("Cancel order")}</button>
       )}
       {p.isAdmin && (
         <button
@@ -60,8 +60,7 @@ export function SaleActions(p: { id: string; status: SalesStatus; paymentStatus:
             });
           }}
         >
-          Delete order
-        </button>
+          {tr("Delete order")}</button>
       )}
       <Toast toast={toast} onDone={() => setToast(null)} />
     </div>

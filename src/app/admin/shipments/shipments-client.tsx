@@ -10,6 +10,7 @@ import { DateNav } from "@/components/date-nav";
 import { Badge, btn, Card, ColorDot, cx, EmptyState, inputCls, PageHeader, Spinner } from "@/components/ui";
 import { FULFILMENT } from "@/lib/money";
 import { formatClock, formatKm, formatMinutesClock } from "@/lib/time";
+import { Tx, useT } from "@/components/i18n";
 
 type Ready = {
   id: string;
@@ -47,6 +48,7 @@ type Shipment = {
 const window_ = (a: number | null, b: number | null) => (a === null && b === null ? null : `${a !== null ? formatMinutesClock(a) : "any"}–${b !== null ? formatMinutesClock(b) : "close"}`);
 
 export function ShipmentsClient(props: { date: string; today: string; hasDepot: boolean; ready: Ready[]; drivers: Driver[]; shipments: Shipment[] }) {
+  const tr = useT();
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [driverId, setDriverId] = useState<string>("");
@@ -89,19 +91,17 @@ export function ShipmentsClient(props: { date: string; today: string; hasDepot: 
   return (
     <>
       <PageHeader
-        title="Shipments"
-        subtitle="Confirmed orders show up here. Group them into a shipment for a driver, print the docket, and send it to their phone."
+        title={tr("Shipments")}
+        subtitle={tr("Confirmed orders show up here. Group them into a shipment for a driver, print the docket, and send it to their phone.")}
         actions={<DateNav date={props.date} today={props.today} basePath="/admin/shipments" />}
       />
 
       {!props.hasDepot && (
         <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
           <span className="flex items-center gap-2">
-            <AlertTriangle className="size-4" /> Shipments start from your depot. Add its address first.
-          </span>
+            <AlertTriangle className="size-4" /> {" "}{tr("Shipments start from your depot. Add its address first.")}</span>
           <Link href="/admin/settings" className={btn("primary", "sm")}>
-            Add a depot
-          </Link>
+            {tr("Add a depot")}</Link>
         </Card>
       )}
 
@@ -113,7 +113,7 @@ export function ShipmentsClient(props: { date: string; today: string; hasDepot: 
           ["Stops on shipments", totals.stops],
         ].map(([label, value]) => (
           <Card key={label} className="px-4 py-3">
-            <p className="text-xs text-slate-500">{label}</p>
+            <p className="text-xs text-slate-500">{<Tx>{label}</Tx>}</p>
             <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-900">{value}</p>
           </Card>
         ))}
@@ -124,8 +124,8 @@ export function ShipmentsClient(props: { date: string; today: string; hasDepot: 
         <Card className="overflow-hidden xl:sticky xl:top-4">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Ready to ship</h2>
-              <p className="text-xs text-slate-500">Orders for this day that aren&apos;t on a shipment yet.</p>
+              <h2 className="text-sm font-semibold text-slate-900">{tr("Ready to ship")}</h2>
+              <p className="text-xs text-slate-500">{tr("Orders for this day that aren't on a shipment yet.")}</p>
             </div>
             {locatable.length > 0 && (
               <label className="flex items-center gap-2 text-xs text-slate-600">
@@ -134,14 +134,12 @@ export function ShipmentsClient(props: { date: string; today: string; hasDepot: 
                   checked={locatable.length > 0 && locatable.every((o) => selected.has(o.id))}
                   onChange={(e) => setSelected(e.target.checked ? new Set(locatable.map((o) => o.id)) : new Set())}
                 />
-                Select all
-              </label>
+                {tr("Select all")}</label>
             )}
           </div>
           {props.ready.length === 0 ? (
-            <EmptyState icon={PackageCheck} title="Everything is on a shipment">
-              New confirmed orders for this day appear here automatically.
-            </EmptyState>
+            <EmptyState icon={PackageCheck} title={tr("Everything is on a shipment")}>
+              {tr("New confirmed orders for this day appear here automatically.")}</EmptyState>
           ) : (
             <ul className="max-h-[60vh] divide-y divide-line overflow-y-auto">
               {props.ready.map((o) => {
@@ -160,17 +158,16 @@ export function ShipmentsClient(props: { date: string; today: string; hasDepot: 
                         <span className="flex flex-wrap items-center gap-1.5">
                           <span className="font-semibold text-slate-900">{o.orderNumber}</span>
                           <span className="truncate text-slate-600">{o.customerName}</span>
-                          {o.fulfilment && <Badge tone={FULFILMENT[o.fulfilment].tone}>{FULFILMENT[o.fulfilment].label}</Badge>}
-                          {o.pinnedDriverId && <Badge tone="violet">For {props.drivers.find((d) => d.id === o.pinnedDriverId)?.name ?? "a driver"}</Badge>}
+                          {o.fulfilment && <Badge tone={FULFILMENT[o.fulfilment].tone}>{<Tx>{FULFILMENT[o.fulfilment].label}</Tx>}</Badge>}
+                          {o.pinnedDriverId && <Badge tone="violet">{tr("For")}{" "}{props.drivers.find((d) => d.id === o.pinnedDriverId)?.name ?? tr("a driver")}</Badge>}
                         </span>
                         <span className="block truncate text-xs text-slate-500">{o.address}</span>
                         <span className="mt-0.5 flex gap-3 text-[11px] text-slate-500">
-                          <span>Qty {o.demand}</span>
-                          {w && <span>Window {w}</span>}
+                          <span>{tr("Qty")}{" "}{o.demand}</span>
+                          {w && <span>{tr("Window")}{" "}{w}</span>}
                           {!o.located && (
                             <span className="flex items-center gap-1 text-red-600">
-                              <MapPinOff className="size-3" /> Address not located
-                            </span>
+                              <MapPinOff className="size-3" /> {" "}{tr("Address not located")}</span>
                           )}
                         </span>
                       </span>
@@ -182,16 +179,15 @@ export function ShipmentsClient(props: { date: string; today: string; hasDepot: 
           )}
           {props.ready.some((o) => !o.located) && (
             <p className="border-t border-line px-4 py-2 text-xs text-slate-500">
-              Orders with an address that isn&apos;t located can&apos;t be routed.{" "}
+              {tr("Orders with an address that isn't located can't be routed.")}{" "}
               <Link href={`/admin/orders?date=${props.date}&status=attention`} className="text-blue-700 hover:underline">
-                Verify addresses
-              </Link>
+                {tr("Verify addresses")}</Link>
             </p>
           )}
           {props.ready.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 border-t border-line bg-slate-50 px-4 py-3">
-              <select value={effectiveDriver} onChange={(e) => setDriverId(e.target.value)} className={cx(inputCls, "w-auto min-w-44")} aria-label="Driver">
-                <option value="">Choose a driver…</option>
+              <select value={effectiveDriver} onChange={(e) => setDriverId(e.target.value)} className={cx(inputCls, "w-auto min-w-44")} aria-label={tr("Driver")}>
+                <option value="">{tr("Choose a driver…")}</option>
                 {props.drivers.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
@@ -209,8 +205,7 @@ export function ShipmentsClient(props: { date: string; today: string; hasDepot: 
               </button>
               {selected.size > 0 && (
                 <span className="text-xs text-slate-500">
-                  {units} units
-                  {driver?.capacity != null && units > driver.capacity && <span className="text-amber-700"> · over {driver.name}&apos;s capacity ({driver.capacity})</span>}
+                  {units} {" "}{tr("units")}{driver?.capacity != null && units > driver.capacity && <span className="text-amber-700"> {" "}{tr("· over")}{" "}{driver.name}{tr("'s capacity (")}{driver.capacity})</span>}
                 </span>
               )}
             </div>
@@ -221,9 +216,8 @@ export function ShipmentsClient(props: { date: string; today: string; hasDepot: 
         <div className="space-y-3">
           {props.shipments.length === 0 ? (
             <Card>
-              <EmptyState icon={Truck} title="No shipments for this day yet">
-                Tick orders on the left, choose a driver and create a shipment.
-              </EmptyState>
+              <EmptyState icon={Truck} title={tr("No shipments for this day yet")}>
+                {tr("Tick orders on the left, choose a driver and create a shipment.")}</EmptyState>
             </Card>
           ) : (
             props.shipments.map((s) => <ShipmentCard key={s.id} s={s} busy={busy} pending={pending} run={run} />)
@@ -246,6 +240,7 @@ function ShipmentCard({
   pending: boolean;
   run: (key: string, fn: () => Promise<{ ok: true; message?: string } | { ok: false; error: string }>) => void;
 }) {
+  const tr = useT();
   const units = s.stops.reduce((t, x) => t + x.demand, 0);
   const late = s.stops.filter((x) => x.lateS > 0).length;
   const done = s.stops.filter((x) => x.status !== "pending").length;
@@ -265,7 +260,7 @@ function ShipmentCard({
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-3">
         <div>
           <p className="flex items-center gap-2 font-semibold text-slate-900">
-            {s.number} <Badge tone={state.tone}>{state.label}</Badge>
+            {s.number} <Badge tone={state.tone}>{<Tx>{state.label}</Tx>}</Badge>
           </p>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-600">
             <ColorDot color={s.color} /> {s.driverName}
@@ -274,17 +269,14 @@ function ShipmentCard({
         </div>
         <div className="flex flex-wrap gap-1.5">
           <Link href={`/admin/shipments/${s.id}/docket`} className={btn("secondary", "sm")}>
-            <Printer className="size-3.5" /> Docket
-          </Link>
+            <Printer className="size-3.5" /> {" "}{tr("Docket")}</Link>
           {!s.dispatchedAt ? (
             <button className={btn("primary", "sm")} disabled={pending || !s.stops.length} onClick={() => run(`send-${s.id}`, () => sendShipment(s.id))}>
-              {busy === `send-${s.id}` ? <Spinner className="size-3" /> : <Send className="size-3.5" />} Send to driver
-            </button>
+              {busy === `send-${s.id}` ? <Spinner className="size-3" /> : <Send className="size-3.5" />} {" "}{tr("Send to driver")}</button>
           ) : (
             editable && (
               <button className={btn("secondary", "sm")} disabled={pending} onClick={() => run(`recall-${s.id}`, () => recallShipment(s.id))}>
-                <Undo2 className="size-3.5" /> Recall
-              </button>
+                <Undo2 className="size-3.5" /> {" "}{tr("Recall")}</button>
             )
           )}
           {editable && !s.dispatchedAt && (
@@ -308,7 +300,7 @@ function ShipmentCard({
           ["Leaves → back", `${formatClock(s.startS)}–${formatClock(s.endS)}`],
         ].map(([k, v]) => (
           <div key={k} className="rounded-lg bg-slate-50 px-2 py-1.5">
-            <dt className="text-slate-500">{k}</dt>
+            <dt className="text-slate-500">{tr(k as string)}</dt>
             <dd className="font-semibold tabular-nums text-slate-900">{v}</dd>
           </div>
         ))}
@@ -316,7 +308,11 @@ function ShipmentCard({
       {(late > 0 || s.overCapacity > 0 || s.overtimeS > 0) && (
         <p className="mx-4 mt-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
           <AlertTriangle className="size-3.5" />
-          {[late > 0 && `${late} stop${late === 1 ? "" : "s"} after the delivery window`, s.overCapacity > 0 && `${s.overCapacity} units over capacity`, s.overtimeS > 0 && "runs past the driver's shift"]
+          {[
+            late > 0 && tr(late === 1 ? "{n} stop after the delivery window" : "{n} stops after the delivery window", { n: late }),
+            s.overCapacity > 0 && tr("{n} units over capacity", { n: s.overCapacity }),
+            s.overtimeS > 0 && tr("runs past the driver's shift"),
+          ]
             .filter(Boolean)
             .join(" · ")}
         </p>

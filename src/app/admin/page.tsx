@@ -14,6 +14,7 @@ import { liveFleet } from "@/lib/tracking";
 import { formatClock, nowSecondsIn, todayIn } from "@/lib/time";
 import { DemoOrdersButton } from "./demo-orders-button";
 import { databaseUrl } from "@/lib/db/url";
+import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -97,20 +98,19 @@ export default async function DashboardPage() {
             </Link>
           ) : (
             <Link href="/admin/tracking" className={btn("primary")}>
-              <Radio className="size-4" /> Follow the drivers live
-            </Link>
+              <Radio className="size-4" /> {" "}<T>{"Follow the drivers live"}</T></Link>
           )
         }
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Today's orders" value={dayOrders.length} icon={Package} tone="slate" hint={notLocated ? `${notLocated} need an address check` : undefined} />
-        <Stat label="Unplanned" value={count("pending")} icon={Circle} tone="violet" hint={count("planned") ? `${count("planned")} planned, not sent` : undefined} />
-        <Stat label="Out for delivery" value={outForDelivery} icon={Truck} tone="blue" />
-        <Stat label="Delivered" value={delivered} icon={PackageCheck} tone="green" hint={dayOrders.length ? `${Math.round((delivered / dayOrders.length) * 100)}% of today` : undefined} />
-        <Stat label="Failed" value={failed} icon={PackageX} tone={failed ? "red" : "slate"} />
+        <Stat label={<T>{"Today's orders"}</T>} value={dayOrders.length} icon={Package} tone="slate" hint={notLocated ? `${notLocated} need an address check` : undefined} />
+        <Stat label={<T>{"Unplanned"}</T>} value={count("pending")} icon={Circle} tone="violet" hint={count("planned") ? `${count("planned")} planned, not sent` : undefined} />
+        <Stat label={<T>{"Out for delivery"}</T>} value={outForDelivery} icon={Truck} tone="blue" />
+        <Stat label={<T>{"Delivered"}</T>} value={delivered} icon={PackageCheck} tone="green" hint={dayOrders.length ? `${Math.round((delivered / dayOrders.length) * 100)}% of today` : undefined} />
+        <Stat label={<T>{"Failed"}</T>} value={failed} icon={PackageX} tone={failed ? "red" : "slate"} />
         <Stat
-          label="Projected completion"
+          label={<T>{"Projected completion"}</T>}
           value={projectedFinish ? formatClock(projectedFinish) : "—"}
           icon={Clock}
           tone="amber"
@@ -122,12 +122,11 @@ export default async function DashboardPage() {
         <div className="min-w-0 space-y-4">
           <Card className="overflow-hidden">
             <CardHeader
-              title="Live delivery map"
+              title={<T>{"Live delivery map"}</T>}
               subtitle={dispatched ? "Green delivered, red failed, round markers are drivers' live positions" : "Showing today's plan"}
               action={
                 <Link href="/admin/tracking" className={btn("ghost", "sm")}>
-                  Live tracking →
-                </Link>
+                  <T>{"Live tracking →"}</T></Link>
               }
             />
             <div className="h-[420px]">
@@ -142,27 +141,23 @@ export default async function DashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Drivers today" />
+            <CardHeader title={<T>{"Drivers today"}</T>} />
             {routeRows.length === 0 && dayOrders.length === 0 ? (
-              <EmptyState icon={Package} title="No orders for today yet">
-                Start by adding today&apos;s deliveries. Then the planner builds each driver&apos;s route.
-                <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <EmptyState icon={Package} title={<T>{"No orders for today yet"}</T>}>
+                <T>{"Start by adding today's deliveries. Then the planner builds each driver's route."}</T><div className="mt-3 flex flex-wrap justify-center gap-2">
                   <Link href={`/admin/orders/import?date=${today}`} className={btn("primary", "sm")}>
-                    <Upload className="size-3.5" /> Import a spreadsheet
-                  </Link>
+                    <Upload className="size-3.5" /> {" "}<T>{"Import a spreadsheet"}</T></Link>
                   <Link href={`/admin/orders?date=${today}`} className={btn("secondary", "sm")}>
-                    Add orders by hand
-                  </Link>
+                    <T>{"Add orders by hand"}</T></Link>
                   {!databaseUrl() && <DemoOrdersButton date={today} />}
                 </div>
               </EmptyState>
             ) : routeRows.length === 0 ? (
-              <EmptyState icon={Truck} title="No routes planned for today">
-                {dayOrders.length} {dayOrders.length === 1 ? "order is" : "orders are"} waiting. The planner turns them into driver routes in a few seconds.
-                <div className="mt-3">
+              <EmptyState icon={Truck} title={<T>{"No routes planned for today"}</T>}>
+                {dayOrders.length}{" "}
+                <T>{dayOrders.length === 1 ? "order is waiting. The planner turns them into driver routes in a few seconds." : "orders are waiting. The planner turns them into driver routes in a few seconds."}</T><div className="mt-3">
                   <Link href={`/admin/planner?date=${today}`} className={btn("primary", "sm")}>
-                    <MapIcon className="size-3.5" /> Plan today&apos;s routes
-                  </Link>
+                    <MapIcon className="size-3.5" /> {" "}<T>{"Plan today's routes"}</T></Link>
                 </div>
               </EmptyState>
             ) : (
@@ -170,12 +165,12 @@ export default async function DashboardPage() {
                 <table className="w-full min-w-[680px] text-sm">
                   <thead>
                     <tr className="border-b border-line text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      <th className="px-4 py-2.5">Driver</th>
-                      <th className="px-4 py-2.5">Progress</th>
-                      <th className="px-4 py-2.5">Next stop</th>
-                      <th className="px-4 py-2.5 text-right">Planned finish</th>
-                      <th className="px-4 py-2.5 text-right">Projected</th>
-                      <th className="px-4 py-2.5">Status</th>
+                      <th className="px-4 py-2.5"><T>{"Driver"}</T></th>
+                      <th className="px-4 py-2.5"><T>{"Progress"}</T></th>
+                      <th className="px-4 py-2.5"><T>{"Next stop"}</T></th>
+                      <th className="px-4 py-2.5 text-right"><T>{"Planned finish"}</T></th>
+                      <th className="px-4 py-2.5 text-right"><T>{"Projected"}</T></th>
+                      <th className="px-4 py-2.5"><T>{"Status"}</T></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
@@ -189,9 +184,9 @@ export default async function DashboardPage() {
                           </span>
                           <span className="text-xs text-slate-500">
                             {r.vehicle}
-                            {r.trips > 1 && ` · ${r.trips} trips`}
+                            {r.trips > 1 && <> <Tx>{`· ${r.trips} trips`}</Tx></>}
                             {gps && r.status === "in_progress" && (
-                              <span className={gps.stale ? "text-amber-600" : "text-emerald-600"}> · GPS {formatAgo(gps.ageS)}</span>
+                              <span className={gps.stale ? "text-amber-600" : "text-emerald-600"}> {" "}<T>{"· GPS"}</T>{" "}<Tx>{formatAgo(gps.ageS)}</Tx></span>
                             )}
                           </span>
                         </td>
@@ -203,14 +198,14 @@ export default async function DashboardPage() {
                             <span className="text-xs tabular-nums text-slate-600">
                               {done + f}/{r.stops.length}
                             </span>
-                            {f > 0 && <Badge tone="red">{f} failed</Badge>}
+                            {f > 0 && <Badge tone="red">{f} {" "}<T>{"failed"}</T></Badge>}
                           </div>
                         </td>
                         <td className="max-w-52 px-4 py-3">
                           {next ? (
                             <>
                               <p className="truncate text-slate-800">{next.order.customerName || next.order.orderNumber}</p>
-                              <p className="text-xs text-slate-500">ETA {formatClock(next.etaS)}</p>
+                              <p className="text-xs text-slate-500"><T>{"ETA"}</T>{" "}{formatClock(next.etaS)}</p>
                             </>
                           ) : (
                             <span className="text-slate-400">—</span>
@@ -218,17 +213,17 @@ export default async function DashboardPage() {
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-slate-700">{formatClock(r.endS)}</td>
                         <td className={cx("px-4 py-3 text-right tabular-nums", delay > 600 ? "font-semibold text-amber-600" : "text-slate-700")}>
-                          {projected ? formatClock(projected) : "Done"}
+                          {projected ? formatClock(projected) : <T>{"Done"}</T>}
                         </td>
                         <td className="px-4 py-3">
                           {r.status === "completed" ? (
-                            <Badge tone="green">Finished</Badge>
+                            <Badge tone="green"><T>{"Finished"}</T></Badge>
                           ) : r.status === "in_progress" ? (
-                            <Badge tone="blue">On delivery</Badge>
+                            <Badge tone="blue"><T>{"On delivery"}</T></Badge>
                           ) : dispatched ? (
-                            <Badge tone="slate">Not started</Badge>
+                            <Badge tone="slate"><T>{"Not started"}</T></Badge>
                           ) : (
-                            <Badge tone="violet">Draft</Badge>
+                            <Badge tone="violet"><T>{"Draft"}</T></Badge>
                           )}
                         </td>
                       </tr>
@@ -243,7 +238,7 @@ export default async function DashboardPage() {
 
         <div className="space-y-4">
           <Card>
-            <CardHeader title="Today's checklist" />
+            <CardHeader title={<T>{"Today's checklist"}</T>} />
             <ol className="space-y-1 p-3">
               {steps.map((st, i) => (
                 <li key={st.label}>
@@ -253,7 +248,7 @@ export default async function DashboardPage() {
                     ) : (
                       <span className="grid size-5 place-items-center rounded-full border-2 border-slate-300 text-[10px] font-bold text-slate-400">{i + 1}</span>
                     )}
-                    <span className={cx("flex-1 text-sm", st.done ? "text-slate-400 line-through" : "font-medium text-slate-800")}>{st.label}</span>
+                    <span className={cx("flex-1 text-sm", st.done ? "text-slate-400 line-through" : "font-medium text-slate-800")}>{<Tx>{st.label}</Tx>}</span>
                     <st.icon className="size-4 text-slate-300" />
                   </Link>
                 </li>
@@ -262,9 +257,9 @@ export default async function DashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Recent activity" />
+            <CardHeader title={<T>{"Recent activity"}</T>} />
             {events.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-slate-400">Driver updates will appear here.</p>
+              <p className="px-4 py-6 text-center text-sm text-slate-400"><T>{"Driver updates will appear here."}</T></p>
             ) : (
               <ul className="divide-y divide-line">
                 {events.map(({ e, orderNumber, customer, driver, color }) => (
@@ -273,14 +268,14 @@ export default async function DashboardPage() {
                     <div className="min-w-0 flex-1 text-sm">
                       <p className="text-slate-800">
                         <span className="font-medium" style={{ color: color ?? undefined }}>
-                          {driver ?? "Driver"}
+                          {driver ?? <T>{"Driver"}</T>}
                         </span>{" "}
-                        {e.type === "delivered" ? "delivered" : e.type === "failed" ? "couldn't deliver" : "started their route with"} {orderNumber}
+                        {e.type === "delivered" ? <T>{"delivered"}</T> : e.type === "failed" ? <T>{"couldn't deliver"}</T> : <T>{"started their route with"}</T>} {orderNumber}
                       </p>
                       <p className="truncate text-xs text-slate-500">
                         {customer}
                         {e.reason && ` · ${e.reason}`}
-                        {e.recipient && ` · received by ${e.recipient}`}
+                        {e.recipient && <> <Tx>{`· received by ${e.recipient}`}</Tx></>}
                       </p>
                     </div>
                     <span className="shrink-0 text-xs text-slate-400">

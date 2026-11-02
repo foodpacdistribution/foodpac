@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { cx, Spinner } from "@/components/ui";
 import { productImageUrl } from "@/lib/product-image";
+import { useT } from "@/components/i18n";
 
 type Hit = { id: string; sku: string; name: string; category: string; packSize: string; hasImage: boolean; updatedAt: string };
 
 /** Shop search with suggestions as you type (debounced, cancels stale requests, keyboard friendly). */
 export function SearchBox({ className, size = "md", autoFocus }: { className?: string; size?: "md" | "lg"; autoFocus?: boolean }) {
+  const tr = useT();
   const router = useRouter();
   const listId = useId();
   const [q, setQ] = useState("");
@@ -98,19 +100,19 @@ export function SearchBox({ className, size = "md", autoFocus }: { className?: s
             setOpen(false);
           }
         }}
-        placeholder={lg ? "Search by product, SKU or barcode" : "Search products, SKU or barcode"}
+        placeholder={tr(lg ? "Search by product, SKU or barcode" : "Search products, SKU or barcode")}
         className={cx(
           "w-full rounded-full bg-white text-leaf-950 placeholder:text-leaf-900/40 focus:outline-none",
           lg ? "h-13 pr-32 pl-12 text-base focus:ring-4 focus:ring-tomato/30" : "h-10 border border-leaf-950/15 pr-9 pl-10 text-sm focus:border-leaf-600 focus:ring-2 focus:ring-leaf-600/20",
         )}
       />
       {loading && !lg && <Spinner className="absolute right-3.5 size-3.5 text-leaf-900/40" />}
-      {lg && <button className="absolute right-1.5 h-10 rounded-full bg-tomato px-5 text-sm font-semibold text-white transition-colors hover:bg-tomato-dark active:scale-[0.97]">Search</button>}
+      {lg && <button className="absolute right-1.5 h-10 rounded-full bg-tomato px-5 text-sm font-semibold text-white transition-colors hover:bg-tomato-dark active:scale-[0.97]">{tr("Search")}</button>}
 
       {showList && (
         <div id={listId} role="listbox" className="absolute top-full right-0 left-0 z-50 mt-2 animate-pop overflow-hidden rounded-2xl border border-leaf-950/10 bg-white text-left text-leaf-950 shadow-pop">
           {hits.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-leaf-900/55">{loading ? "Searching…" : `No products match “${q.trim()}”.`}</p>
+            <p className="px-4 py-3 text-sm text-leaf-900/55">{loading ? tr("Searching…") : `No products match “${q.trim()}”.`}</p>
           ) : (
             hits.map((h, i) => (
               <button
@@ -140,7 +142,7 @@ export function SearchBox({ className, size = "md", autoFocus }: { className?: s
             onClick={() => go(`/products?q=${encodeURIComponent(q.trim())}`)}
             className="flex w-full items-center justify-between border-t border-leaf-950/10 px-4 py-2.5 text-sm font-semibold text-leaf-700 hover:bg-leaf-50"
           >
-            See all results for “{q.trim()}” <ArrowRight className="size-4" />
+            {tr("See all results for “")}{q.trim()}” <ArrowRight className="size-4" />
           </button>
         </div>
       )}

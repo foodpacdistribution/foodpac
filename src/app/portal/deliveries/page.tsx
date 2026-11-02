@@ -11,6 +11,7 @@ import { getSettings } from "@/lib/planning";
 import { listPortalOrders } from "@/lib/portal";
 import { formatClock, todayIn } from "@/lib/time";
 import { StageBadge, StageSteps } from "../stage";
+import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Deliveries" };
 
@@ -29,38 +30,38 @@ export default async function PortalDeliveries() {
 
   return (
     <>
-      <h1 className="font-display text-2xl font-semibold tracking-tight">Deliveries</h1>
-      <p className="mt-1 text-sm text-leaf-900/60">Follow each delivery from our warehouse to your door.</p>
+      <h1 className="font-display text-2xl font-semibold tracking-tight"><T>{"Deliveries"}</T></h1>
+      <p className="mt-1 text-sm text-leaf-900/60"><T>{"Follow each delivery from our warehouse to your door."}</T></p>
 
       {rows.length === 0 ? (
         <div className="mt-8 rounded-3xl border border-dashed border-leaf-950/15 bg-white px-6 py-14 text-center">
           <PackageSearch className="mx-auto size-10 text-leaf-700/60" />
-          <p className="mt-3 font-semibold">No orders yet</p>
-          <p className="mx-auto mt-1 max-w-xs text-sm text-leaf-900/60">Orders we have for your business will appear here as soon as they&apos;re booked in.</p>
+          <p className="mt-3 font-semibold"><T>{"No orders yet"}</T></p>
+          <p className="mx-auto mt-1 max-w-xs text-sm text-leaf-900/60"><T>{"Orders we have for your business will appear here as soon as they're booked in."}</T></p>
         </div>
       ) : (
         <>
-          <Section title="Upcoming & on the way" empty="Nothing on the way right now.">
+          <Section title={<T>{"Upcoming & on the way"}</T>} empty="Nothing on the way right now.">
             {current.map((o) => (
               <OrderCard key={o.id} o={o}>
                 {o.stage === "out_for_delivery" && o.etaS !== null ? (
                   <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-amber-800">
-                    <Clock className="size-4" /> On the way · planned arrival around {formatClock(o.etaS)}
+                    <Clock className="size-4" /> {" "}<T>{"On the way · planned arrival around"}</T>{" "}{formatClock(o.etaS)}
                   </p>
                 ) : o.etaS !== null ? (
                   <p className="mt-3 flex items-center gap-1.5 text-sm text-leaf-900/70">
-                    <Clock className="size-4" /> Planned arrival around {formatClock(o.etaS)}
+                    <Clock className="size-4" /> {" "}<T>{"Planned arrival around"}</T>{" "}{formatClock(o.etaS)}
                   </p>
                 ) : null}
               </OrderCard>
             ))}
           </Section>
-          <Section title="Past deliveries" empty="No past deliveries in the last 60 days.">
+          <Section title={<T>{"Past deliveries"}</T>} empty="No past deliveries in the last 60 days.">
             {past.map((o) => (
               <OrderCard key={o.id} o={o} compact>
                 {o.completedAt && (
                   <p className="mt-1 text-xs text-leaf-900/60">
-                    {o.stage === "delivered" ? "Delivered" : "Attempted"} at {fmt.format(new Date(o.completedAt))}
+                    {o.stage === "delivered" ? <T>{"Delivered"}</T> : <T>{"Attempted"}</T>} {" "}<T>{"at"}</T>{" "}{fmt.format(new Date(o.completedAt))}
                   </p>
                 )}
               </OrderCard>
@@ -72,10 +73,10 @@ export default async function PortalDeliveries() {
   );
 }
 
-function Section({ title, empty, children }: { title: string; empty: string; children: React.ReactNode[] }) {
+function Section({ title, empty, children }: { title: React.ReactNode; empty: string; children: React.ReactNode[] }) {
   return (
     <section className="mt-8">
-      <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-leaf-900/50">{title}</h2>
+      <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-leaf-900/50">{<Tx>{title}</Tx>}</h2>
       <div className="mt-3 space-y-3">{children.length ? children : <p className="text-sm text-leaf-900/50">{empty}</p>}</div>
     </section>
   );
@@ -95,7 +96,7 @@ function OrderCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold">
-            Order {o.orderNumber} <span className="font-normal text-leaf-900/50">· {prettyDate(o.deliveryDate)}</span>
+            <T>{"Order"}</T>{" "}{o.orderNumber} <span className="font-normal text-leaf-900/50">· {<Tx>{prettyDate(o.deliveryDate)}</Tx>}</span>
           </p>
           <p className="truncate text-xs text-leaf-900/60">{o.address}</p>
         </div>

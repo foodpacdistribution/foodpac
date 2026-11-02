@@ -20,6 +20,7 @@ import {
   TEMPLATE_HEADERS,
   toCsv,
 } from "@/lib/product-import";
+import { Tx, useT } from "@/components/i18n";
 
 type Sheet = { name: string; headers: string[]; rows: string[][] };
 
@@ -47,6 +48,7 @@ const TEMPLATE = toCsv([
 ]);
 
 export function ProductImportClient({ existingSkus }: { existingSkus: string[] }) {
+  const tr = useT();
   const existing = useMemo(() => new Set(existingSkus), [existingSkus]);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [mapping, setMapping] = useState<ProductMapping>({});
@@ -113,15 +115,13 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
   return (
     <>
       <Link href="/admin/products" className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="size-4" /> Products & Stock
-      </Link>
+        <ArrowLeft className="size-4" /> {" "}{tr("Products & Stock")}</Link>
       <PageHeader
-        title="Import products"
-        subtitle="Upload a spreadsheet of your range. Products are matched by SKU: new SKUs are added, existing ones updated. Empty cells leave the current value as it is."
+        title={tr("Import products")}
+        subtitle={tr("Upload a spreadsheet of your range. Products are matched by SKU: new SKUs are added, existing ones updated. Empty cells leave the current value as it is.")}
         actions={
           <button className={btn("secondary")} onClick={() => download("foodpac-products-template.csv", TEMPLATE)}>
-            <Download className="size-4" /> Download template
-          </button>
+            <Download className="size-4" /> {" "}{tr("Download template")}</button>
         }
       />
 
@@ -129,16 +129,13 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
         <Card className="p-8 text-center">
           <CheckCircle2 className="mx-auto size-12 animate-check text-emerald-600" />
           <p className="mt-3 text-lg font-semibold text-slate-900">
-            {result.created} added · {result.updated} updated
-          </p>
-          <p className="mt-1 text-sm text-slate-500">Your products are live in the online shop.</p>
+            {result.created} {" "}{tr("added ·")}{" "}{result.updated} {" "}{tr("updated")}</p>
+          <p className="mt-1 text-sm text-slate-500">{tr("Your products are live in the online shop.")}</p>
           <div className="mt-5 flex justify-center gap-2">
             <Link href="/admin/products" className={btn("primary")}>
-              View products
-            </Link>
+              {tr("View products")}</Link>
             <button className={btn("secondary")} onClick={() => (setSheet(null), setResult(null))}>
-              Import another file
-            </button>
+              {tr("Import another file")}</button>
           </div>
         </Card>
       ) : (
@@ -146,8 +143,8 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
           <Card className="p-5">
             <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line px-6 py-8 text-center hover:border-blue-400 hover:bg-blue-50/40">
               {sheet ? <FileSpreadsheet className="size-8 text-blue-600" /> : <Upload className="size-8 text-slate-400" />}
-              <span className="text-sm font-medium text-slate-900">{sheet ? `${sheet.name} · ${sheet.rows.length} rows` : "Choose an Excel (.xlsx) or CSV file"}</span>
-              <span className="text-xs text-slate-500">First row = column names. Up to {MAX_IMPORT_ROWS} products per file.</span>
+              <span className="text-sm font-medium text-slate-900">{sheet ? `${sheet.name} · ${sheet.rows.length} rows` : tr("Choose an Excel (.xlsx) or CSV file")}</span>
+              <span className="text-xs text-slate-500">{tr("First row = column names. Up to")}{" "}{MAX_IMPORT_ROWS} {" "}{tr("products per file.")}</span>
               <input type="file" accept=".xlsx,.csv,.txt,.tsv" className="sr-only" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
             </label>
             <div className="mt-3">
@@ -158,11 +155,11 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
           {sheet && (
             <>
               <Card>
-                <CardHeader title="Match columns" subtitle="Matched automatically from your column names. Change any that are wrong; leave unused ones on “—”." />
+                <CardHeader title={tr("Match columns")} subtitle={tr("Matched automatically from your column names. Change any that are wrong; leave unused ones on “—”.")} />
                 <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
                   {PRODUCT_FIELDS.map((f) => (
                     <label key={f.key} className="block">
-                      <span className="mb-1 block text-xs font-medium text-slate-600">{f.label}</span>
+                      <span className="mb-1 block text-xs font-medium text-slate-600">{<Tx>{f.label}</Tx>}</span>
                       <select
                         value={mapping[f.key] ?? -1}
                         onChange={(e) => setMapping((m) => ({ ...m, [f.key]: Number(e.target.value) < 0 ? undefined : Number(e.target.value) }))}
@@ -180,31 +177,30 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
                 </div>
                 <label className="flex items-center gap-2 border-t border-line px-4 py-3 text-sm">
                   <input type="checkbox" checked={incGst} onChange={(e) => setIncGst(e.target.checked)} />
-                  Prices in this file include GST (the shop stores prices ex GST, so 10% is taken off taxable lines)
-                </label>
+                  {tr("Prices in this file include GST (the shop stores prices ex GST, so 10% is taken off taxable lines)")}</label>
               </Card>
 
               <Card className="overflow-hidden">
                 <CardHeader
-                  title="Preview"
+                  title={tr("Preview")}
                   subtitle={
                     bad
                       ? `${bad} row${bad === 1 ? "" : "s"} need fixing before you can import`
                       : `All ${rows.length} rows look good · ${newCount} new, ${rows.length - newCount} update existing products`
                   }
-                  action={bad ? <Badge tone="red">{bad} to fix</Badge> : <Badge tone="green">Ready</Badge>}
+                  action={bad ? <Badge tone="red">{bad} {" "}{tr("to fix")}</Badge> : <Badge tone="green">{tr("Ready")}</Badge>}
                 />
                 <div className="max-h-[420px] overflow-auto">
                   <table className="w-full min-w-[720px] text-sm">
                     <thead className="sticky top-0 border-b border-line bg-slate-50 text-left text-xs text-slate-500">
                       <tr>
-                        <th className="px-3 py-2 font-medium">Row</th>
-                        <th className="px-2 py-2 font-medium">SKU</th>
-                        <th className="px-2 py-2 font-medium">Name</th>
-                        <th className="px-2 py-2 text-right font-medium">Price ex GST</th>
-                        <th className="px-2 py-2 font-medium">Category</th>
-                        <th className="px-2 py-2 text-right font-medium">Stock</th>
-                        <th className="px-3 py-2 font-medium">Check</th>
+                        <th className="px-3 py-2 font-medium">{tr("Row")}</th>
+                        <th className="px-2 py-2 font-medium">{tr("SKU")}</th>
+                        <th className="px-2 py-2 font-medium">{tr("Name")}</th>
+                        <th className="px-2 py-2 text-right font-medium">{tr("Price ex GST")}</th>
+                        <th className="px-2 py-2 font-medium">{tr("Category")}</th>
+                        <th className="px-2 py-2 text-right font-medium">{tr("Stock")}</th>
+                        <th className="px-3 py-2 font-medium">{tr("Check")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -218,7 +214,7 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
                           <td className="px-2 py-1.5 text-right tabular-nums">{c.ok ? (c.value.stock ?? "—") : ""}</td>
                           <td className="px-3 py-1.5 text-xs">
                             {c.ok ? (
-                              existing.has(c.value.sku) ? <Badge tone="blue">Update</Badge> : <Badge tone="green">New</Badge>
+                              existing.has(c.value.sku) ? <Badge tone="blue">{tr("Update")}</Badge> : <Badge tone="green">{tr("New")}</Badge>
                             ) : <span className="flex items-center gap-1 text-red-700"><AlertTriangle className="size-3.5" />{c.error}</span>}
                           </td>
                         </tr>
@@ -230,11 +226,11 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
 
               {result && result.errors.length > 0 && (
                 <Card className="border-red-200 p-4">
-                  <p className="text-sm font-semibold text-red-800">Nothing was imported. Fix these rows and upload again:</p>
+                  <p className="text-sm font-semibold text-red-800">{tr("Nothing was imported. Fix these rows and upload again:")}</p>
                   <ul className="mt-2 max-h-48 space-y-0.5 overflow-auto text-sm text-red-700">
                     {result.errors.map((e) => (
                       <li key={`${e.row}-${e.message}`}>
-                        Row {e.row}: {e.message}
+                        {tr("Row")}{" "}{e.row}: {e.message}
                       </li>
                     ))}
                   </ul>
@@ -242,9 +238,9 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
               )}
 
               <div className="flex items-center justify-end gap-3">
-                {missingRequired && <span className="text-sm text-amber-700">Choose which column holds the SKU.</span>}
+                {missingRequired && <span className="text-sm text-amber-700">{tr("Choose which column holds the SKU.")}</span>}
                 <button disabled={pending || bad > 0 || missingRequired} onClick={submit} className={btn("primary", "lg")}>
-                  {pending ? <Spinner className="size-4" /> : <Upload className="size-4" />} Import {rows.length} product{rows.length === 1 ? "" : "s"}
+                  {pending ? <Spinner className="size-4" /> : <Upload className="size-4" />} {" "}{tr("Import")}{" "}{rows.length} {" "}{tr("product")}{rows.length === 1 ? "" : "s"}
                 </button>
               </div>
             </>

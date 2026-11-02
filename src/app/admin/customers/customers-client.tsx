@@ -9,6 +9,7 @@ import { FormError, Modal, SubmitButton } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import type { PaymentTerms } from "@/lib/db/schema";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
+import { useT } from "@/components/i18n";
 
 type Customer = {
   id: string;
@@ -26,25 +27,24 @@ type Customer = {
 };
 
 export function CustomersClient({ customers, isAdmin }: { customers: Customer[]; isAdmin: boolean }) {
+  const tr = useT();
   const [editing, setEditing] = useState<Customer | "new" | null>(null);
   const router = useRouter();
 
   return (
     <>
       <PageHeader
-        title="Customers"
-        subtitle="Give a customer a portal login and they can follow their own orders, see the delivery photo and signature."
+        title={tr("Customers")}
+        subtitle={tr("Give a customer a portal login and they can follow their own orders, see the delivery photo and signature.")}
         actions={
           <button className={btn("primary")} onClick={() => setEditing("new")}>
-            <Plus className="size-4" /> Add customer
-          </button>
+            <Plus className="size-4" /> {" "}{tr("Add customer")}</button>
         }
       />
       {customers.length === 0 ? (
         <Card>
-          <EmptyState icon={Building2} title="No customers yet">
-            Add the businesses you deliver to. Orders whose customer name or phone matches are linked automatically.
-          </EmptyState>
+          <EmptyState icon={Building2} title={tr("No customers yet")}>
+            {tr("Add the businesses you deliver to. Orders whose customer name or phone matches are linked automatically.")}</EmptyState>
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -54,13 +54,13 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-slate-900">{c.name}</p>
                   <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
-                    <Package className="size-3.5" /> {c.orderCount} linked order{c.orderCount === 1 ? "" : "s"}
+                    <Package className="size-3.5" /> {c.orderCount} {" "}{tr("linked order")}{c.orderCount === 1 ? "" : "s"}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
-                  {!c.approved && <Badge tone="amber">Needs approval</Badge>}
-                  {!c.active && <Badge>Inactive</Badge>}
-                  {c.login ? <Badge tone="green">Portal on</Badge> : <Badge>No login</Badge>}
+                  {!c.approved && <Badge tone="amber">{tr("Needs approval")}</Badge>}
+                  {!c.active && <Badge>{tr("Inactive")}</Badge>}
+                  {c.login ? <Badge tone="green">{tr("Portal on")}</Badge> : <Badge>{tr("No login")}</Badge>}
                   <button className={btn("ghost", "icon")} onClick={() => setEditing(c)} aria-label={`Edit ${c.name}`}>
                     <Pencil className="size-3.5" />
                   </button>
@@ -84,17 +84,16 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
                 )}
                 {c.login && (
                   <li className="flex items-center gap-1.5">
-                    <KeyRound className="size-3.5 text-slate-400" /> Login: {c.login.email}
+                    <KeyRound className="size-3.5 text-slate-400" /> {" "}{tr("Login:")}{" "}{c.login.email}
                   </li>
                 )}
                 <li className="text-slate-500">
-                  {PAYMENT_TERMS_LABEL[c.paymentTerms]}
+                  {tr(PAYMENT_TERMS_LABEL[c.paymentTerms])}
                   {c.creditLimitCents !== null && ` · limit ${aud(c.creditLimitCents)}`}
                 </li>
               </ul>
               <Link href={`/admin/customers/${c.id}`} className={cx(btn("secondary", "sm"), "mt-3")}>
-                <Tags className="size-3.5" /> Price list
-              </Link>
+                <Tags className="size-3.5" /> {" "}{tr("Price list")}</Link>
             </Card>
           ))}
         </div>
@@ -116,6 +115,7 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
 }
 
 function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null; onDone: () => void; isAdmin: boolean }) {
+  const tr = useT();
   const [state, action] = useActionState(saveCustomer, undefined);
   const [removing, startRemove] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -126,27 +126,27 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
   return (
     <form action={action} className="space-y-4">
       {customer && <input type="hidden" name="id" value={customer.id} />}
-      <Field label="Business name" hint="Orders with this exact customer name are linked to this customer.">
+      <Field label={tr("Business name")} hint={tr("Orders with this exact customer name are linked to this customer.")}>
         <input name="name" required defaultValue={customer?.name} className={inputCls} />
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Phone" hint="Also used to match orders.">
+        <Field label={tr("Phone")} hint={tr("Also used to match orders.")}>
           <input name="phone" type="tel" defaultValue={customer?.phone ?? ""} className={inputCls} />
         </Field>
-        <Field label="Contact email">
+        <Field label={tr("Contact email")}>
           <input name="email" type="email" defaultValue={customer?.email ?? ""} className={inputCls} />
         </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
-        <Field label="Delivery address">
+        <Field label={tr("Delivery address")}>
           <input name="address" defaultValue={customer?.address ?? ""} className={inputCls} />
         </Field>
-        <Field label="ABN">
+        <Field label={tr("ABN")}>
           <input name="abn" defaultValue={customer?.abn ?? ""} className={inputCls} />
         </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Payment terms" hint="Invoice terms let them choose “Pay by invoice” at checkout.">
+        <Field label={tr("Payment terms")} hint={tr("Invoice terms let them choose “Pay by invoice” at checkout.")}>
           <select name="paymentTerms" defaultValue={customer?.paymentTerms ?? "prepay"} className={inputCls}>
             {Object.entries(PAYMENT_TERMS_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
@@ -155,30 +155,28 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
             ))}
           </select>
         </Field>
-        <Field label="Credit limit ($, optional)" hint="Max unpaid balance on invoice orders.">
+        <Field label={tr("Credit limit ($, optional)")} hint={tr("Max unpaid balance on invoice orders.")}>
           <input name="creditLimit" inputMode="decimal" defaultValue={customer?.creditLimitCents != null ? (customer.creditLimitCents / 100).toFixed(0) : ""} className={inputCls} />
         </Field>
       </div>
       <div className="flex gap-5 text-sm">
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="approved" defaultChecked={customer?.approved ?? true} /> Approved to order
-        </label>
+          <input type="checkbox" name="approved" defaultChecked={customer?.approved ?? true} /> {" "}{tr("Approved to order")}</label>
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="active" defaultChecked={customer?.active ?? true} /> Active
-        </label>
+          <input type="checkbox" name="active" defaultChecked={customer?.active ?? true} /> {" "}{tr("Active")}</label>
       </div>
 
       <fieldset className="space-y-3 rounded-xl border border-line p-3">
-        <legend className="px-1 text-xs font-semibold text-slate-700">Customer portal login</legend>
+        <legend className="px-1 text-xs font-semibold text-slate-700">{tr("Customer portal login")}</legend>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Login email">
+          <Field label={tr("Login email")}>
             <input name="loginEmail" type="email" autoComplete="off" defaultValue={customer?.login?.email ?? ""} className={inputCls} />
           </Field>
-          <Field label="Contact name">
+          <Field label={tr("Contact name")}>
             <input name="loginName" autoComplete="off" defaultValue={customer?.login?.name ?? ""} className={inputCls} />
           </Field>
         </div>
-        <Field label={customer?.login ? "New password (leave blank to keep)" : "Password"} hint="At least 8 characters.">
+        <Field label={customer?.login ? "New password (leave blank to keep)" : "Password"} hint={tr("At least 8 characters.")}>
           <input name="password" type="password" autoComplete="new-password" className={inputCls} />
         </Field>
         {customer?.login && (
@@ -193,14 +191,13 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
             }
             className={btn("danger", "sm")}
           >
-            Remove portal login
-          </button>
+            {tr("Remove portal login")}</button>
         )}
       </fieldset>
 
       <FormError message={state && !state.ok ? state.error : null} />
       {deleteError && <FormError message={deleteError} />}
-      <SubmitButton className="w-full">{customer ? "Save changes" : "Add customer"}</SubmitButton>
+      <SubmitButton className="w-full">{customer ? tr("Save changes") : tr("Add customer")}</SubmitButton>
       {customer && isAdmin && (
         <button
           type="button"
@@ -215,8 +212,7 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
             });
           }}
         >
-          Delete customer
-        </button>
+          {tr("Delete customer")}</button>
       )}
     </form>
   );
