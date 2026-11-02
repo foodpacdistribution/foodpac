@@ -5,6 +5,7 @@ import { updateMyBusiness } from "@/app/actions/shop";
 import { SubmitButton } from "@/components/client-ui";
 import { ProfileLabel, profileInput, Saved } from "@/components/profile-forms";
 import { useT } from "@/components/i18n";
+import { AddressInput } from "@/components/address-input";
 
 export function BusinessForm(c: { name: string; phone: string | null; email: string | null; address: string | null; abn: string | null }) {
   const tr = useT();
@@ -24,7 +25,7 @@ export function BusinessForm(c: { name: string; phone: string | null; email: str
         <input name="email" type="email" defaultValue={c.email ?? ""} className={profileInput} />
       </ProfileLabel>
       <ProfileLabel text={tr("Main delivery address")} className="sm:col-span-2">
-        <input name="address" defaultValue={c.address ?? ""} autoComplete="street-address" className={profileInput} />
+        <AddressInput name="address" defaultValue={c.address ?? ""} inputClassName={profileInput} />
       </ProfileLabel>
       <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
         <SubmitButton pendingText={tr("Saving…")} className="rounded-full bg-leaf-700 px-5 hover:bg-leaf-800">

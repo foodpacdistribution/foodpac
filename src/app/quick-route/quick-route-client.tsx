@@ -20,6 +20,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { describeLocation, locateAddress, planQuickRoute, type QuickEnd, type QuickRouteRequest, type QuickRouteResult } from "@/app/actions/quick-route";
+import { AddressInput } from "@/components/address-input";
 import { FormError, Toast, type ToastMessage } from "@/components/client-ui";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { btn, cx, Field, inputCls, Spinner } from "@/components/ui";
@@ -30,7 +31,18 @@ import { formatClock, formatDuration, formatKm } from "@/lib/time";
 import { Tx, useT } from "@/components/i18n";
 
 type StartKind = "gps" | "depot" | "address";
-type Form = { startKind: StartKind; startAddress: string; addresses: string; end: QuickEnd; serviceMin: number };
+type Point = { lat: number; lng: number };
+type Form = {
+  startKind: StartKind;
+  startAddress: string;
+  /** Position of a start address picked from suggestions (dropped if the text is edited). */
+  startPoint?: Point | null;
+  addresses: string;
+  /** Exact positions of addresses picked from suggestions, by address text. */
+  picked?: Record<string, Point>;
+  end: QuickEnd;
+  serviceMin: number;
+};
 /** An address as located for the driver to confirm. "manual" = the driver placed or moved the pin. */
 type Check = { address: string; status: "ok" | "approximate" | "failed" | "manual"; lat: number | null; lng: number | null; label: string | null };
 type Done = { address: string; status: "delivered" | "failed" };
@@ -159,6 +171,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
       setProgress({ done: 0, total: addressList.length });
       for (const address of addressList) {
         let c = known.get(address);
+        const p = form.picked?.[address];
+        if ((!c || c.status === "failed") && p) c = { address, status: "ok", lat: p.lat, lng: p.lng, label: address };
         if (!c || c.status === "failed") {
           const res = await locateAddress(address);
           if (!res.ok) {
@@ -228,7 +242,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             ? { kind: "gps", ...(await startPosition()) }
             : startKind === "depot"
               ? { kind: "depot" }
-              : { kind: "address", address: form.startAddress },
+              : { kind: "address", address: form.startAddress, ...(form.startPoint ?? {}) },
         stops: checks.map((c) => ({ address: c.address, lat: c.lat ?? undefined, lng: c.lng ?? undefined })),
         end: form.end,
         serviceMin: form.serviceMin,
@@ -310,11 +324,14 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
               </div>
               {form.startKind === "depot" && <p className="mt-1.5 text-xs text-slate-500">{depotName}</p>}
               {form.startKind === "address" && (
-                <input
-                  className={cx(inputCls, "mt-2 h-11 text-base")}
+                <AddressInput
+                  className="mt-2"
+                  aria-label={tr("Starting address")}
                   placeholder={tr("e.g. 100 Queen St, Brisbane City")}
                   value={form.startAddress}
-                  onChange={(e) => setForm({ startAddress: e.target.value })}
+                  near={here ?? BRISBANE}
+                  onChange={(text) => setForm({ startAddress: text, startPoint: null })}
+                  onPick={(a) => setForm({ startAddress: a.text, startPoint: a.lat !== null && a.lng !== null ? { lat: a.lat, lng: a.lng } : null })}
                 />
               )}
             </div>
@@ -327,6 +344,18 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                   : tr("One per line, or paste a list or spreadsheet column. Include the suburb for the best match.")
               }
             >
+              <AddressInput
+                className="mb-2"
+                aria-label={tr("Search an address to add")}
+                placeholder={tr("Search an address to add…")}
+                clearOnPick
+                near={here ?? BRISBANE}
+                onPick={(a) => {
+                  const lines = form.addresses.split("\n").map((l) => l.trim()).filter(Boolean);
+                  const picked = a.lat !== null && a.lng !== null ? { ...form.picked, [a.text]: { lat: a.lat, lng: a.lng } } : form.picked;
+                  setForm({ addresses: lines.includes(a.text) ? form.addresses : [...lines, a.text].join("\n"), picked });
+                }}
+              />
               <textarea
                 className={cx(inputCls, "h-auto min-h-40 py-2 text-base leading-relaxed")}
                 placeholder={"12 Mains Rd, Sunnybank\n2 Clunies Ross Ct, Eight Mile Plains\nLogan Central Plaza, Logan Central\n…"}
@@ -463,8 +492,22 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                         researchAddress(i, editing.text);
                       }}
                     >
-                      <input autoFocus className={cx(inputCls, "h-10 flex-1 text-base")} value={editing.text} onChange={(e) => setEditing({ index: i, text: e.target.value })} />
-                      <button className={btn("primary", "md", "h-10")} disabled={pending}>
+                      <AddressInput
+                        autoFocus
+                        className="flex-1"
+                        aria-label={tr("Address")}
+                        value={editing.text}
+                        near={here ?? BRISBANE}
+                        onChange={(text) => setEditing({ index: i, text })}
+                        onPick={(a) => {
+                          // A suggestion with a position is placed directly; otherwise look the text up.
+                          if (a.lat !== null && a.lng !== null) {
+                            setChecks(checks.map((x, j) => (j === i ? { address: a.text, status: "ok", lat: a.lat, lng: a.lng, label: a.text } : x)));
+                            setEditing(null);
+                          } else researchAddress(i, a.text);
+                        }}
+                      />
+                      <button className={btn("primary", "md", "h-11")} disabled={pending}>
                         {tr("Search")}</button>
                     </form>
                   )}

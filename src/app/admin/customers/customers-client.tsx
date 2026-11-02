@@ -10,6 +10,7 @@ import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@
 import type { PaymentTerms } from "@/lib/db/schema";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { useT } from "@/components/i18n";
+import { AddressInput } from "@/components/address-input";
 
 type Customer = {
   id: string;
@@ -207,7 +208,7 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
       </div>
       <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
         <Field label={tr("Delivery address")}>
-          <input name="address" defaultValue={customer?.address ?? ""} className={inputCls} />
+          <AddressInput name="address" defaultValue={customer?.address ?? ""} inputClassName={inputCls} />
         </Field>
         <Field label={tr("ABN")}>
           <input name="abn" defaultValue={customer?.abn ?? ""} className={inputCls} />

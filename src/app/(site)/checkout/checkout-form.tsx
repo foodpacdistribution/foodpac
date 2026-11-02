@@ -9,6 +9,7 @@ import { prettyDate } from "@/lib/dates";
 import type { PaymentMethod, PaymentTerms } from "@/lib/db/schema";
 import { aud, PAYMENT_METHOD_LABEL, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { Tx, useT } from "@/components/i18n";
+import { AddressInput } from "@/components/address-input";
 
 type Address = { id: string; label: string; recipient: string; phone: string | null; address: string; instructions: string | null };
 
@@ -62,7 +63,7 @@ export function CheckoutForm(props: {
               <input name="phone" type="tel" defaultValue={fill.phone ?? ""} className={input} />
             </Label>
             <Label text={tr("Delivery address")} className="sm:col-span-2">
-              <input name="address" required defaultValue={fill.address} placeholder={tr("Street, suburb, state, postcode")} className={input} />
+              <AddressInput name="address" required defaultValue={fill.address} placeholder={tr("Street, suburb, state, postcode")} inputClassName={input} />
             </Label>
             <Label text={tr("Delivery instructions (optional)")} className="sm:col-span-2">
               <input name="instructions" defaultValue={fill.instructions ?? ""} placeholder={tr("e.g. Rear loading dock, ring the bell")} className={input} />

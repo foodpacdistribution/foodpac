@@ -12,7 +12,8 @@ import { nowSecondsIn } from "@/lib/time";
 export type QuickEnd = "last_stop" | "start" | "depot";
 
 export type QuickRouteRequest = {
-  start: { kind: "gps"; lat: number; lng: number } | { kind: "depot" } | { kind: "address"; address: string };
+  /** An address picked from suggestions carries its position, so it isn't looked up again. */
+  start: { kind: "gps"; lat: number; lng: number } | { kind: "depot" } | { kind: "address"; address: string; lat?: number; lng?: number };
   /** Stops already located (when re-planning the rest of a route) carry their coordinates. */
   stops: { address: string; lat?: number; lng?: number }[];
   end: QuickEnd;
@@ -100,7 +101,8 @@ export async function planQuickRoute(req: QuickRouteRequest): Promise<ActionResu
     } else {
       const address = String(req.start?.address ?? "").trim().slice(0, 300);
       if (!address) throw new UserError("Enter a starting address, or use your location.");
-      const g = await geocodeAddress(db, address);
+      const { lat, lng } = req.start ?? {};
+      const g = validPoint(lat, lng) ? { status: "ok" as const, lat: lat!, lng: lng! } : await geocodeAddress(db, address);
       if (g.status === "failed") throw new UserError(`Couldn't find the starting address "${address}".`);
       start = { lat: g.lat!, lng: g.lng!, label: address };
     }

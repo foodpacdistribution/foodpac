@@ -9,6 +9,7 @@ import { Badge, btn, Card, CardHeader, cx, Field, inputCls, PageHeader } from "@
 import type { settings as settingsTable } from "@/lib/db/schema";
 import { minutesToInput } from "@/lib/time";
 import { useT } from "@/components/i18n";
+import { AddressInput } from "@/components/address-input";
 
 type Settings = typeof settingsTable.$inferSelect;
 type U = { id: string; name: string; email: string; role: string };
@@ -256,7 +257,7 @@ function DepotForm({ depot, onDone }: { depot: Depot | null; onDone: () => void 
         <input name="name" required defaultValue={depot?.name} placeholder={tr("Northside warehouse")} className={inputCls} />
       </Field>
       <Field label={tr("Address")} hint={tr("Checked on the map when you save")}>
-        <input name="address" required defaultValue={depot?.address} placeholder={tr("1 Example Rd, Eagle Farm QLD 4009")} className={inputCls} />
+        <AddressInput name="address" required defaultValue={depot?.address} placeholder={tr("1 Example Rd, Eagle Farm QLD 4009")} inputClassName={inputCls} />
       </Field>
       <label className="flex items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" name="active" defaultChecked={depot?.active ?? true} /> {" "}{tr("Active")}</label>
