@@ -1,13 +1,16 @@
 import { eq, sql } from "drizzle-orm";
-import { Search, ShoppingCart, UserRound } from "lucide-react";
+import { ShoppingCart, UserRound } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import Link from "next/link";
+import { ViewTransition } from "react";
 import { Logo } from "@/components/brand";
 import { getCurrentCustomer, getCurrentUser } from "@/lib/auth/dal";
 import { accountLinks } from "@/lib/account";
 import { getDb } from "@/lib/db";
 import { cartItems } from "@/lib/db/schema";
 import { CATEGORIES, SITE } from "./content";
+import { CartBadge } from "./cart-badge";
+import { SearchBox } from "./search-box";
 
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const [user, viewer] = await Promise.all([getCurrentUser(), getCurrentCustomer()]);
@@ -20,7 +23,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="min-h-dvh bg-cream text-leaf-950">
-      <header className="sticky top-0 z-40 border-b border-leaf-950/10 bg-cream/95 backdrop-blur">
+      <header className="site-header sticky top-0 z-40 border-b border-leaf-950/10 bg-cream/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Foodpac Distribution home">
             <Logo className="h-9 sm:h-11" priority />
@@ -44,11 +47,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
               <Link href="/cart" className="relative flex h-10 items-center gap-1.5 rounded-full px-3 hover:bg-leaf-950/5" aria-label={`Cart, ${cartCount} items`}>
                 <ShoppingCart className="size-4" />
                 <span className="hidden sm:inline">Cart</span>
-                {cartCount > 0 && (
-                  <span className="absolute -top-0.5 right-0 grid h-5 min-w-5 place-items-center rounded-full bg-tomato px-1 text-[11px] font-semibold text-white tabular-nums">
-                    {cartCount > 99 ? "99+" : cartCount}
-                  </span>
-                )}
+                <CartBadge count={cartCount} />
               </Link>
             )}
           </nav>
@@ -78,7 +77,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         </nav>
       </header>
 
-      {children}
+      {/* Crossfades page content on navigation; the header and footer stay put. */}
+      <ViewTransition>{children}</ViewTransition>
 
       <footer className="bg-leaf-950 text-leaf-100/70">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:grid-cols-[1.5fr_1fr_1fr] sm:px-6">
@@ -120,19 +120,5 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         </div>
       </footer>
     </div>
-  );
-}
-
-function SearchBox({ className }: { className?: string }) {
-  return (
-    <form action="/products" role="search" className={`relative items-center ${className ?? ""}`}>
-      <Search className="pointer-events-none absolute left-3.5 size-4 text-leaf-900/40" />
-      <input
-        name="q"
-        type="search"
-        placeholder="Search products, SKU or barcode"
-        className="h-10 w-full rounded-full border border-leaf-950/15 bg-white pr-4 pl-10 text-sm placeholder:text-leaf-900/40 focus:border-leaf-600 focus:ring-2 focus:ring-leaf-600/20 focus:outline-none"
-      />
-    </form>
   );
 }

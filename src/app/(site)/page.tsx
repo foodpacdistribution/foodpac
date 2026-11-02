@@ -1,10 +1,11 @@
-import { ArrowRight, Search, Zap } from "lucide-react";
+import { ArrowRight, Zap } from "lucide-react";
 import Link from "next/link";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { listCatalog, listCategories, recentlyBought } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
 import { CATEGORIES, SITE } from "./content";
+import { SearchBox } from "./search-box";
 import { Contact, Delivery, HowItWorks, Promises } from "./sections";
 import { ProductCard } from "./shop-ui";
 
@@ -59,16 +60,7 @@ export default async function HomePage() {
             <p className="mt-4 max-w-xl text-cream/75">
               Your prices, carton quantities and delivery windows, all in one place. Track the van on the day and see the signed proof of delivery when it lands.
             </p>
-            <form action="/products" role="search" className="relative mt-7 flex max-w-xl items-center">
-              <Search className="pointer-events-none absolute left-4 size-5 text-leaf-900/40" />
-              <input
-                name="q"
-                type="search"
-                placeholder="Search by product, SKU or barcode"
-                className="h-13 w-full rounded-full bg-white pr-32 pl-12 text-base text-leaf-950 placeholder:text-leaf-900/40 focus:ring-4 focus:ring-tomato/30 focus:outline-none"
-              />
-              <button className="absolute right-1.5 h-10 rounded-full bg-tomato px-5 text-sm font-semibold text-white hover:bg-tomato-dark">Search</button>
-            </form>
+            <SearchBox size="lg" className="mt-7 flex max-w-xl" />
             {!viewer && (
               <p className="mt-4 text-sm text-cream/70">
                 New customer?{" "}

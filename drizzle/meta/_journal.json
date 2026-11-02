@@ -57,6 +57,13 @@
       "when": 1793586770854,
       "tag": "0007_lock_down_data_api",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793589993042,
+      "tag": "0008_product_updated_at",
+      "breakpoints": true
     }
   ]
 }

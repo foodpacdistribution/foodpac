@@ -1,21 +1,47 @@
+import Image from "next/image";
 import Link from "next/link";
+import { ViewTransition } from "react";
 import { cx } from "@/components/ui";
 import { aud } from "@/lib/money";
+import { productImageUrl } from "@/lib/product-image";
 import type { CatalogItem } from "@/lib/shop";
 import { AddToCart } from "./add-to-cart";
 import { categoryInfo } from "./content";
 
-export function ProductImage({ p, className }: { p: Pick<CatalogItem, "id" | "hasImage" | "category" | "name">; className?: string }) {
+/**
+ * Product photo (optimised and cached for good), or the category icon when there's none.
+ * `morph` names it for a view transition, so the photo glides from the card into the product
+ * page. Only use it where each product appears once on the page.
+ */
+export function ProductImage({
+  p,
+  className,
+  sizes = "(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw",
+  priority,
+  morph,
+}: {
+  p: Pick<CatalogItem, "id" | "hasImage" | "category" | "name" | "updatedAt">;
+  className?: string;
+  sizes?: string;
+  priority?: boolean;
+  morph?: boolean;
+}) {
   const Icon = categoryInfo(p.category).icon;
-  return (
-    <div className={cx("grid place-items-center overflow-hidden bg-leaf-50", className)}>
+  const box = (
+    <div className={cx("relative grid place-items-center overflow-hidden bg-leaf-50", className)}>
       {p.hasImage ? (
-        // eslint-disable-next-line @next/next/no-img-element -- served from our own API
-        <img src={`/api/products/${p.id}/image`} alt={p.name} className="size-full object-cover" />
+        <Image src={productImageUrl(p)} alt={p.name} fill sizes={sizes} priority={priority} className="object-cover" />
       ) : (
         <Icon className="size-1/3 text-leaf-700/40" strokeWidth={1.4} />
       )}
     </div>
+  );
+  return morph ? (
+    <ViewTransition name={`product-${p.id}`} share="morph" default="none">
+      {box}
+    </ViewTransition>
+  ) : (
+    box
   );
 }
 
@@ -48,11 +74,11 @@ export function Price({ p, signedIn }: { p: Pick<CatalogItem, "priceCents" | "li
   );
 }
 
-export function ProductCard({ p, signedIn }: { p: CatalogItem; signedIn: boolean }) {
+export function ProductCard({ p, signedIn, morph }: { p: CatalogItem; signedIn: boolean; morph?: boolean }) {
   return (
-    <div className="group flex flex-col overflow-hidden rounded-2xl border border-leaf-950/10 bg-white transition-colors hover:border-leaf-700/30">
-      <Link href={`/products/${encodeURIComponent(p.sku)}`} className="block">
-        <ProductImage p={p} className="aspect-[4/3] transition-transform duration-300 group-hover:scale-[1.02]" />
+    <div className="reveal group flex flex-col overflow-hidden rounded-2xl border border-leaf-950/10 bg-white transition-[border-color,box-shadow,translate] duration-300 ease-out hover:-translate-y-0.5 hover:border-leaf-700/30 hover:shadow-[0_12px_28px_-12px_rgb(17_58_39/0.25)]">
+      <Link href={`/products/${encodeURIComponent(p.sku)}`} className="block overflow-hidden">
+        <ProductImage p={p} morph={morph} className="aspect-[4/3] transition-transform duration-500 ease-out group-hover:scale-[1.04]" />
       </Link>
       <div className="flex flex-1 flex-col p-4">
         <p className="text-[11px] font-medium uppercase tracking-wider text-leaf-900/45">{p.sku}</p>

@@ -48,6 +48,7 @@ export async function saveProduct(_prev: unknown, form: FormData) {
       gst: form.get("gst") === "on",
       featured: form.get("featured") === "on",
       active: form.get("active") === "on",
+      updatedAt: new Date(),
       ...(image ? { image: image.data, imageMime: image.mime } : {}),
       ...(form.get("removeImage") === "on" && !image ? { image: null, imageMime: null } : {}),
     };
@@ -155,7 +156,7 @@ export async function importProducts(rows: ProductImportRow[], opts: { pricesInc
         );
       }
       for (const { sku, ...set } of toUpdate) {
-        if (Object.keys(set).length) await tx.update(products).set(set).where(eq(products.sku, sku));
+        if (Object.keys(set).length) await tx.update(products).set({ ...set, updatedAt: new Date() }).where(eq(products.sku, sku));
       }
     });
     revalidate();

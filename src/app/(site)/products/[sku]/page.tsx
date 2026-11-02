@@ -28,7 +28,7 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
         <ArrowLeft className="size-4" /> {p.category}
       </Link>
       <div className="mt-4 grid gap-8 lg:grid-cols-2">
-        <ProductImage p={p} className="aspect-square rounded-3xl border border-leaf-950/10" />
+        <ProductImage p={p} morph priority sizes="(min-width: 1024px) 560px, 100vw" className="aspect-square rounded-3xl border border-leaf-950/10" />
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-leaf-900/50">SKU {p.sku}</p>
           <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">{p.name}</h1>

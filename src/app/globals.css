@@ -32,9 +32,18 @@
   --animate-check: check 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-toast: toast 2.6s ease both;
   --animate-fade-in: fade-in 200ms ease-out both;
+  --animate-bump: bump 380ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
   /* Navigation bar: fills quickly, then creeps, and never claims to be done until the page swaps. */
   --animate-progress: progress 8s cubic-bezier(0.1, 0.7, 0.3, 1) both;
 
+  @keyframes bump {
+    0% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.35);
+    }
+  }
   @keyframes fade-in {
     from {
       opacity: 0;
@@ -129,6 +138,51 @@ dialog::backdrop {
   backdrop-filter: blur(2px);
 }
 
+/* Shop: cards and sections rise into place as they scroll into view. Pure CSS (no JS);
+   browsers without scroll-driven animations just show them. */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 60%;
+  }
+  /* Header gains a soft shadow once the page scrolls. */
+  .site-header {
+    animation: header-lift linear both;
+    animation-timeline: scroll();
+    animation-range: 0 80px;
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+}
+@keyframes header-lift {
+  to {
+    box-shadow: 0 6px 20px -12px rgb(17 58 39 / 0.35);
+  }
+}
+
+/* Page changes crossfade quickly; a product photo glides from its card into the product page. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+}
+::view-transition-group(.morph) {
+  animation-duration: 380ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+::view-transition-image-pair(.morph) {
+  animation-name: via-blur;
+}
+@keyframes via-blur {
+  30% {
+    filter: blur(3px);
+  }
+}
+
 /* Respect the OS "reduce motion" setting: no movement, things just appear. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -138,6 +192,15 @@ dialog::backdrop {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  .reveal,
+  .site-header {
+    animation: none !important;
   }
   /* The toast's keyframes end hidden; show it statically and let its timer remove it. */
   .animate-toast {

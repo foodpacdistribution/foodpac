@@ -11,7 +11,7 @@ export function Promises() {
     <section className="bg-leaf-900 text-cream">
       <div className="mx-auto grid max-w-6xl gap-px overflow-hidden px-4 py-14 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
         {PROMISES.map((p, i) => (
-          <div key={p.title} className="py-4 sm:pr-8">
+          <div key={p.title} className="reveal py-4 sm:pr-8">
             <p className="font-display text-sm font-semibold text-tomato">0{i + 1}</p>
             <h3 className="mt-2 font-display text-lg font-semibold">{p.title}</h3>
             <p className="mt-2 text-sm leading-relaxed text-cream/70">{p.text}</p>
@@ -32,7 +32,7 @@ export function HowItWorks() {
         </div>
         <ol className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {STEPS.map((s, i) => (
-            <li key={s.title} className="relative rounded-2xl bg-cream p-6">
+            <li key={s.title} className="reveal relative rounded-2xl bg-cream p-6">
               <span className="grid size-10 place-items-center rounded-full bg-leaf-700 font-display font-semibold text-white">{i + 1}</span>
               <h3 className="mt-5 font-display text-lg font-semibold">{s.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-leaf-900/70">{s.text}</p>

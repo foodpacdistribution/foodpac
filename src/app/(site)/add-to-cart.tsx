@@ -1,16 +1,24 @@
 "use client";
 
-import { Minus, Plus, ShoppingCart } from "lucide-react";
-import { useState, useTransition } from "react";
+import { Check, Minus, Plus, ShoppingCart } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
 import { addToCart } from "@/app/actions/shop";
 import { Toast, type ToastMessage } from "@/components/client-ui";
-import { cx, Spinner } from "@/components/ui";
+import { cx } from "@/components/ui";
+import { bumpCart } from "./cart-badge";
 
 /** Quantity stepper (starts at the minimum order) and Add to cart. Stock is checked again at checkout. */
 export function AddToCart({ productId, minQty, stock, size = "md" }: { productId: string; minQty: number; stock: number; size?: "md" | "lg" }) {
   const [qty, setQty] = useState(minQty);
-  const [pending, start] = useTransition();
+  const [, start] = useTransition();
+  const [added, setAdded] = useState(0);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  // "Added ✓" for a moment after each click, then back to "Add".
+  useEffect(() => {
+    if (!added) return;
+    const t = setTimeout(() => setAdded(0), 1600);
+    return () => clearTimeout(t);
+  }, [added]);
   const out = stock <= 0;
   const lg = size === "lg";
   return (
@@ -33,21 +41,38 @@ export function AddToCart({ productId, minQty, stock, size = "md" }: { productId
       </div>
       <button
         type="button"
-        disabled={out || pending}
-        onClick={() =>
+        disabled={out}
+        onClick={() => {
+          // Show it in the cart straight away; undo if the server says no.
+          const n = Math.max(minQty, qty);
+          bumpCart(n);
+          setAdded((k) => k + 1);
           start(async () => {
-            const r = await addToCart(productId, Math.max(minQty, qty));
-            setToast({ id: Date.now(), text: r.ok ? (r.message ?? "Added") : r.error, tone: r.ok ? "ok" : "warn" });
-          })
-        }
+            const r = await addToCart(productId, n);
+            if (!r.ok) {
+              bumpCart(-n);
+              setAdded(0);
+              setToast({ id: Date.now(), text: r.error, tone: "warn" });
+            }
+          });
+        }}
         className={cx(
-          "inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-leaf-700 font-semibold text-white transition-colors hover:bg-leaf-800 disabled:opacity-50",
+          "inline-flex flex-1 items-center justify-center gap-2 rounded-full font-semibold text-white transition-[background-color,transform] duration-200 active:scale-[0.96] disabled:opacity-50",
+          added > 0 ? "bg-leaf-600" : "bg-leaf-700 hover:bg-leaf-800",
           lg ? "h-12 px-6 text-base" : "h-9 px-3 text-sm",
         )}
       >
-        {pending ? <Spinner className="size-3.5" /> : <ShoppingCart className="size-4" />}
-        {out ? "Out of stock" : "Add"}
-        {lg && !out && " to cart"}
+        {added > 0 ? (
+          <span key={added} className="flex animate-pop items-center gap-2">
+            <Check className="size-4" strokeWidth={3} /> Added
+          </span>
+        ) : (
+          <>
+            <ShoppingCart className="size-4" />
+            {out ? "Out of stock" : "Add"}
+            {lg && !out && " to cart"}
+          </>
+        )}
       </button>
       <Toast toast={toast} onDone={() => setToast(null)} />
     </div>

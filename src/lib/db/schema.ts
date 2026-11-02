@@ -450,6 +450,8 @@ export const products = pgTable(
     featured: boolean("featured").notNull().default(false),
     active: boolean("active").notNull().default(true),
     createdAt: createdAt(),
+    /** Bumped on every edit; part of the image URL so photos can be cached for good. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("products_category_idx").on(t.category)],
 );

@@ -36,6 +36,8 @@ export type CatalogItem = {
   minQty: number;
   stock: number;
   hasImage: boolean;
+  /** For the versioned (cacheable) photo URL. */
+  updatedAt: Date;
   featured: boolean;
   gst: boolean;
   /** null when the viewer can't see prices (signed out or not approved yet). */
@@ -57,6 +59,7 @@ const catalogColumns = {
   minQty: products.minQty,
   stock: products.stock,
   hasImage: sql<boolean>`${products.image} is not null`,
+  updatedAt: products.updatedAt,
   featured: products.featured,
   gst: products.gst,
   priceCents: products.priceCents,
@@ -73,9 +76,17 @@ async function withPrices(db: DB, rows: (Omit<CatalogItem, "listPriceCents" | "p
   return rows.map((r) => ({ ...r, listPriceCents: r.priceCents, priceCents: own.find((p) => p.productId === r.id)?.priceCents ?? r.priceCents }));
 }
 
-export async function listCatalog(db: DB, customer: Customer | null, opts: { q?: string; category?: string; featured?: boolean; limit?: number } = {}) {
+export const SORTS = { name: "Name A–Z", "price-asc": "Price: low to high", "price-desc": "Price: high to low", newest: "Newest" } as const;
+export type Sort = keyof typeof SORTS;
+
+export async function listCatalog(
+  db: DB,
+  customer: Customer | null,
+  opts: { q?: string; category?: string; featured?: boolean; inStock?: boolean; sort?: Sort; limit?: number } = {},
+) {
   const q = opts.q?.trim();
   const where = [eq(products.active, true)];
+  if (opts.inStock) where.push(gte(products.stock, 1));
   if (opts.category) where.push(eq(products.category, opts.category));
   if (opts.featured) where.push(eq(products.featured, true));
   if (q) {
@@ -86,9 +97,15 @@ export async function listCatalog(db: DB, customer: Customer | null, opts: { q?:
     .select(catalogColumns)
     .from(products)
     .where(and(...where))
-    .orderBy(asc(products.category), asc(products.name))
+    .orderBy(...(opts.sort === "newest" ? [desc(products.createdAt)] : opts.sort === "name" ? [asc(products.name)] : [asc(products.category), asc(products.name)]))
     .limit(opts.limit ?? 200);
-  return withPrices(db, rows, customer);
+  const priced = await withPrices(db, rows, customer);
+  // Price sorts use each customer's own price, so they happen after pricing.
+  if (opts.sort === "price-asc" || opts.sort === "price-desc") {
+    const dir = opts.sort === "price-asc" ? 1 : -1;
+    priced.sort((a, b) => dir * ((a.priceCents ?? a.listPriceCents ?? 0) - (b.priceCents ?? b.listPriceCents ?? 0)));
+  }
+  return priced;
 }
 
 export async function getProductBySku(db: DB, customer: Customer | null, sku: string) {

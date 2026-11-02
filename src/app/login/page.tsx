@@ -1,23 +1,16 @@
 import { ArrowLeft, Building2, ShieldCheck, Truck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Logo } from "@/components/brand";
-import { LoginForm } from "./login-form";
 import { databaseUrl } from "@/lib/db/url";
+import { LoginBody, LoginBodyFromUrl } from "./login-body";
 
 export const metadata: Metadata = { title: "Sign in" };
 
-const DEMO = [
-  ["customer@demo.local", "Customer"],
-  ["admin@demo.local", "Admin"],
-  ["dispatch@demo.local", "Dispatcher"],
-  ["john@demo.local", "Driver"],
-];
-
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; email?: string }> }) {
-  const { next, email } = await searchParams;
+// Static: nothing here depends on the request, so the page is served straight from the edge.
+export default function LoginPage() {
   const demo = !databaseUrl();
-  const toCheckout = next?.startsWith("/cart") || next?.startsWith("/checkout");
 
   return (
     <main className="grid min-h-dvh bg-cream text-leaf-950 lg:grid-cols-[1.05fr_1fr]">
@@ -55,34 +48,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-10">
           <h2 className="font-display text-3xl font-semibold tracking-tight">Welcome back</h2>
-          <p className="mt-2 text-leaf-900/65">{toCheckout ? "Sign in to finish your order." : "Sign in to your Foodpac account."}</p>
-          <LoginForm key={email ?? ""} next={next} defaultEmail={email} />
-
-          <div className="mt-8 rounded-2xl border border-leaf-950/10 bg-white p-4">
-            <p className="text-sm font-semibold">New to Foodpac?</p>
-            <p className="mt-0.5 text-sm text-leaf-900/65">Open a trade account to see your prices and order online.</p>
-            <Link href="/register" className="mt-3 inline-flex h-10 items-center rounded-full border border-leaf-950/15 px-4 text-sm font-semibold hover:border-leaf-700/40">
-              Open an account
-            </Link>
-          </div>
-
-          {demo && (
-            <div className="mt-4 rounded-2xl border border-dashed border-leaf-950/20 p-4 text-xs text-leaf-900/70">
-              <p className="font-semibold text-leaf-950">Demo accounts · password demo1234</p>
-              <div className="mt-2 grid grid-cols-2 gap-1.5">
-                {DEMO.map(([e, role]) => (
-                  <Link
-                    key={e}
-                    href={`/login?email=${encodeURIComponent(e)}${next ? `&next=${encodeURIComponent(next)}` : ""}`}
-                    className="rounded-lg bg-white px-2.5 py-1.5 ring-1 ring-leaf-950/10 hover:ring-leaf-700/40"
-                  >
-                    <span className="block font-semibold text-leaf-950">{role}</span>
-                    <span className="block truncate font-mono text-[11px]">{e}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
+          <Suspense fallback={<LoginBody demo={demo} />}>
+            <LoginBodyFromUrl demo={demo} />
+          </Suspense>
         </div>
         <p className="text-center text-xs text-leaf-900/45">Staff and drivers use the login they were given by Foodpac.</p>
       </section>

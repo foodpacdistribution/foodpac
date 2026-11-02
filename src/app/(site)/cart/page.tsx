@@ -41,7 +41,7 @@ export default async function CartPage() {
           <section className="overflow-hidden rounded-3xl border border-leaf-950/10 bg-white">
             {lines.map((l) => (
               <div key={l.id} className="flex flex-wrap items-center gap-4 border-b border-leaf-950/5 p-4 last:border-0">
-                <ProductImage p={l} className="size-16 shrink-0 rounded-xl" />
+                <ProductImage p={l} sizes="64px" className="size-16 shrink-0 rounded-xl" />
                 <div className="min-w-0 flex-1">
                   <Link href={`/products/${encodeURIComponent(l.sku)}`} className="font-semibold hover:text-leaf-700">
                     {l.name}
