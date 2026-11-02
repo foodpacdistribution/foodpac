@@ -11,6 +11,7 @@ import {
   Search,
   Sparkles,
   Trash2,
+  Send,
   Upload,
   Zap,
 } from "lucide-react";
@@ -61,6 +62,8 @@ export function OrdersClient(props: {
   }
 
   const needGeocode = orders.filter((o) => o.geocodeStatus === "pending" || o.geocodeStatus === "failed");
+  // Orders for this day that drivers can't see yet (not planned, or planned but not dispatched).
+  const notSent = props.counts.pending + props.counts.planned;
   const driverById = new Map(drivers.map((d) => [d.id, d]));
   const allSelected = orders.length > 0 && orders.every((o) => selected.has(o.id));
 
@@ -147,6 +150,27 @@ export function OrdersClient(props: {
             {geo ? <Spinner /> : <MapPinCheck className="size-4" />}
             {geo ? `Checking ${geo.done}/${geo.total}…` : "Verify addresses"}
           </button>
+        </Card>
+      )}
+
+      {notSent > 0 && (
+        <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 border-blue-200 bg-blue-50/60 px-4 py-3">
+          <div className="flex items-center gap-2.5 text-sm text-blue-950">
+            <Send className="size-4 shrink-0 text-blue-600" />
+            <span>
+              <strong>{notSent}</strong> order{notSent === 1 ? " isn't" : "s aren't"} on a driver&apos;s phone yet. Drivers receive orders once the day&apos;s route is
+              planned and dispatched{props.depots.length === 0 ? ", which needs a depot (where routes start)" : ""}.
+            </span>
+          </div>
+          {props.depots.length === 0 ? (
+            <Link href="/admin/settings" className={btn("primary", "sm")}>
+              Add a depot
+            </Link>
+          ) : (
+            <Link href={`/admin/planner?date=${date}`} className={btn("primary", "sm")}>
+              <Send className="size-4" /> Plan &amp; dispatch
+            </Link>
+          )}
         </Card>
       )}
 
@@ -538,7 +562,7 @@ function OrderForm({
           <input name="demand" type="number" min={0} defaultValue={order?.demand ?? 1} className={inputCls} />
         </Field>
       </div>
-      <Field label="Always deliver with" hint="Pinned orders are only assigned to this driver by the optimiser.">
+      <Field label="Always deliver with" hint="The planner gives this order to this driver. It reaches their phone once the day's route is planned and dispatched.">
         <select name="pinnedDriverId" defaultValue={order?.pinnedDriverId ?? ""} className={inputCls}>
           <option value="">Any driver</option>
           {drivers.map((d) => (
