@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Inter } from "next/font/google";
+import { I18nProvider } from "@/components/i18n";
+import { getLocale } from "@/lib/i18n/server";
 import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
@@ -22,10 +24,13 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: "#ffffff", width: "device-width", initialScale: 1 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const locale = await getLocale();
   return (
-    <html lang="en" className={`${inter.variable} ${bricolage.variable}`}>
-      <body className="min-h-dvh font-sans antialiased">{children}</body>
+    <html lang={locale === "zh" ? "zh-CN" : "en"} className={`${inter.variable} ${bricolage.variable}`}>
+      <body className="min-h-dvh font-sans antialiased">
+        <I18nProvider locale={locale}>{children}</I18nProvider>
+      </body>
     </html>
   );
 }

@@ -109,6 +109,8 @@ export const users = pgTable("users", {
   driverId: uuid("driver_id").references(() => drivers.id, { onDelete: "set null" }),
   /** Customer logins only: the business whose orders they can see. */
   customerId: uuid("customer_id").references(() => customers.id, { onDelete: "cascade" }),
+  /** Interface language ("en" | "zh"); null = whatever the device last chose. */
+  locale: text("locale"),
   createdAt: createdAt(),
 });
 

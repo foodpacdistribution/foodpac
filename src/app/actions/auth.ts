@@ -11,6 +11,7 @@ import { afterLogin, SESSION_COOKIE, sessionCookieOptions, signSession, verifySe
 import { clearAttempts, countAttempt, loginKeys } from "@/lib/auth/throttle";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { isLocale, LOCALE_COOKIE } from "@/lib/i18n";
 import { UserError } from "@/lib/planning";
 
 export async function login(_prev: { error?: string } | undefined, form: FormData) {
@@ -34,7 +35,10 @@ export async function login(_prev: { error?: string } | undefined, form: FormDat
   await clearAttempts(db, [keys[0].key]);
 
   const token = await signSession({ sub: user.id, role: user.role, name: user.name, driverId: user.driverId });
-  (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, token, sessionCookieOptions);
+  // The account's language wins over whatever this device had.
+  if (isLocale(user.locale)) jar.set(LOCALE_COOKIE, user.locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
   redirect(afterLogin(user.role, String(form.get("next") ?? "")));
 }
 
@@ -75,4 +79,13 @@ export async function updateMyName(_prev: unknown, form: FormData) {
     revalidatePath("/", "layout");
     return { message: "Saved" };
   });
+}
+
+/** English / 中文. Remembered on this device, and on the account when signed in. */
+export async function setLocale(locale: string) {
+  if (!isLocale(locale)) return;
+  (await cookies()).set(LOCALE_COOKIE, locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+  const me = await getCurrentUser();
+  if (me) await (await getDb()).update(users).set({ locale }).where(eq(users.id, me.id));
+  revalidatePath("/", "layout");
 }
