@@ -78,12 +78,30 @@ describe("solve", () => {
     expect(latest(balanced)).toBeLessThan(16 * H + 30 * 60);
   });
 
+  it("still shares work when an afternoon window already sets the latest finish", () => {
+    // Regression: the latest finish was the only balance term, so once one driver's
+    // 1pm stop fixed it, two drivers did everything and the third was left idle.
+    const p = problem(30, 3, (jobs) => {
+      jobs[5].twStart = 13 * H;
+      jobs[5].twEnd = 16 * H;
+      jobs[5].allowedVehicles = ["d2"];
+    });
+    const s = solve(p, { timeLimitMs: 800 });
+    const fastest = solve({ ...p, objective: "time" }, { timeLimitMs: 800 });
+    const latest = (x: typeof s) => Math.max(...x.routes.map((r) => r.end));
+    expect(s.unassigned).toEqual([]);
+    expect(s.routes.every((r) => r.jobIds.length >= 5)).toBe(true);
+    const work = s.routes.map((r) => r.duration);
+    expect(Math.max(...work) / Math.min(...work)).toBeLessThan(1.5);
+    expect(latest(s)).toBeLessThanOrEqual(latest(fastest));
+  });
+
   it("respects time windows and reports impossible ones", () => {
     const p = problem(20, 2, (jobs) => {
       jobs[0].twStart = 13 * H;
       jobs[0].twEnd = 14 * H;
       jobs[1].twStart = 8 * H;
-      jobs[1].twEnd = 8 * H + 60; // cannot be reached within one minute of departure
+      jobs[1].twEnd = 8 * H + 60; 
     });
     const s = solve(p, { timeLimitMs: 500 });
     expect(s.unassigned).toEqual([{ jobId: "o1", reason: "time_window" }]);

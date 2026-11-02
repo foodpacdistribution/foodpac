@@ -67,8 +67,8 @@ export async function saveDriver(_prev: unknown, form: FormData) {
       }
     });
 
-    revalidatePath("/drivers");
-    revalidatePath("/planner");
+    revalidatePath("/admin/drivers");
+    revalidatePath("/admin/planner");
     return { message: id ? "Driver updated" : "Driver added" };
   });
 }

@@ -25,9 +25,9 @@ const int = (f: FormData, k: string) => {
 };
 
 function revalidateAll() {
-  revalidatePath("/orders");
-  revalidatePath("/planner");
-  revalidatePath("/");
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin/planner");
+  revalidatePath("/admin");
 }
 
 /** Removes an order from any not-yet-completed stop (date change, deletion of plan membership). */
@@ -199,16 +199,17 @@ export async function importOrders(rows: ImportRow[], defaultDate: string) {
       valid.push({ ...res.value, depotId, source: "import" });
     });
 
-    let inserted = 0;
+    // Ids of the new orders, so the import page can place them on the map straight away.
+    const ids: string[] = [];
     for (let i = 0; i < valid.length; i += 200) {
       const batch = valid.slice(i, i + 200);
-      const ins = await db.insert(orders).values(batch).onConflictDoNothing().returning({ orderNumber: orders.orderNumber });
-      inserted += ins.length;
+      const ins = await db.insert(orders).values(batch).onConflictDoNothing().returning({ id: orders.id, orderNumber: orders.orderNumber });
+      ids.push(...ins.map((r) => r.id));
       const got = new Set(ins.map((r) => r.orderNumber));
       batch.forEach((b) => !got.has(b.orderNumber) && duplicates.push(b.orderNumber));
     }
     revalidateAll();
-    return { data: { inserted, duplicates, errors } };
+    return { data: { inserted: ids.length, ids, duplicates, errors } };
   });
 }
 

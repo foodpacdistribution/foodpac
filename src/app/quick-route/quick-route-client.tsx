@@ -18,13 +18,13 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { locateAddress, planQuickRoute, type QuickEnd, type QuickRouteRequest, type QuickRouteResult } from "@/app/actions/quick-route";
-import { FormError } from "@/components/client-ui";
+import { FormError, Toast, type ToastMessage } from "@/components/client-ui";
 import { DeliveryMap, type MapStop } from "@/components/map";
-import { btn, cx, Field, inputCls } from "@/components/ui";
+import { btn, cx, Field, inputCls, Spinner } from "@/components/ui";
 import { multiStopNavigation, navigationUrls } from "@/lib/orders";
-import { projectRemaining } from "@/lib/quick-route";
+import { parseAddressList, projectRemaining } from "@/lib/quick-route";
 import { formatClock, formatDuration, formatKm } from "@/lib/time";
 
 type StartKind = "gps" | "depot" | "address";
@@ -123,6 +123,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
   const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const clearToast = useCallback(() => setToast(null), []);
 
   const update = (patch: Partial<Saved>) =>
     setState((prev) => {
@@ -133,7 +135,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
   const setForm = (patch: Partial<Form>) => update({ form: { ...state.form, ...patch } });
 
   const { form, step, checks, result, plannedAtMs, leftAtMs, driving, next, done } = state;
-  const addressList = form.addresses.split("\n").map((a) => a.trim()).filter(Boolean);
+  const { addresses: addressList, duplicates } = parseAddressList(form.addresses);
 
   // Keep projected ETAs current while driving.
   useEffect(() => {
@@ -165,7 +167,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
         setProgress({ done: out.length, total: addressList.length });
       }
       setProgress(null);
-      update({ checks: out, step: "review" });
+      // Show the cleaned-up list if the driver goes back to edit it.
+      update({ checks: out, step: "review", form: { ...form, addresses: addressList.join("\n") } });
     });
   };
 
@@ -245,6 +248,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
     const now = Date.now();
     setNowMs(now);
     update({ next: next + 1, leftAtMs: now, done: [...done, { address: result.stops[next].address, status }] });
+    setToast({ id: now, tone: status === "delivered" ? "ok" : "warn", text: `${status === "delivered" ? "Delivered" : "Not delivered"} · ${result.stops[next].address}` });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -270,7 +274,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
     return (
       <div className="min-h-dvh pb-10">
         {header}
-        <main className="mx-auto -mt-12 max-w-lg space-y-4 px-4">
+        <main key="enter" className="mx-auto -mt-12 max-w-lg animate-rise space-y-4 px-4">
           <section className="space-y-4 rounded-2xl bg-white p-4 shadow-card">
             <div>
               <p className="mb-1.5 text-xs font-medium text-slate-600">Start from</p>
@@ -309,7 +313,14 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
               )}
             </div>
 
-            <Field label={`Delivery addresses (${addressList.length})`} hint="One per line. Include the suburb for the best match.">
+            <Field
+              label={`Delivery addresses (${addressList.length})`}
+              hint={
+                duplicates
+                  ? `One per line. ${duplicates} repeated ${duplicates === 1 ? "address" : "addresses"} will only be visited once.`
+                  : "One per line, or paste a list or spreadsheet column. Include the suburb for the best match."
+              }
+            >
               <textarea
                 className={cx(inputCls, "h-auto min-h-40 py-2 text-base leading-relaxed")}
                 placeholder={"12 Mains Rd, Sunnybank\n2 Clunies Ross Ct, Eight Mile Plains\nLogan Central Plaza, Logan Central\n…"}
@@ -344,9 +355,14 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
 
             <FormError message={error} />
             <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || !addressList.length} onClick={checkAddresses}>
-              <Search className="size-5" />
+              {progress ? <Spinner className="size-5" /> : <Search className="size-5" />}
               {progress ? `Finding address ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : "Check addresses"}
             </button>
+            {progress && (
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-blue-600 transition-[width] duration-500 ease-out" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+              </div>
+            )}
           </section>
         </main>
       </div>
@@ -365,7 +381,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
     return (
       <div className="min-h-dvh pb-10">
         {header}
-        <main className="mx-auto -mt-12 max-w-lg space-y-4 px-4">
+        <main key="review" className="mx-auto -mt-12 max-w-lg animate-rise space-y-4 px-4">
           <section className="rounded-2xl bg-white p-4 shadow-card">
             <h2 className="font-semibold text-slate-900">Check the pins</h2>
             <p className="mt-1 text-sm text-slate-500">
@@ -483,7 +499,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             </p>
           )}
           <button className={btn("primary", "lg", "w-full rounded-xl")} disabled={pending || failed > 0 || !checks.length} onClick={() => optimise()}>
-            <Zap className="size-5" /> {pending ? "Calculating…" : "Find the fastest route"}
+            {pending ? <Spinner className="size-5" /> : <Zap className="size-5" />} {pending ? "Calculating…" : "Find the fastest route"}
           </button>
           <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={() => update({ step: "enter" })}>
             Back to the address list
@@ -538,7 +554,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
   return (
     <div className="min-h-dvh pb-10">
       {header}
-      <main className="mx-auto -mt-12 max-w-lg space-y-4 px-4">
+      <main key="route" className="mx-auto -mt-12 max-w-lg animate-rise space-y-4 px-4">
         {/* Summary */}
         <section className="rounded-2xl bg-white p-4 shadow-card">
           <div className="grid grid-cols-3 text-center">
@@ -610,7 +626,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             </div>
           </>
         ) : current ? (
-          <section className="overflow-hidden rounded-2xl bg-white shadow-card">
+          // Keyed by stop so the next drop visibly slides in after one is finished.
+          <section key={next} className="animate-rise overflow-hidden rounded-2xl bg-white shadow-card">
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
                 Stop {offset + next + 1} of {total}
@@ -646,7 +663,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             </div>
           </section>
         ) : goingHome ? (
-          <section className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
+          <section className="animate-rise space-y-3 rounded-2xl bg-white p-4 shadow-card">
             <p className="flex items-center gap-2 font-semibold text-slate-900">
               <Flag className="size-4 text-emerald-600" /> All stops done. Head back to {result.end!.label}
             </p>
@@ -662,7 +679,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
           </section>
         ) : (
           <section className="rounded-2xl bg-white p-8 text-center shadow-card">
-            <CheckCircle2 className="mx-auto size-12 text-emerald-500" />
+            <CheckCircle2 className="mx-auto size-12 animate-check text-emerald-500" />
             <p className="mt-3 text-lg font-semibold">All stops completed</p>
             <button className={btn("secondary", "md", "mt-4 rounded-xl")} onClick={startOver}>
               Plan a new route
@@ -678,7 +695,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
               </a>
             )}
             <button className={btn("secondary", "md", "w-full rounded-xl")} disabled={pending} onClick={replanRemaining}>
-              <LocateFixed className="size-4" /> {pending ? "Re-planning…" : `Re-plan the ${remaining.length} remaining from my location`}
+              {pending ? <Spinner /> : <LocateFixed className="size-4" />} {pending ? "Re-planning…" : `Re-plan the ${remaining.length} remaining from my location`}
             </button>
             <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={() => setShowMap(!showMap)}>
               {showMap ? "Hide route map" : "Show route map"}
@@ -752,6 +769,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
           </button>
         )}
       </main>
+      <Toast toast={toast} onDone={clearToast} />
     </div>
   );
 }

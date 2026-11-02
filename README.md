@@ -1,6 +1,31 @@
-# AI Delivery Planner
+# Foodpac Distribution System
 
-Turn each day's orders into optimised, multi-driver delivery routes — then dispatch them to drivers' phones and track progress.
+One platform from the customer's order to the signed delivery:
+
+| Area | URL | Who |
+| --- | --- | --- |
+| Online shop (catalogue, search, cart, checkout) | `/`, `/products`, `/cart`, `/checkout` | Customers (prices after sign-in) |
+| Customer account (orders, live tracking, proof of delivery, invoices, quick order, addresses) | `/portal` | Customers |
+| Back office (sales orders, products & stock, customers & price lists, delivery planning, tracking, enquiries) | `/admin` | Admin, dispatcher |
+| Driver app (route, navigation, photo + signature + GPS at each drop) | `/driver` | Drivers |
+
+**Order flow:** customer places an order → stock is reserved → card orders wait for Stripe, bank-transfer and invoice orders are confirmed straight away → a confirmed order becomes a delivery order on its delivery day → warehouse picks, packs, loads → the planner optimises routes → driver delivers with photo, signature and a GPS fix → the customer sees it all in `/portal`.
+
+Order, payment, warehouse, delivery and proof-of-delivery status are stored separately.
+
+## Online shop
+
+- **Prices** are worked out on the server for the signed-in customer: their own price (Back office → Customers → Price list) or the list price. Guests and unapproved accounts see no prices. Prices are ex GST; GST (10%) applies to taxable lines and the delivery fee.
+- **Stock** is reserved with a conditional update when the order is placed (no overselling) and returned when an order is cancelled or an unpaid card checkout expires (30 min).
+- **Payment methods:** card (Stripe Checkout, only when `STRIPE_SECRET_KEY` is set), bank transfer, and pay by invoice for customers with invoice terms (Net 7/14/30) within their credit limit.
+- **Checkout** checks delivery days and the order cut-off (Settings → Online shop), the minimum order and the free-delivery threshold. A double-click can't place the order twice (idempotency key).
+- **Customers** can register themselves at `/register`; staff approve them under Customers. Orders imported or synced for a customer's name or phone are linked to their account automatically.
+- **Customer tracking** shows the van live only for the last leg to that customer (never other customers' stops), plus the photo, signature, recipient and how far from the address the driver confirmed delivery.
+- Edit the public wording, categories and company details (phone, email, ABN for invoices) in `src/app/(site)/content.ts`.
+
+---
+
+The delivery engine below plans and dispatches the routes.
 
 **Daily flow:** import orders → verify addresses → optimise routes → adjust if needed → dispatch → drivers navigate and mark stops delivered/failed → history and analytics.
 
@@ -18,6 +43,7 @@ Open http://localhost:3000. The first request creates an embedded Postgres datab
 | `admin@demo.local` / `demo1234` | Admin |
 | `dispatch@demo.local` / `demo1234` | Dispatcher |
 | `john@demo.local` / `demo1234` (also `mia@`, `sam@`) | Driver (open on a phone) |
+| `customer@demo.local` / `demo1234` | Customer (shop + portal) |
 
 To start from scratch: stop the dev server, run `npm run reset-local`, and start it again.
 

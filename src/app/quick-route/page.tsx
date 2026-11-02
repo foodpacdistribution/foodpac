@@ -14,7 +14,7 @@ export default async function QuickRoutePage() {
 
   return (
     <QuickRouteLoader
-      backHref={user.role === "driver" ? "/driver" : "/planner"}
+      backHref={user.role === "driver" ? "/driver" : "/admin/planner"}
       depotName={depot?.name ?? null}
       defaultServiceMin={s.defaultServiceMin}
     />

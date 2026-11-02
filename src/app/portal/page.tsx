@@ -1,0 +1,266 @@
+import { ArrowRight, CalendarClock, MapPin, Pencil, Phone, Receipt, ShoppingBag, Truck, Zap } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { SITE } from "@/app/(site)/content";
+import { ProductCard } from "@/app/(site)/shop-ui";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { cx } from "@/components/ui";
+import { initials } from "@/lib/account";
+import { getCurrentCustomer } from "@/lib/auth/dal";
+import { linkOrdersToCustomer } from "@/lib/customers";
+import { prettyDate } from "@/lib/dates";
+import { getDb } from "@/lib/db";
+import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
+import { getSettings } from "@/lib/planning";
+import { recentlyBought } from "@/lib/shop";
+import { formatMinutesClock, todayIn } from "@/lib/time";
+import { StageSteps } from "./stage";
+import { listSalesOrders } from "./orders/data";
+import { SalesOrderList } from "./orders/list";
+
+export const metadata: Metadata = { title: "My account" };
+
+function greeting(timeZone: string) {
+  const h = Number(new Intl.DateTimeFormat("en-AU", { timeZone, hour: "numeric", hourCycle: "h23" }).format(new Date()));
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
+
+export default async function PortalOverview() {
+  const viewer = await getCurrentCustomer();
+  if (!viewer) return null;
+  const { customer: c, user } = viewer;
+  const db = await getDb();
+  await linkOrdersToCustomer(db, c);
+  const s = await getSettings(db);
+  const today = todayIn(s.timezone);
+  const [orders, again] = await Promise.all([listSalesOrders(db, c.id, 60), recentlyBought(db, c, 4)]);
+
+  const month = today.slice(0, 7);
+  const monthOf = (d: Date) => todayIn(s.timezone, d).slice(0, 7);
+  const live = orders.filter((o) => o.status !== "cancelled");
+  const thisMonth = live.filter((o) => monthOf(o.createdAt) === month);
+  const open = live.filter((o) => o.delivery?.stage !== "delivered");
+  const unpaid = live.filter((o) => o.paymentStatus === "unpaid");
+  const owing = unpaid.reduce((t, o) => t + o.totalCents, 0);
+  const overdue = unpaid.filter((o) => o.dueDate && o.dueDate < today);
+  const onTheWay = live.filter((o) => o.delivery?.stage === "out_for_delivery");
+  const next = live
+    .filter((o) => o.deliveryDate >= today && o.delivery?.stage !== "delivered" && o.delivery?.stage !== "failed")
+    .sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate))[0];
+  const creditLeft = c.creditLimitCents !== null ? Math.max(0, c.creditLimitCents - owing) : null;
+
+  return (
+    <>
+      {onTheWay.length > 0 && <AutoRefresh seconds={30} />}
+
+      <section className="relative overflow-hidden rounded-3xl bg-leaf-900 p-6 text-cream sm:p-8">
+        <div className="relative z-10 flex flex-wrap items-center gap-5">
+          <span className="grid size-16 shrink-0 place-items-center rounded-2xl bg-cream font-display text-2xl font-semibold text-leaf-800">{initials(c.name)}</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-cream/70">
+              {greeting(s.timezone)}, {user.name.split(" ")[0]}
+            </p>
+            <h1 className="truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">{c.name}</h1>
+            <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-semibold">
+              <span className={cx("rounded-full px-2.5 py-1", c.approved ? "bg-leaf-600 text-white" : "bg-amber-300 text-amber-950")}>
+                {c.approved ? "Approved trade account" : "Awaiting approval"}
+              </span>
+              <span className="rounded-full bg-white/10 px-2.5 py-1">{PAYMENT_TERMS_LABEL[c.paymentTerms]}</span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/products" className="inline-flex h-11 items-center gap-2 rounded-full bg-tomato px-5 text-sm font-semibold text-white hover:bg-tomato-dark">
+              <ShoppingBag className="size-4" /> Shop now
+            </Link>
+            <Link href="/portal/quick-order" className="inline-flex h-11 items-center gap-2 rounded-full bg-white/10 px-5 text-sm font-semibold hover:bg-white/15">
+              <Zap className="size-4" /> Quick order
+            </Link>
+          </div>
+        </div>
+        {creditLeft !== null && c.creditLimitCents! > 0 && (
+          <div className="relative z-10 mt-6 max-w-md">
+            <div className="flex justify-between text-xs text-cream/70">
+              <span>Credit available</span>
+              <span className="tabular-nums">
+                {aud(creditLeft)} of {aud(c.creditLimitCents)}
+              </span>
+            </div>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-leaf-600" style={{ width: `${Math.round((creditLeft / c.creditLimitCents!) * 100)}%` }} />
+            </div>
+          </div>
+        )}
+        <svg className="absolute -right-10 -bottom-10 h-56 opacity-20" viewBox="0 0 200 200" fill="none" aria-hidden>
+          <path d="M10 180 C 60 150, 40 100, 100 90 S 170 60, 150 20" stroke="#faf6ee" strokeWidth="3" strokeDasharray="2 8" strokeLinecap="round" />
+          {[[10, 180], [100, 90], [150, 20]].map(([x, y]) => (
+            <circle key={x} cx={x} cy={y} r="7" fill="#113a27" stroke="#faf6ee" strokeWidth="3" />
+          ))}
+        </svg>
+      </section>
+
+      {onTheWay.map((o) => (
+        <Link
+          key={o.id}
+          href={`/portal/track/${o.deliveryOrderId}`}
+          className="mt-4 flex items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100"
+        >
+          <span className="relative grid size-9 place-items-center rounded-full bg-amber-400 text-white">
+            <Truck className="size-4" />
+            <span className="absolute inset-0 animate-ping rounded-full bg-amber-400/40" />
+          </span>
+          <span className="flex-1 text-sm">
+            <span className="font-semibold">{o.number} is on the way.</span> Track the van live.
+          </span>
+          <ArrowRight className="size-4" />
+        </Link>
+      ))}
+
+      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Orders this month" value={String(thisMonth.length)} />
+        <Stat label="Spent this month" value={aud(thisMonth.reduce((t, o) => t + o.totalCents, 0))} hint="incl. GST" />
+        <Stat label="Open orders" value={String(open.length)} hint="Not delivered yet" />
+        <Stat
+          label="To pay"
+          value={aud(owing)}
+          hint={overdue.length ? `${overdue.length} overdue` : unpaid.length ? `${unpaid.length} invoice${unpaid.length === 1 ? "" : "s"}` : "All paid up"}
+          warn={overdue.length > 0}
+          href="/portal/invoices"
+        />
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
+        <div className="min-w-0 space-y-8">
+          {next && (
+            <section>
+              <SectionTitle title="Next delivery" />
+              <Link href={`/portal/orders/${next.id}`} className="mt-3 block rounded-3xl border border-leaf-950/10 bg-white p-5 hover:border-leaf-700/30">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="flex items-center gap-2 font-display text-xl font-semibold">
+                      <CalendarClock className="size-5 text-leaf-700" />
+                      {next.deliveryDate === today ? "Today" : prettyDate(next.deliveryDate, { weekday: "long", day: "numeric", month: "long" })}
+                    </p>
+                    <p className="mt-0.5 text-sm text-leaf-900/60">
+                      {next.number} · {next.items} item{next.items === 1 ? "" : "s"}
+                      {(next.windowStartMin !== null || next.windowEndMin !== null) &&
+                        ` · ${next.windowStartMin !== null ? formatMinutesClock(next.windowStartMin) : "any time"}–${next.windowEndMin !== null ? formatMinutesClock(next.windowEndMin) : "close"}`}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold text-leaf-700">Details →</span>
+                </div>
+                {next.delivery && (
+                  <div className="mt-5">
+                    <StageSteps stage={next.delivery.stage} />
+                  </div>
+                )}
+              </Link>
+            </section>
+          )}
+
+          {again.length > 0 && (
+            <section>
+              <SectionTitle title="Buy again" link={{ href: "/portal/quick-order", label: "Quick order" }} />
+              <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {again.map((p) => (
+                  <ProductCard key={p.id} p={p} signedIn />
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section>
+            <SectionTitle title="Recent orders" link={{ href: "/portal/orders", label: "All orders" }} />
+            {orders.length ? (
+              <SalesOrderList rows={orders.slice(0, 5)} />
+            ) : (
+              <div className="mt-3 rounded-3xl border border-dashed border-leaf-950/15 bg-white px-6 py-10 text-center">
+                <p className="font-semibold">No orders yet</p>
+                <p className="mt-1 text-sm text-leaf-900/60">Your first order is a few clicks away.</p>
+                <Link href="/products" className="mt-4 inline-flex h-10 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white">
+                  Browse products
+                </Link>
+              </div>
+            )}
+          </section>
+        </div>
+
+        <aside className="space-y-4">
+          <div className="rounded-3xl border border-leaf-950/10 bg-white p-5 text-sm">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">Account details</h2>
+              <Link href="/portal/profile" className="inline-flex items-center gap-1 text-xs font-semibold text-leaf-700 hover:underline">
+                <Pencil className="size-3" /> Edit
+              </Link>
+            </div>
+            <dl className="mt-3 space-y-2.5 text-leaf-900/75">
+              <Detail label="Contact" value={`${user.name} · ${user.email}`} />
+              {c.phone && <Detail label="Phone" value={c.phone} />}
+              {c.address && <Detail label="Delivery address" value={c.address} />}
+              {c.abn && <Detail label="ABN" value={c.abn} />}
+            </dl>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Link href="/portal/addresses" className="flex items-center justify-center gap-1.5 rounded-xl bg-leaf-50 py-2 text-xs font-semibold text-leaf-800 hover:bg-leaf-100">
+                <MapPin className="size-3.5" /> Addresses
+              </Link>
+              <Link href="/portal/invoices" className="flex items-center justify-center gap-1.5 rounded-xl bg-leaf-50 py-2 text-xs font-semibold text-leaf-800 hover:bg-leaf-100">
+                <Receipt className="size-3.5" /> Invoices
+              </Link>
+            </div>
+          </div>
+          <div className="rounded-3xl bg-[#f1ebdd] p-5 text-sm">
+            <h2 className="font-semibold">Need a hand?</h2>
+            <p className="mt-1 text-leaf-900/70">Changes to an order, a product you can&apos;t find, or a delivery question — we&apos;re here {SITE.hours}.</p>
+            {SITE.phone && (
+              <a href={`tel:${SITE.phone.replace(/\s/g, "")}`} className="mt-3 flex items-center gap-2 font-semibold text-leaf-800">
+                <Phone className="size-4" /> {SITE.phone}
+              </a>
+            )}
+            <Link href="/#contact" className="mt-3 inline-flex h-9 items-center rounded-full bg-white px-4 text-xs font-semibold ring-1 ring-leaf-950/10 hover:ring-leaf-700/30">
+              Send us a message
+            </Link>
+          </div>
+        </aside>
+      </div>
+    </>
+  );
+}
+
+function SectionTitle({ title, link }: { title: string; link?: { href: string; label: string } }) {
+  return (
+    <div className="flex items-end justify-between">
+      <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-leaf-900/50">{title}</h2>
+      {link && (
+        <Link href={link.href} className="text-sm font-semibold text-leaf-700 hover:underline">
+          {link.label}
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, hint, warn, href }: { label: string; value: string; hint?: string; warn?: boolean; href?: string }) {
+  const body = (
+    <>
+      <p className="text-xs font-medium text-leaf-900/55">{label}</p>
+      <p className={cx("mt-1 font-display text-2xl font-semibold tabular-nums", warn && "text-red-700")}>{value}</p>
+      {hint && <p className={cx("mt-0.5 text-xs", warn ? "font-semibold text-red-700" : "text-leaf-900/50")}>{hint}</p>}
+    </>
+  );
+  const cls = "block rounded-2xl border border-leaf-950/10 bg-white p-4";
+  return href ? (
+    <Link href={href} className={cx(cls, "hover:border-leaf-700/30")}>
+      {body}
+    </Link>
+  ) : (
+    <div className={cls}>{body}</div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[11px] font-semibold uppercase tracking-wider text-leaf-900/45">{label}</dt>
+      <dd className="break-words">{value}</dd>
+    </div>
+  );
+}

@@ -1,9 +1,10 @@
 "use client";
 
-import { X } from "lucide-react";
+import { CheckCircle2, TriangleAlert, X } from "lucide-react";
+import { useLinkStatus } from "next/link";
 import { useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
-import { btn, cx } from "./ui";
+import { btn, cx, Spinner, TopProgress } from "./ui";
 
 export function SubmitButton({
   children,
@@ -24,7 +25,7 @@ export function SubmitButton({
     <button type="submit" disabled={pending || rest.disabled} className={btn(variant, size, className)} {...rest}>
       {pending ? (
         <>
-          <span className="size-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />
+          <Spinner className="size-3.5" />
           {pendingText ?? "Saving…"}
         </>
       ) : (
@@ -60,7 +61,8 @@ export function Modal({
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
       className={cx(
-        "m-auto w-[calc(100%-2rem)] rounded-2xl border border-line bg-white p-0 text-slate-900 shadow-pop",
+        // The animation replays each time showModal() makes the dialog visible.
+        "m-auto w-[calc(100%-2rem)] animate-pop rounded-2xl border border-line bg-white p-0 text-slate-900 shadow-pop",
         wide ? "max-w-3xl" : "max-w-lg",
       )}
     >
@@ -76,6 +78,46 @@ export function Modal({
         </div>
       )}
     </dialog>
+  );
+}
+
+/**
+ * Put inside a <Link>: shows the top progress bar and a small spinner while that link's
+ * page is loading (only when it wasn't prefetched). Always rendered, so the link never shifts.
+ */
+export function LinkPending({ className }: { className?: string }) {
+  const { pending } = useLinkStatus();
+  return (
+    <>
+      <Spinner className={cx("size-3.5 transition-opacity", pending ? "opacity-100" : "opacity-0", className)} />
+      {pending && <TopProgress />}
+    </>
+  );
+}
+
+export type ToastMessage ={ id: number; text: string; tone: "ok" | "warn" };
+
+/** Brief confirmation at the bottom of the screen ("Delivered · Acme"), gone after a moment. */
+export function Toast({ toast, onDone }: { toast: ToastMessage | null; onDone: () => void }) {
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(onDone, 2600);
+    return () => clearTimeout(t);
+  }, [toast, onDone]);
+  if (!toast) return null;
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4" role="status" aria-live="polite">
+      <p
+        key={toast.id}
+        className={cx(
+          "flex animate-toast items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-white shadow-pop",
+          toast.tone === "ok" ? "bg-emerald-600" : "bg-navy-900",
+        )}
+      >
+        {toast.tone === "ok" ? <CheckCircle2 className="size-4" /> : <TriangleAlert className="size-4" />}
+        {toast.text}
+      </p>
+    </div>
   );
 }
 

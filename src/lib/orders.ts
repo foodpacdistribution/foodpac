@@ -163,3 +163,18 @@ export function multiStopNavigation(points: { lat: number; lng: number }[]) {
     (waypoints.length ? `&waypoints=${waypoints.map(coord).join("%7C")}` : "");
   return { url, count: batch.length };
 }
+
+/** Beyond this, a delivery confirmed away from the address is flagged for staff and the customer. */
+export const DELIVERY_PLACE_WARN_M = 150;
+
+/** "12 m from the delivery address (GPS ±6 m)" for the place a delivery was confirmed. */
+export function describeDeliveryPlace(distanceM: number | null, accuracyM: number | null) {
+  if (distanceM === null) return null;
+  const d = distanceM < 1000 ? `${Math.round(distanceM)} m` : `${(distanceM / 1000).toFixed(1)} km`;
+  return `${d} from the delivery address${accuracyM !== null ? ` (GPS ±${Math.round(accuracyM)} m)` : ""}`;
+}
+
+/** Opens a point on Google Maps (for viewing, not navigating). */
+export function mapPinUrl(lat: number, lng: number) {
+  return `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lng.toFixed(6)}`;
+}

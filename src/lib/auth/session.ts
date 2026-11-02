@@ -15,6 +15,29 @@ function secret() {
   return new TextEncoder().encode(s);
 }
 
+/** Where each role lands after signing in, and where it is sent when it opens a page it can't use. */
+export function homeFor(role: Role) {
+  return role === "driver" ? "/driver" : role === "customer" ? "/portal" : "/admin";
+}
+
+/**
+ * Where to go after signing in: the page the user was trying to open, if it's a local path
+ * their role may use, otherwise their home. Never an external URL (open-redirect safe).
+ */
+export function afterLogin(role: Role, next: string | null | undefined) {
+  const home = homeFor(role);
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\") || next.startsWith("/login")) return home;
+  const path = next.split(/[?#]/)[0];
+  const under = (p: string) => path === p || path.startsWith(`${p}/`);
+  const ok =
+    role === "customer"
+      ? !under("/admin") && !under("/driver") && !under("/quick-route")
+      : role === "driver"
+        ? under("/driver") || path === "/quick-route" || !(under("/admin") || under("/portal"))
+        : !under("/portal") && !under("/driver");
+  return ok ? next : home;
+}
+
 export async function signSession(payload: SessionPayload) {
   return new SignJWT({ role: payload.role, name: payload.name, driverId: payload.driverId })
     .setProtectedHeader({ alg: "HS256" })

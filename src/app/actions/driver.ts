@@ -12,9 +12,9 @@ import { readUpload, saveProof } from "@/lib/proofs";
 
 function revalidate() {
   revalidatePath("/driver");
-  revalidatePath("/");
-  revalidatePath("/planner");
-  revalidatePath("/orders");
+  revalidatePath("/admin");
+  revalidatePath("/admin/planner");
+  revalidatePath("/admin/orders");
 }
 
 /** Loads a stop only if it belongs to the signed-in driver's dispatched route. */
@@ -60,6 +60,7 @@ async function finishStop(
   stopId: string,
   outcome: { type: "delivered"; recipient: string | null; note: string | null } | { type: "failed"; reason: string; note: string | null },
   proofs: { photo: Upload; signature: Upload },
+  at: Fix | null,
 ) {
   const { db, user, stop, route } = await ownStop(stopId);
   if (stop.status !== "pending") throw new UserError("This stop is already completed.");
@@ -77,6 +78,9 @@ async function finishStop(
         reason: outcome.type === "failed" ? outcome.reason : null,
         recipient: outcome.type === "delivered" ? outcome.recipient : null,
         note: outcome.note,
+        lat: at?.lat ?? null,
+        lng: at?.lng ?? null,
+        accuracyM: at?.accuracy ?? null,
       })
       .returning({ id: deliveryEvents.id });
     for (const kind of ["photo", "signature"] as const) {
@@ -100,6 +104,17 @@ async function finishStop(
   revalidate();
 }
 
+type Fix = { lat: number; lng: number; accuracy: number | null };
+
+/** The phone's GPS fix sent with the outcome; ignored when missing or not a real coordinate. */
+function readFix(form: FormData): Fix | null {
+  const lat = Number(form.get("lat"));
+  const lng = Number(form.get("lng"));
+  const accuracy = Number(form.get("accuracy"));
+  if (!form.get("lat") || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng, accuracy: Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : null };
+}
+
 const clean = (v: FormDataEntryValue | null, max = 500) => {
   const s = String(v ?? "").trim().slice(0, max);
   return s || null;
@@ -114,7 +129,7 @@ export async function markDelivered(_prev: unknown, form: FormData) {
     if (s.requirePhoto && !photo) throw new UserError("A delivery photo is required.");
     if (s.requireSignature && !signature) throw new UserError("The customer's signature is required.");
     if (signature && !recipient) throw new UserError("Enter the name of the person who signed.");
-    await finishStop(String(form.get("stopId")), { type: "delivered", recipient, note: clean(form.get("note")) }, { photo, signature });
+    await finishStop(String(form.get("stopId")), { type: "delivered", recipient, note: clean(form.get("note")) }, { photo, signature }, readFix(form));
     return { message: "Marked as delivered" };
   });
 }
@@ -124,7 +139,7 @@ export async function markFailed(_prev: unknown, form: FormData) {
     const reason = String(form.get("reason") ?? "");
     if (!FAILURE_REASONS.includes(reason)) throw new UserError("Choose a reason.");
     const photo = await readUpload(form.get("photo"), "Photo");
-    await finishStop(String(form.get("stopId")), { type: "failed", reason, note: clean(form.get("note")) }, { photo, signature: null });
+    await finishStop(String(form.get("stopId")), { type: "failed", reason, note: clean(form.get("note")) }, { photo, signature: null }, readFix(form));
     return { message: "Delivery issue reported" };
   });
 }

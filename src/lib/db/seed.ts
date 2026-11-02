@@ -2,7 +2,7 @@ import { count } from "drizzle-orm";
 import { hashPassword } from "../auth/password";
 import { todayIn } from "../time";
 import type { DB } from "./index";
-import { depots, drivers, orders, settings, users } from "./schema";
+import { customerPrices, customers, depots, drivers, orders, products, settings, users } from "./schema";
 
 // Approximate suburb centres around Brisbane. Demo data only — not real customers.
 const DEMO_SUBURBS: [string, string, number, number][] = [
@@ -106,4 +106,62 @@ export async function insertDemoOrders(db: DB, deliveryDate: string) {
   });
   const inserted = await db.insert(orders).values(rows).onConflictDoNothing().returning({ id: orders.id });
   return inserted.length;
+}
+
+// Demo catalogue for the online shop. Example lines only — replace with the real range in
+// Back office → Products & Stock. [sku, name, category, pack size, unit, price $ ex GST, stock, min qty, GST, featured]
+const DEMO_PRODUCTS: [string, string, string, string, string, number, number, number, boolean, boolean][] = [
+  ["FP-1001", "Kraft takeaway box No.8", "Takeaway containers", "200 pcs / carton", "carton", 62.0, 80, 1, true, true],
+  ["FP-1002", "Black rectangular container 650 ml with lid", "Takeaway containers", "500 sets / carton", "carton", 89.5, 45, 1, true, true],
+  ["FP-1003", "Sugarcane clamshell 9 inch", "Takeaway containers", "200 pcs / carton", "carton", 48.0, 6, 1, true, false],
+  ["FP-2001", "Double wall coffee cup 8 oz", "Cups & lids", "500 pcs / carton", "carton", 74.0, 120, 1, true, true],
+  ["FP-2002", "Double wall coffee cup 12 oz", "Cups & lids", "500 pcs / carton", "carton", 82.0, 95, 1, true, false],
+  ["FP-2003", "Sip lid 8 oz, white", "Cups & lids", "1000 pcs / carton", "carton", 39.0, 60, 1, true, false],
+  ["FP-2004", "Clear cold cup 16 oz with dome lid", "Cups & lids", "1000 sets / carton", "carton", 118.0, 0, 1, true, false],
+  ["FP-3001", "Brown paper carry bag, medium", "Bags & wraps", "250 pcs / carton", "carton", 44.0, 70, 1, true, false],
+  ["FP-3002", "Cling wrap 45 cm x 600 m", "Bags & wraps", "1 roll", "roll", 21.5, 40, 2, true, true],
+  ["FP-3003", "Baking paper 40 cm x 120 m", "Bags & wraps", "1 roll", "roll", 18.9, 35, 1, true, false],
+  ["FP-4001", "Wooden fork 160 mm", "Cutlery & napkins", "1000 pcs / carton", "carton", 32.0, 50, 1, true, false],
+  ["FP-4002", "2-ply dinner napkin, white", "Cutlery & napkins", "2000 pcs / carton", "carton", 46.0, 55, 1, true, false],
+  ["FP-4003", "Portion cup 2 oz with lid", "Cutlery & napkins", "2500 sets / carton", "carton", 69.0, 8, 1, true, false],
+  ["FP-5001", "Nitrile gloves, black, large", "Cleaning & hygiene", "10 boxes of 100 / carton", "carton", 79.0, 40, 1, true, true],
+  ["FP-5002", "Multi-surface sanitiser 5 L", "Cleaning & hygiene", "5 L bottle", "bottle", 24.0, 30, 1, true, false],
+  ["FP-5003", "Interleaved hand towel", "Cleaning & hygiene", "16 packs / carton", "carton", 38.5, 25, 1, true, false],
+  ["FP-6001", "Canola frying oil 20 L", "Pantry & dry goods", "20 L drum", "drum", 58.0, 22, 1, false, true],
+  ["FP-6002", "Tomato sauce portion sachets", "Pantry & dry goods", "1000 sachets / carton", "carton", 41.0, 18, 1, false, false],
+  ["FP-6003", "Jasmine rice 10 kg", "Pantry & dry goods", "10 kg bag", "bag", 27.5, 60, 2, false, false],
+];
+
+/** Adds the demo catalogue and a demo customer login once (local embedded database only). */
+export async function seedShopDemo(db: DB) {
+  const [{ n }] = await db.select({ n: count() }).from(products);
+  if (n > 0) return;
+  const rows = await db
+    .insert(products)
+    .values(
+      DEMO_PRODUCTS.map(([sku, name, category, packSize, unit, price, stock, minQty, gst, featured]) => ({
+        sku,
+        name,
+        category,
+        packSize,
+        unit,
+        priceCents: Math.round(price * 100),
+        stock,
+        minQty,
+        gst,
+        featured,
+        description: `${name}. ${packSize}. Demo product — replace with your real range.`,
+      })),
+    )
+    .returning({ id: products.id, sku: products.sku, priceCents: products.priceCents });
+
+  // Named like a demo delivery order so the portal also shows today's tracked delivery.
+  const [c] = await db
+    .insert(customers)
+    .values({ name: "Demo Customer 01", phone: "07 3000 0001", email: "customer@demo.local", address: "Fortitude Valley QLD 4006", paymentTerms: "net14", creditLimitCents: 500000 })
+    .returning();
+  await db.insert(users).values({ email: "customer@demo.local", name: "Casey Customer", role: "customer", customerId: c.id, passwordHash: await hashPassword("demo1234") }).onConflictDoNothing();
+  const special = rows.filter((r) => r.sku === "FP-2001" || r.sku === "FP-1001");
+  if (special.length) await db.insert(customerPrices).values(special.map((r) => ({ customerId: c.id, productId: r.id, priceCents: Math.round(r.priceCents * 0.9) })));
+  await db.update(settings).set({ bankDetails: "Foodpac Distribution (demo)\nBSB 000-000  Account 00000000" });
 }

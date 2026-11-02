@@ -115,3 +115,27 @@ export function useLocationSharing(active: boolean) {
 
   return { status: active ? status : "off", lastSentAt };
 }
+
+export type BestFix = { lat: number; lng: number; accuracy: number };
+
+/**
+ * Watches GPS at high accuracy while mounted and keeps the most precise fix. Used on the
+ * Delivered / Problem sheet: by the time the photo and signature are done the phone has
+ * usually settled to a few metres, and that fix is saved with the delivery as proof of place.
+ */
+export function useBestFix() {
+  const [fix, setFix] = useState<BestFix | null>(null);
+  useEffect(() => {
+    if (!("geolocation" in navigator)) return;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        const next = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+        setFix((best) => (!best || next.accuracy <= best.accuracy ? next : best));
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30_000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
+  return fix;
+}

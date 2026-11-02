@@ -2,7 +2,7 @@
 
 import { Camera, Eraser, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { btn, cx } from "@/components/ui";
+import { btn, cx, Spinner } from "@/components/ui";
 
 /** Resizes a camera photo on the phone so uploads stay small (~100–300 KB). */
 async function compressPhoto(file: File, maxSide = 1600, quality = 0.75): Promise<File> {
@@ -45,7 +45,7 @@ export function PhotoCapture({ value, onChange, required }: { value: File | null
   }
   return (
     <label className={cx(btn("secondary", "lg", "w-full cursor-pointer rounded-xl border-dashed"), busy && "opacity-60")}>
-      <Camera className="size-5" /> {busy ? "Processing…" : `Take photo${required ? " (required)" : ""}`}
+      {busy ? <Spinner className="size-5" /> : <Camera className="size-5" />} {busy ? "Processing…" : `Take photo${required ? " (required)" : ""}`}
       <input
         type="file"
         accept="image/*"

@@ -2,6 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import { getCurrentUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { deliveryEvents, deliveryProofs, drivers, orders } from "@/lib/db/schema";
+import { haversine } from "@/lib/geo/routing";
 
 /** Timeline of driver events for one order, with proof-of-delivery images. */
 export async function GET(_req: Request, ctx: RouteContext<"/api/orders/[id]/record">) {
@@ -11,7 +12,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/orders/[id]/rec
   if (!/^[0-9a-f-]{36}$/i.test(id)) return new Response("Not found", { status: 404 });
 
   const db = await getDb();
-  const [order] = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, id)).limit(1);
+  const [order] = await db.select({ id: orders.id, lat: orders.lat, lng: orders.lng }).from(orders).where(eq(orders.id, id)).limit(1);
   if (!order) return new Response("Not found", { status: 404 });
 
   const events = await db
@@ -34,6 +35,15 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/orders/[id]/rec
       recipient: e.recipient,
       reason: e.reason,
       note: e.note,
+      place:
+        e.lat !== null && e.lng !== null
+          ? {
+              lat: e.lat,
+              lng: e.lng,
+              accuracyM: e.accuracyM,
+              distanceM: order.lat !== null && order.lng !== null ? Math.round(haversine(order as { lat: number; lng: number }, e as { lat: number; lng: number })) : null,
+            }
+          : null,
       proofs: proofs.filter((p) => p.eventId === e.id).map((p) => ({ id: p.id, kind: p.kind })),
     })),
   });

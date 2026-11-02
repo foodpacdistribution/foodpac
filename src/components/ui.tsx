@@ -9,7 +9,8 @@ type Size = "sm" | "md" | "lg" | "icon" | "icon-sm";
 
 export function btn(variant: Variant = "secondary", size: Size = "md", extra?: string) {
   return clsx(
-    "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
+    // active:scale gives a tap a physical "press", which matters most on the driver's phone.
+    "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
     {
       primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm",
       secondary: "bg-white text-slate-700 border border-line hover:bg-slate-50 shadow-sm",
@@ -20,6 +21,16 @@ export function btn(variant: Variant = "secondary", size: Size = "md", extra?: s
     { sm: "h-8 px-3 text-xs", md: "h-9 px-3.5 text-sm", lg: "h-12 px-5 text-base", icon: "size-8", "icon-sm": "size-6" }[size],
     extra,
   );
+}
+
+/** Busy indicator for buttons and inline loading; takes the text colour. */
+export function Spinner({ className }: { className?: string }) {
+  return <span aria-hidden className={clsx("inline-block size-4 shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent", className)} />;
+}
+
+/** Thin bar across the top of the window while a page or day is loading. */
+export function TopProgress() {
+  return <span aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-0.5 origin-left animate-progress bg-blue-500" />;
 }
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {

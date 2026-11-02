@@ -1,0 +1,60 @@
+"use client";
+
+import { useActionState } from "react";
+import { saveShopSettings } from "@/app/actions/settings";
+import { FormError, SubmitButton } from "@/components/client-ui";
+import { Card, CardHeader, cx, Field, inputCls } from "@/components/ui";
+import { minutesToInput } from "@/lib/time";
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+export function ShopSettingsCard(p: {
+  deliveryFeeCents: number;
+  freeDeliveryOverCents: number;
+  minOrderCents: number;
+  orderCutoffMin: number;
+  deliveryDays: number[];
+  bankDetails: string;
+  stripe: boolean;
+}) {
+  const [state, action] = useActionState(saveShopSettings, undefined);
+  const d = (c: number) => (c / 100).toFixed(2);
+  return (
+    <Card>
+      <CardHeader title="Online shop" subtitle={`Card payments: ${p.stripe ? "on (Stripe)" : "off — set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET to accept cards"}`} />
+      <form action={action} className="grid gap-4 p-4 sm:grid-cols-2">
+        <Field label="Delivery fee ex GST ($)">
+          <input name="deliveryFee" inputMode="decimal" defaultValue={d(p.deliveryFeeCents)} className={inputCls} />
+        </Field>
+        <Field label="Free delivery over ($, 0 = never)">
+          <input name="freeDeliveryOver" inputMode="decimal" defaultValue={d(p.freeDeliveryOverCents)} className={inputCls} />
+        </Field>
+        <Field label="Minimum order ex GST ($)">
+          <input name="minOrder" inputMode="decimal" defaultValue={d(p.minOrderCents)} className={inputCls} />
+        </Field>
+        <Field label="Order cut-off" hint="Orders before this time can be delivered the next delivery day.">
+          <input name="orderCutoff" type="time" defaultValue={minutesToInput(p.orderCutoffMin)} className={inputCls} />
+        </Field>
+        <fieldset className="sm:col-span-2">
+          <legend className="mb-1 text-xs font-medium text-slate-600">Delivery days</legend>
+          <div className="flex flex-wrap gap-1.5">
+            {DAYS.map((day, i) => (
+              <label key={day} className="cursor-pointer">
+                <input type="checkbox" name="deliveryDays" value={i + 1} defaultChecked={p.deliveryDays.includes(i + 1)} className="peer sr-only" />
+                <span className={cx("block rounded-md border border-line px-3 py-1.5 text-sm peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:text-blue-700")}>{day}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <Field label="Bank details for transfers" hint="Shown at checkout and on invoices." className="sm:col-span-2">
+          <textarea name="bankDetails" rows={3} defaultValue={p.bankDetails} placeholder={"Account name\nBSB 000-000  Account 00000000"} className={cx(inputCls, "h-auto py-2")} />
+        </Field>
+        <div className="sm:col-span-2">
+          <FormError message={state && !state.ok ? state.error : null} />
+          {state?.ok && <p className="text-sm text-emerald-700">{state.message}</p>}
+        </div>
+        <SubmitButton className="sm:col-span-2 sm:w-fit">Save shop settings</SubmitButton>
+      </form>
+    </Card>
+  );
+}

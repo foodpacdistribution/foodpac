@@ -7,6 +7,7 @@ import {
   index,
   integer,
   jsonb,
+  pgSequence,
   pgTable,
   real,
   text,
@@ -15,7 +16,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-export type Role = "admin" | "dispatcher" | "driver";
+export type Role = "admin" | "dispatcher" | "driver" | "customer";
 
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -38,6 +39,16 @@ export const settings = pgTable("settings", {
   reloadMin: integer("reload_min").notNull().default(15),
   requirePhoto: boolean("require_photo").notNull().default(false),
   requireSignature: boolean("require_signature").notNull().default(false),
+  /** Online shop. Money is in cents, ex GST. */
+  deliveryFeeCents: integer("delivery_fee_cents").notNull().default(1500),
+  freeDeliveryOverCents: integer("free_delivery_over_cents").notNull().default(30000),
+  minOrderCents: integer("min_order_cents").notNull().default(0),
+  /** Orders placed before this time (minutes after midnight) can go on the next delivery day. */
+  orderCutoffMin: integer("order_cutoff_min").notNull().default(14 * 60),
+  /** ISO weekdays we deliver on (1 = Monday). */
+  deliveryDays: jsonb("delivery_days").$type<number[]>().notNull().default([1, 2, 3, 4, 5]),
+  /** Shown to customers who choose bank transfer. */
+  bankDetails: text("bank_details").notNull().default(""),
 });
 
 export const depots = pgTable("depots", {
@@ -69,6 +80,26 @@ export const drivers = pgTable("drivers", {
   createdAt: createdAt(),
 });
 
+/** A business we deliver to. Orders are linked to it so its staff can follow them in the customer portal. */
+export const customers = pgTable("customers", {
+  id: id(),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  address: text("address"),
+  abn: text("abn"),
+  active: boolean("active").notNull().default(true),
+  /** Self-registered customers wait for staff approval before they see prices or order. */
+  approved: boolean("approved").notNull().default(true),
+  /** prepay = card or bank transfer up front; netN = invoice due N days after delivery. */
+  paymentTerms: text("payment_terms").$type<PaymentTerms>().notNull().default("prepay"),
+  /** Max unpaid invoice balance for account customers. null = no limit. */
+  creditLimitCents: integer("credit_limit_cents"),
+  createdAt: createdAt(),
+});
+
+export type PaymentTerms = "prepay" | "net7" | "net14" | "net30";
+
 export const users = pgTable("users", {
   id: id(),
   email: text("email").notNull().unique(),
@@ -76,6 +107,8 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: text("role").$type<Role>().notNull(),
   driverId: uuid("driver_id").references(() => drivers.id, { onDelete: "set null" }),
+  /** Customer logins only: the business whose orders they can see. */
+  customerId: uuid("customer_id").references(() => customers.id, { onDelete: "cascade" }),
   createdAt: createdAt(),
 });
 
@@ -109,6 +142,8 @@ export const orders = pgTable(
     /** Ship-from depot: only drivers based there can take it. null = any depot. */
     depotId: uuid("depot_id").references(() => depots.id, { onDelete: "set null" }),
     driverId: uuid("driver_id").references(() => drivers.id, { onDelete: "set null" }),
+    /** Set automatically when the order's customer name or phone matches a customer. */
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
     status: text("status").$type<OrderStatus>().notNull().default("pending"),
     /** manual | import | api | feed:<name> */
     source: text("source").notNull().default("manual"),
@@ -118,6 +153,7 @@ export const orders = pgTable(
   (t) => [
     uniqueIndex("orders_number_date_uq").on(t.orderNumber, t.deliveryDate),
     index("orders_date_idx").on(t.deliveryDate),
+    index("orders_customer_idx").on(t.customerId),
   ],
 );
 
@@ -268,6 +304,10 @@ export const deliveryEvents = pgTable(
     reason: text("reason"),
     recipient: text("recipient"),
     note: text("note"),
+    /** Where the phone was when the driver confirmed the outcome (fresh high-accuracy fix). */
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    accuracyM: real("accuracy_m"),
     createdAt: createdAt(),
   },
   (t) => [index("delivery_events_order_idx").on(t.orderId)],
@@ -363,3 +403,164 @@ export const orderFeeds = pgTable("order_feeds", {
   lastResult: jsonb("last_result").$type<FeedResult>(),
   createdAt: createdAt(),
 });
+
+export type EnquiryStatus = "new" | "contacted" | "closed";
+
+/** Messages sent from the contact form on the public website. */
+export const enquiries = pgTable(
+  "enquiries",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    business: text("business"),
+    email: text("email").notNull(),
+    phone: text("phone"),
+    suburb: text("suburb"),
+    message: text("message").notNull(),
+    status: text("status").$type<EnquiryStatus>().notNull().default("new"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("enquiries_created_idx").on(t.createdAt)],
+);
+
+// ---------------------------------------------------------------------------
+// Online shop
+// ---------------------------------------------------------------------------
+
+export const products = pgTable(
+  "products",
+  {
+    id: id(),
+    sku: text("sku").notNull().unique(),
+    barcode: text("barcode"),
+    name: text("name").notNull(),
+    category: text("category").notNull().default("Other"),
+    description: text("description").notNull().default(""),
+    /** e.g. "10 kg / carton", "1000 pcs / carton". */
+    packSize: text("pack_size").notNull().default(""),
+    unit: text("unit").notNull().default("carton"),
+    /** List price per unit in cents, ex GST. Customers can have their own price. */
+    priceCents: integer("price_cents").notNull(),
+    gst: boolean("gst").notNull().default(true),
+    minQty: integer("min_qty").notNull().default(1),
+    /** On hand, not yet reserved by an order. Reserved when an order is placed, given back if it's cancelled. */
+    stock: integer("stock").notNull().default(0),
+    image: bytea("image"),
+    imageMime: text("image_mime"),
+    featured: boolean("featured").notNull().default(false),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [index("products_category_idx").on(t.category)],
+);
+
+/** Customer-specific price for one product, in cents ex GST. */
+export const customerPrices = pgTable(
+  "customer_prices",
+  {
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    priceCents: integer("price_cents").notNull(),
+  },
+  (t) => [uniqueIndex("customer_prices_uq").on(t.customerId, t.productId)],
+);
+
+export const customerAddresses = pgTable("customer_addresses", {
+  id: id(),
+  customerId: uuid("customer_id")
+    .notNull()
+    .references(() => customers.id, { onDelete: "cascade" }),
+  label: text("label").notNull().default(""),
+  recipient: text("recipient").notNull().default(""),
+  phone: text("phone"),
+  address: text("address").notNull(),
+  instructions: text("instructions"),
+  createdAt: createdAt(),
+});
+
+export const cartItems = pgTable(
+  "cart_items",
+  {
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    qty: integer("qty").notNull(),
+  },
+  (t) => [uniqueIndex("cart_items_uq").on(t.customerId, t.productId)],
+);
+
+export type SalesStatus = "pending" | "confirmed" | "cancelled";
+export type PaymentStatus = "unpaid" | "paid" | "failed" | "refunded";
+export type PaymentMethod = "card" | "bank_transfer" | "invoice";
+export type FulfilmentStatus = "new" | "picking" | "packed" | "loaded";
+
+export const salesOrderNo = pgSequence("sales_order_no", { startWith: 10001 });
+
+/**
+ * A purchase from the shop. Order, payment and warehouse status are kept apart; delivery
+ * status comes from the linked delivery order (orders table) that the planner routes.
+ */
+export const salesOrders = pgTable(
+  "sales_orders",
+  {
+    id: id(),
+    number: text("number").notNull().unique(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    status: text("status").$type<SalesStatus>().notNull().default("pending"),
+    paymentStatus: text("payment_status").$type<PaymentStatus>().notNull().default("unpaid"),
+    paymentMethod: text("payment_method").$type<PaymentMethod>().notNull(),
+    fulfilment: text("fulfilment").$type<FulfilmentStatus>().notNull().default("new"),
+    subtotalCents: integer("subtotal_cents").notNull(),
+    deliveryFeeCents: integer("delivery_fee_cents").notNull(),
+    gstCents: integer("gst_cents").notNull(),
+    totalCents: integer("total_cents").notNull(),
+    deliveryDate: date("delivery_date", { mode: "string" }).notNull(),
+    recipient: text("recipient").notNull(),
+    phone: text("phone"),
+    address: text("address").notNull(),
+    instructions: text("instructions"),
+    windowStartMin: integer("window_start_min"),
+    windowEndMin: integer("window_end_min"),
+    notes: text("notes"),
+    /** Invoice due date for account customers. */
+    dueDate: date("due_date", { mode: "string" }),
+    deliveryOrderId: uuid("delivery_order_id").references(() => orders.id, { onDelete: "set null" }),
+    stripeSessionId: text("stripe_session_id"),
+    /** Sent with the checkout form so a double-click or retry can't place the order twice. */
+    idempotencyKey: text("idempotency_key").notNull().unique(),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("sales_orders_customer_idx").on(t.customerId), index("sales_orders_created_idx").on(t.createdAt)],
+);
+
+export const salesOrderItems = pgTable(
+  "sales_order_items",
+  {
+    id: id(),
+    salesOrderId: uuid("sales_order_id")
+      .notNull()
+      .references(() => salesOrders.id, { onDelete: "cascade" }),
+    productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+    sku: text("sku").notNull(),
+    name: text("name").notNull(),
+    packSize: text("pack_size").notNull(),
+    unit: text("unit").notNull(),
+    unitPriceCents: integer("unit_price_cents").notNull(),
+    qty: integer("qty").notNull(),
+    gst: boolean("gst").notNull(),
+    lineCents: integer("line_cents").notNull(),
+  },
+  (t) => [index("sales_order_items_order_idx").on(t.salesOrderId)],
+);

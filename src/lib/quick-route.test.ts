@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planSingleRoute, projectRemaining } from "./quick-route";
+import { parseAddressList, planSingleRoute, projectRemaining } from "./quick-route";
 
 /** Points on a line: travel time = |a - b| × 60 s, distance = |a - b| × 1000 m. */
 function lineMatrix(xs: number[]) {
@@ -84,5 +84,24 @@ describe("projectRemaining", () => {
   it("never puts the next arrival in the past", () => {
     // Left at 1000, should have arrived at 1600, but it is 2000 and still not there.
     expect(projectRemaining(stops, 1000, 2000).map((s) => s.arrivalS)).toEqual([2000, 2600]);
+  });
+});
+
+describe("parseAddressList", () => {
+  it("drops list markers but keeps street numbers", () => {
+    const { addresses } = parseAddressList("1. 12 Mains Rd, Sunnybank\n2) 3/40 Logan Rd\n- 7 Queen St\n• 100 Eagle St\n12 Mains Rd North");
+    expect(addresses).toEqual(["12 Mains Rd, Sunnybank", "3/40 Logan Rd", "7 Queen St", "100 Eagle St", "12 Mains Rd North"]);
+  });
+
+  it("joins spreadsheet cells and skips blank lines", () => {
+    const { addresses } = parseAddressList("12 Mains Rd\tSunnybank\t4109\n\n  \n\t\n2 Clunies Ross Ct\tEight Mile Plains");
+    expect(addresses).toEqual(["12 Mains Rd, Sunnybank, 4109", "2 Clunies Ross Ct, Eight Mile Plains"]);
+  });
+
+  it("keeps a repeated address once, ignoring case and spacing", () => {
+    expect(parseAddressList("12 Mains Rd, Sunnybank\n12  mains rd sunnybank\n7 Queen St")).toEqual({
+      addresses: ["12 Mains Rd, Sunnybank", "7 Queen St"],
+      duplicates: 1,
+    });
   });
 });

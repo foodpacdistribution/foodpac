@@ -109,7 +109,37 @@ export function planSingleRoute(matrix: Matrix, opts: QuickPlanOptions): QuickPl
   };
 }
 
-export type TimedStop = { legDurationS: number; arrivalS: number; departureS: number };
+/**
+ * Turns pasted text into one address per line. Drivers paste from notes, chats and
+ * spreadsheets, so list markers ("1.", "2)", "-", "•") are dropped, spreadsheet cells
+ * (tabs) are joined with commas, and repeated addresses are kept once.
+ */
+export function parseAddressList(text: string): { addresses: string[]; duplicates: number } {
+  const seen = new Set<string>();
+  const addresses: string[] = [];
+  let duplicates = 0;
+  for (const line of text.split(/\r?\n/)) {
+    const address = line
+      .split("\t")
+      .map((cell) => cell.trim())
+      .filter(Boolean)
+      .join(", ")
+      .replace(/^(\d{1,2}[.)]|[-*•·])\s+/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!address) continue;
+    const key = address.toLowerCase().replace(/[\s,]+/g, " ");
+    if (seen.has(key)) {
+      duplicates++;
+      continue;
+    }
+    seen.add(key);
+    addresses.push(address);
+  }
+  return { addresses, duplicates };
+}
+
+export type TimedStop ={ legDurationS: number; arrivalS: number; departureS: number };
 
 /**
  * Re-times the stops still to do from when the driver actually left the last

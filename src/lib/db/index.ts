@@ -39,8 +39,9 @@ async function init(): Promise<DB> {
   await migrate(lite, { migrationsFolder: "drizzle" });
   const db = lite as unknown as DB;
   await ensureSettingsRow(db);
-  const { seedDemo } = await import("./seed");
+  const { seedDemo, seedShopDemo } = await import("./seed");
   await seedDemo(db);
+  await seedShopDemo(db);
   return db;
 }
 

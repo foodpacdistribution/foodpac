@@ -1,20 +1,20 @@
 "use client";
 
-import { CheckCircle2, Clock, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, Zap } from "lucide-react";
+import { CheckCircle2, Clock, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, UserRound, Warehouse, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useCallback, useEffect, useState, useTransition } from "react";
 import { logout } from "@/app/actions/auth";
 import { markDelivered, markFailed, startRoute } from "@/app/actions/driver";
-import { FormError, Modal, SubmitButton } from "@/components/client-ui";
+import { FormError, Modal, SubmitButton, Toast, type ToastMessage } from "@/components/client-ui";
 import { DeliveryMap, type MapStop } from "@/components/map";
-import { Badge, btn, cx, Field, inputCls } from "@/components/ui";
+import { Badge, btn, cx, Field, inputCls, Spinner } from "@/components/ui";
 import { prettyDate } from "@/lib/dates";
 import { FAILURE_REASONS, multiStopNavigation, navigationUrls } from "@/lib/orders";
 import type { RouteView, StopView } from "@/lib/planning";
 import { formatClock, formatMinutesClock } from "@/lib/time";
 import { PhotoCapture, SignaturePad } from "./proof-inputs";
-import { readSharePref, useLocationSharing, writeSharePref } from "./use-location-sharing";
+import { readSharePref, useBestFix, useLocationSharing, writeSharePref } from "./use-location-sharing";
 
 type Props = {
   name: string;
@@ -37,9 +37,12 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
   const [sharePref, setSharePref] = useState(readSharePref);
   const sharing = useLocationSharing(route?.status === "in_progress" && sharePref);
   const [pending, startTransition] = useTransition();
-  const [sheet, setSheet] = useState<null | "delivered" | "failed">(null);
+  // The stop the sheet was opened for. Saving refreshes the route, so `current` can already be the next stop by the time it's done.
+  const [sheet, setSheet] = useState<null | { kind: "delivered" | "failed"; stopId: string; name: string }>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(false);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const clearToast = useCallback(() => setToast(null), []);
 
   // Keep the list fresh if the dispatcher re-plans while the driver is out.
   useEffect(() => {
@@ -51,6 +54,14 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
   const pendingStops = stops.filter((s) => s.status === "pending");
   const doneCount = stops.length - pendingStops.length;
   const current: StopView | undefined = pendingStops.find((s) => s.id === selectedId) ?? pendingStops[0];
+  const openSheet = (kind: "delivered" | "failed") =>
+    current && setSheet({ kind, stopId: current.id, name: current.order.customerName || current.order.orderNumber });
+  const finishSheet = (t: Omit<ToastMessage, "id">) => {
+    setSheet(null);
+    setSelectedId(null);
+    setToast({ id: Date.now(), ...t });
+    router.refresh();
+  };
   const delay = current ? Math.max(0, nowS - current.etaS) : 0;
   // A planned depot reload sits between the previous stop and this one.
   const reloadBefore = current && route ? route.reloads.find((r) => r.afterSeq === current.seq - 1) : undefined;
@@ -79,6 +90,9 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
         <div className="flex gap-2">
           <Link href="/quick-route" className="flex h-9 items-center gap-1.5 rounded-full bg-white/10 px-3 text-xs font-medium text-slate-200">
             <Zap className="size-3.5" /> Quick route
+          </Link>
+          <Link href="/account" className="grid size-9 place-items-center rounded-full bg-white/10 text-slate-300" aria-label="Profile & password">
+            <UserRound className="size-4" />
           </Link>
           <form action={logout}>
             <button className="grid size-9 place-items-center rounded-full bg-white/10 text-slate-300" aria-label="Sign out">
@@ -164,19 +178,19 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
           />
         )}
 
-        {route.status === "planned" && (
-          <button
-            className={btn("primary", "lg", "w-full rounded-2xl")}
-            disabled={pending}
-            onClick={() => startTransition(async () => (await startRoute(route.id), router.refresh()))}
-          >
-            <PlayCircle className="size-5" /> {pending ? "Starting…" : "Start today's route"}
-          </button>
+        {route.status === "planned" && current && (
+          <p className="flex items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <PlayCircle className="size-5 shrink-0 text-blue-600" />
+            <span>
+              Tap <strong>Start route &amp; navigate</strong> when you set off. Dispatch will see you&apos;re on the road.
+            </span>
+          </p>
         )}
 
         {/* Next delivery */}
         {current ? (
-          <section className="overflow-hidden rounded-2xl bg-white shadow-card">
+          // Keyed by stop so the next delivery visibly slides in after one is finished.
+          <section key={current.id} className="animate-rise overflow-hidden rounded-2xl bg-white shadow-card">
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
                 {current.id === pendingStops[0]?.id ? "Next delivery" : "Selected stop"} · Stop {current.seq}
@@ -209,8 +223,15 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
                 </p>
               )}
               <div className="grid grid-cols-[1fr_auto] gap-2">
-                <a href={navigationUrls(current.order.lat, current.order.lng).google} target="_blank" rel="noreferrer" className={btn("primary", "lg", "rounded-xl")}>
-                  <Navigation className="size-5" /> Start navigation
+                <a
+                  href={navigationUrls(current.order.lat, current.order.lng).google}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={btn("primary", "lg", "rounded-xl")}
+                  // Setting off is when the route starts: one tap instead of a separate "Start" step.
+                  onClick={() => route.status === "planned" && startTransition(async () => (await startRoute(route.id), router.refresh()))}
+                >
+                  {pending ? <Spinner className="size-5" /> : <Navigation className="size-5" />} {route.status === "planned" ? (pending ? "Starting…" : "Start route & navigate") : "Navigate"}
                 </a>
                 {current.order.phone && (
                   <a href={`tel:${current.order.phone.replace(/\s+/g, "")}`} className={btn("secondary", "lg", "rounded-xl px-4")} aria-label="Call customer">
@@ -218,19 +239,21 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
                   </a>
                 )}
               </div>
-              {multiNav && (
-                <a href={multiNav.url} target="_blank" rel="noreferrer" className={btn("secondary", "md", "w-full rounded-xl")}>
-                  <Route className="size-4" /> Google Maps: next {multiNav.count} stops in order
+              <p className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                <a href={navigationUrls(current.order.lat, current.order.lng).apple} target="_blank" rel="noreferrer" className="underline">
+                  Use Apple Maps
                 </a>
-              )}
-              <a href={navigationUrls(current.order.lat, current.order.lng).apple} target="_blank" rel="noreferrer" className="block text-center text-xs text-slate-500 underline">
-                Open in Apple Maps instead
-              </a>
+                {multiNav && (
+                  <a href={multiNav.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 underline">
+                    <Route className="size-3.5" /> Next {multiNav.count} stops in Google Maps
+                  </a>
+                )}
+              </p>
               <div className="grid grid-cols-2 gap-2 border-t border-line pt-3">
-                <button className={btn("success", "lg", "rounded-xl")} onClick={() => setSheet("delivered")}>
+                <button className={btn("success", "lg", "rounded-xl")} onClick={() => openSheet("delivered")}>
                   <CheckCircle2 className="size-5" /> Delivered
                 </button>
-                <button className={btn("danger", "lg", "rounded-xl")} onClick={() => setSheet("failed")}>
+                <button className={btn("danger", "lg", "rounded-xl")} onClick={() => openSheet("failed")}>
                   <TriangleAlert className="size-5" /> Problem
                 </button>
               </div>
@@ -238,7 +261,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
           </section>
         ) : (
           <section className="rounded-2xl bg-white p-8 text-center shadow-card">
-            <CheckCircle2 className="mx-auto size-12 text-emerald-500" />
+            <CheckCircle2 className="mx-auto size-12 animate-check text-emerald-500" />
             <p className="mt-3 text-lg font-semibold">All stops completed</p>
             <p className="mt-1 text-sm text-slate-500">Great work today. Drive safely back to {depot?.name ?? "the depot"}.</p>
           </section>
@@ -337,22 +360,21 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
         </section>
       </main>
 
-      {current && (
-        <>
-          <Modal open={sheet === "delivered"} onClose={() => setSheet(null)} title="Confirm delivery">
-            <OutcomeForm
-              kind="delivered"
-              stopId={current.id}
-              requirePhoto={requirePhoto}
-              requireSignature={requireSignature}
-              onDone={() => (setSheet(null), setSelectedId(null), router.refresh())}
-            />
-          </Modal>
-          <Modal open={sheet === "failed"} onClose={() => setSheet(null)} title="Report a delivery problem">
-            <OutcomeForm kind="failed" stopId={current.id} onDone={() => (setSheet(null), setSelectedId(null), router.refresh())} />
-          </Modal>
-        </>
-      )}
+      <Modal open={sheet?.kind === "delivered"} onClose={() => setSheet(null)} title="Confirm delivery">
+        {sheet && (
+          <OutcomeForm
+            kind="delivered"
+            stopId={sheet.stopId}
+            requirePhoto={requirePhoto}
+            requireSignature={requireSignature}
+            onDone={() => finishSheet({ tone: "ok", text: `Delivered · ${sheet.name}` })}
+          />
+        )}
+      </Modal>
+      <Modal open={sheet?.kind === "failed"} onClose={() => setSheet(null)} title="Report a delivery problem">
+        {sheet && <OutcomeForm kind="failed" stopId={sheet.stopId} onDone={() => finishSheet({ tone: "warn", text: `Problem reported · ${sheet.name}` })} />}
+      </Modal>
+      <Toast toast={toast} onDone={clearToast} />
     </div>
   );
 }
@@ -419,6 +441,7 @@ function OutcomeForm({
   const [state, action] = useActionState(kind === "delivered" ? markDelivered : markFailed, undefined);
   const [photo, setPhoto] = useState<File | null>(null);
   const [signature, setSignature] = useState<File | null>(null);
+  const fix = useBestFix();
   useEffect(() => {
     if (state?.ok) onDone();
   }, [state, onDone]);
@@ -429,6 +452,11 @@ function OutcomeForm({
         // Images live in component state (resized / drawn), so attach them here.
         if (photo) fd.set("photo", photo);
         if (signature) fd.set("signature", signature);
+        if (fix) {
+          fd.set("lat", String(fix.lat));
+          fd.set("lng", String(fix.lng));
+          fd.set("accuracy", String(fix.accuracy));
+        }
         return action(fd);
       }}
       className="space-y-4"
@@ -459,6 +487,10 @@ function OutcomeForm({
       <Field label="Note (optional)">
         <textarea name="note" rows={2} className={cx(inputCls, "h-auto py-2 text-base")} />
       </Field>
+      <p className={cx("flex items-center gap-1.5 text-xs", fix && fix.accuracy <= 30 ? "text-emerald-700" : "text-slate-500")}>
+        {fix ? <LocateFixed className="size-3.5" /> : <Spinner className="size-3" />}
+        {fix ? `Location recorded with this delivery · ±${Math.round(fix.accuracy)} m` : "Getting your exact location…"}
+      </p>
       <FormError message={state && !state.ok ? state.error : null} />
       <SubmitButton disabled={missing} variant={kind === "delivered" ? "success" : "primary"} size="lg" className="w-full rounded-xl" pendingText="Uploading…">
         {kind === "delivered" ? "Confirm delivered" : "Report problem"}

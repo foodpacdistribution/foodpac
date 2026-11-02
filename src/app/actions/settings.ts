@@ -11,6 +11,7 @@ import { apiKeys, depots, orderFeeds, settings, users } from "@/lib/db/schema";
 import { geocodeAddress } from "@/lib/geo/geocode";
 import { createApiKey, geocodeOrderIds, runFeed } from "@/lib/sync";
 import { getSettings, UserError } from "@/lib/planning";
+import { parseDollars } from "@/lib/money";
 import { inputToMinutes } from "@/lib/time";
 
 export async function saveSettings(_prev: unknown, form: FormData) {
@@ -48,7 +49,7 @@ export async function saveSettings(_prev: unknown, form: FormData) {
       })
       .where(eq(settings.id, 1));
     const message = "Settings saved";
-    revalidatePath("/", "layout");
+    revalidatePath("/admin", "layout");
     return { message };
   });
 }
@@ -67,7 +68,7 @@ export async function createStaffUser(_prev: unknown, form: FormData) {
     const [exists] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (exists) throw new UserError("That email already has a login.");
     await db.insert(users).values({ email, name, role, passwordHash: await hashPassword(password) });
-    revalidatePath("/settings");
+    revalidatePath("/admin/settings");
     return { message: `Login created for ${name}` };
   });
 }
@@ -77,7 +78,7 @@ export async function deleteUser(userId: string) {
     const me = await assertUser(["admin"]);
     if (me.id === userId) throw new UserError("You can't remove your own login.");
     await (await getDb()).delete(users).where(eq(users.id, userId));
-    revalidatePath("/settings");
+    revalidatePath("/admin/settings");
     return { message: "Login removed" };
   });
 }
@@ -106,7 +107,7 @@ export async function saveDepot(_prev: unknown, form: FormData) {
     }
     if (id) await db.update(depots).set({ name, address, active, ...coords }).where(eq(depots.id, id));
     else await db.insert(depots).values({ name, address, active, ...coords });
-    revalidatePath("/", "layout");
+    revalidatePath("/admin", "layout");
     return { message };
   });
 }
@@ -120,7 +121,7 @@ export async function createKey(name: string) {
     await assertUser(["admin"]);
     if (!name.trim()) throw new UserError("Give the key a name, e.g. the system that will use it.");
     const key = await createApiKey(await getDb(), name.trim().slice(0, 60));
-    revalidatePath("/settings");
+    revalidatePath("/admin/settings");
     return { data: key, message: "Key created. Copy it now — it won't be shown again." };
   });
 }
@@ -129,7 +130,7 @@ export async function revokeKey(id: string) {
   return attempt(async () => {
     await assertUser(["admin"]);
     await (await getDb()).update(apiKeys).set({ revokedAt: new Date() }).where(eq(apiKeys.id, id));
-    revalidatePath("/settings");
+    revalidatePath("/admin/settings");
     return { message: "Key revoked" };
   });
 }
@@ -170,7 +171,7 @@ export async function saveFeed(_prev: unknown, form: FormData) {
     };
     if (id) await db.update(orderFeeds).set(values).where(eq(orderFeeds.id, id));
     else await db.insert(orderFeeds).values(values);
-    revalidatePath("/settings");
+    revalidatePath("/admin/settings");
     return { message: id ? "Feed updated" : "Feed added" };
   });
 }
@@ -179,7 +180,7 @@ export async function deleteFeed(id: string) {
   return attempt(async () => {
     await assertUser(["admin"]);
     await (await getDb()).delete(orderFeeds).where(eq(orderFeeds.id, id));
-    revalidatePath("/settings");
+    revalidatePath("/admin/settings");
     return { message: "Feed removed" };
   });
 }
@@ -191,9 +192,40 @@ export async function syncFeedNow(id: string) {
     const s = await getSettings(db);
     const r = await runFeed(db, id, s.timezone);
     if (r.geocodeIds.length) after(() => geocodeOrderIds(db, r.geocodeIds));
-    revalidatePath("/settings");
-    revalidatePath("/orders");
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/orders");
     if (!r.ok) throw new UserError(`Sync failed: ${r.message}`);
     return { message: `Synced: ${r.inserted} new, ${r.updated} updated, ${r.skipped} locked (already planned) · ${r.message}` };
+  });
+}
+
+/** Online shop: delivery fee, free-delivery threshold, minimum order, order cut-off, delivery days, bank details. */
+export async function saveShopSettings(_prev: unknown, form: FormData) {
+  return attempt(async () => {
+    await assertUser(["admin"]);
+    const db = await getDb();
+    const get = (k: string) => String(form.get(k) ?? "").trim();
+    const dollars = (k: string, label: string) => {
+      const v = parseDollars(get(k) || "0");
+      if (v === null) throw new UserError(`${label} must be an amount, e.g. 15.`);
+      return v;
+    };
+    const cutoff = inputToMinutes(get("orderCutoff"));
+    if (cutoff === null) throw new UserError("Enter the order cut-off time.");
+    const deliveryDays = form.getAll("deliveryDays").map(Number).filter((d) => d >= 1 && d <= 7);
+    if (!deliveryDays.length) throw new UserError("Pick at least one delivery day.");
+    await db
+      .update(settings)
+      .set({
+        deliveryFeeCents: dollars("deliveryFee", "Delivery fee"),
+        freeDeliveryOverCents: dollars("freeDeliveryOver", "Free delivery threshold"),
+        minOrderCents: dollars("minOrder", "Minimum order"),
+        orderCutoffMin: cutoff,
+        deliveryDays,
+        bankDetails: get("bankDetails").slice(0, 1000),
+      })
+      .where(eq(settings.id, 1));
+    revalidatePath("/admin/settings");
+    return { message: "Shop settings saved" };
   });
 }

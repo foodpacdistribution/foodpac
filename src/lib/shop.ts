@@ -1,0 +1,393 @@
+import "server-only";
+import { and, asc, desc, eq, gte, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import type { DB } from "./db";
+import {
+  cartItems,
+  customerPrices,
+  customers,
+  orders,
+  type PaymentMethod,
+  products,
+  routeStops,
+  salesOrderItems,
+  salesOrderNo,
+  salesOrders,
+  type settings,
+} from "./db/schema";
+import { shiftDate } from "./dates";
+import { GST_RATE } from "./money";
+import { UserError } from "./planning";
+import { nowSecondsIn, todayIn } from "./time";
+
+type Settings = typeof settings.$inferSelect;
+export type Customer = typeof customers.$inferSelect;
+
+// Every price a customer sees or pays is worked out here on the server from their
+// own price list, never taken from the browser.
+
+export type CatalogItem = {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  description: string;
+  packSize: string;
+  unit: string;
+  minQty: number;
+  stock: number;
+  hasImage: boolean;
+  featured: boolean;
+  gst: boolean;
+  /** null when the viewer can't see prices (signed out or not approved yet). */
+  priceCents: number | null;
+  listPriceCents: number | null;
+};
+
+/** Prices are shown only to signed-in, approved, active customers. */
+export const canSeePrices = (c: Customer | null) => !!c && c.approved && c.active;
+
+const catalogColumns = {
+  id: products.id,
+  sku: products.sku,
+  name: products.name,
+  category: products.category,
+  description: products.description,
+  packSize: products.packSize,
+  unit: products.unit,
+  minQty: products.minQty,
+  stock: products.stock,
+  hasImage: sql<boolean>`${products.image} is not null`,
+  featured: products.featured,
+  gst: products.gst,
+  priceCents: products.priceCents,
+};
+
+async function withPrices(db: DB, rows: (Omit<CatalogItem, "listPriceCents" | "priceCents"> & { priceCents: number })[], customer: Customer | null): Promise<CatalogItem[]> {
+  if (!canSeePrices(customer)) return rows.map((r) => ({ ...r, priceCents: null, listPriceCents: null }));
+  const own = rows.length
+    ? await db
+        .select()
+        .from(customerPrices)
+        .where(and(eq(customerPrices.customerId, customer!.id), inArray(customerPrices.productId, rows.map((r) => r.id))))
+    : [];
+  return rows.map((r) => ({ ...r, listPriceCents: r.priceCents, priceCents: own.find((p) => p.productId === r.id)?.priceCents ?? r.priceCents }));
+}
+
+export async function listCatalog(db: DB, customer: Customer | null, opts: { q?: string; category?: string; featured?: boolean; limit?: number } = {}) {
+  const q = opts.q?.trim();
+  const where = [eq(products.active, true)];
+  if (opts.category) where.push(eq(products.category, opts.category));
+  if (opts.featured) where.push(eq(products.featured, true));
+  if (q) {
+    const like = `%${q.replace(/[%_]/g, "")}%`;
+    where.push(or(ilike(products.name, like), ilike(products.sku, like), ilike(products.barcode, like), ilike(products.description, like))!);
+  }
+  const rows = await db
+    .select(catalogColumns)
+    .from(products)
+    .where(and(...where))
+    .orderBy(asc(products.category), asc(products.name))
+    .limit(opts.limit ?? 200);
+  return withPrices(db, rows, customer);
+}
+
+export async function getProductBySku(db: DB, customer: Customer | null, sku: string) {
+  const [row] = await db
+    .select(catalogColumns)
+    .from(products)
+    .where(and(eq(products.active, true), eq(products.sku, sku)))
+    .limit(1);
+  return row ? (await withPrices(db, [row], customer))[0] : null;
+}
+
+export async function listCategories(db: DB) {
+  return db
+    .select({ name: products.category, n: sql<number>`count(*)::int` })
+    .from(products)
+    .where(eq(products.active, true))
+    .groupBy(products.category)
+    .orderBy(asc(products.category));
+}
+
+/** Products this customer bought before, most recent first. */
+export async function recentlyBought(db: DB, customer: Customer, limit = 8) {
+  const rows = await db
+    .select({ productId: salesOrderItems.productId, last: sql<string>`max(${salesOrders.createdAt})` })
+    .from(salesOrderItems)
+    .innerJoin(salesOrders, eq(salesOrders.id, salesOrderItems.salesOrderId))
+    .where(and(eq(salesOrders.customerId, customer.id), ne(salesOrders.status, "cancelled")))
+    .groupBy(salesOrderItems.productId)
+    .orderBy(desc(sql`max(${salesOrders.createdAt})`))
+    .limit(limit);
+  const ids = rows.map((r) => r.productId).filter((x): x is string => !!x);
+  if (!ids.length) return [];
+  const items = await db
+    .select(catalogColumns)
+    .from(products)
+    .where(and(eq(products.active, true), inArray(products.id, ids)));
+  const priced = await withPrices(db, items, customer);
+  return ids.map((id) => priced.find((p) => p.id === id)).filter((x): x is CatalogItem => !!x);
+}
+
+// ---------------------------------------------------------------------------
+// Cart
+// ---------------------------------------------------------------------------
+
+export type CartLine = CatalogItem & { qty: number; lineCents: number; issue: string | null };
+
+export async function getCart(db: DB, customer: Customer) {
+  const rows = await db.select().from(cartItems).where(eq(cartItems.customerId, customer.id));
+  if (!rows.length) return [] as CartLine[];
+  const items = await db
+    .select({ ...catalogColumns, active: products.active })
+    .from(products)
+    .where(inArray(products.id, rows.map((r) => r.productId)))
+    .orderBy(asc(products.name));
+  const priced = await withPrices(db, items, customer);
+  return priced.map((p): CartLine => {
+    const qty = rows.find((r) => r.productId === p.id)!.qty;
+    const active = items.find((i) => i.id === p.id)!.active;
+    const issue = !active
+      ? "No longer available"
+      : p.stock <= 0
+        ? "Out of stock"
+        : qty > p.stock
+          ? `Only ${p.stock} in stock`
+          : qty < p.minQty
+            ? `Minimum order is ${p.minQty}`
+            : null;
+    return { ...p, qty, lineCents: (p.priceCents ?? 0) * qty, issue };
+  });
+}
+
+export type Quote = { subtotalCents: number; deliveryFeeCents: number; gstCents: number; totalCents: number; belowMinimum: boolean };
+
+/** Totals for a cart: subtotal ex GST, delivery fee (free above the threshold), GST on taxable lines and delivery. */
+export function quote(lines: { lineCents: number; gst: boolean }[], s: Settings): Quote {
+  const subtotalCents = lines.reduce((t, l) => t + l.lineCents, 0);
+  const deliveryFeeCents = subtotalCents === 0 || (s.freeDeliveryOverCents > 0 && subtotalCents >= s.freeDeliveryOverCents) ? 0 : s.deliveryFeeCents;
+  const taxable = lines.filter((l) => l.gst).reduce((t, l) => t + l.lineCents, 0) + deliveryFeeCents;
+  const gstCents = Math.round(taxable * GST_RATE);
+  return { subtotalCents, deliveryFeeCents, gstCents, totalCents: subtotalCents + deliveryFeeCents + gstCents, belowMinimum: subtotalCents < s.minOrderCents };
+}
+
+/** The next delivery days a customer can choose: after today's cut-off, only on delivery weekdays. */
+export function deliveryDates(s: Settings, count = 10, now = new Date()) {
+  const today = todayIn(s.timezone, now);
+  const first = nowSecondsIn(s.timezone, now) < s.orderCutoffMin * 60 ? 1 : 2;
+  const out: string[] = [];
+  for (let d = first; out.length < count && d < 60; d++) {
+    const date = shiftDate(today, d);
+    const iso = ((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+    if (s.deliveryDays.includes(iso)) out.push(date);
+  }
+  return out;
+}
+
+export function allowedMethods(c: Customer, stripeOn: boolean): PaymentMethod[] {
+  const m: PaymentMethod[] = [];
+  if (stripeOn) m.push("card");
+  m.push("bank_transfer");
+  if (c.paymentTerms !== "prepay") m.push("invoice");
+  return m;
+}
+
+/** Unpaid balance on open invoice orders, for the credit limit check. */
+export async function openBalance(db: DB, customerId: string) {
+  const [r] = await db
+    .select({ n: sql<number>`coalesce(sum(${salesOrders.totalCents}), 0)::int` })
+    .from(salesOrders)
+    .where(and(eq(salesOrders.customerId, customerId), ne(salesOrders.status, "cancelled"), eq(salesOrders.paymentStatus, "unpaid")));
+  return r.n;
+}
+
+// ---------------------------------------------------------------------------
+// Placing and cancelling orders
+// ---------------------------------------------------------------------------
+
+export type Checkout = {
+  idempotencyKey: string;
+  method: PaymentMethod;
+  deliveryDate: string;
+  recipient: string;
+  phone: string | null;
+  address: string;
+  instructions: string | null;
+  windowStartMin: number | null;
+  windowEndMin: number | null;
+  notes: string | null;
+};
+
+const dueIn = { prepay: 0, net7: 7, net14: 14, net30: 30 } as const;
+
+/**
+ * Creates the order in one transaction: re-prices the cart, reserves stock with a
+ * conditional update (so two customers can't buy the last carton), writes the order and
+ * clears the cart. Card orders stay pending until Stripe confirms payment; the others are
+ * confirmed straight away and go to the planner.
+ */
+export async function placeOrder(db: DB, customer: Customer, userId: string, c: Checkout, s: Settings, stripeOn: boolean) {
+  const [existing] = await db.select().from(salesOrders).where(eq(salesOrders.idempotencyKey, c.idempotencyKey)).limit(1);
+  if (existing) return existing;
+
+  if (!canSeePrices(customer)) throw new UserError("Your account is waiting for approval. We'll email you once you can order.");
+  if (!allowedMethods(customer, stripeOn).includes(c.method)) throw new UserError("That payment method isn't available on your account.");
+  if (!deliveryDates(s).includes(c.deliveryDate)) throw new UserError("Choose one of the available delivery days.");
+
+  const lines = await getCart(db, customer);
+  if (!lines.length) throw new UserError("Your cart is empty.");
+  const problem = lines.find((l) => l.issue);
+  if (problem) throw new UserError(`${problem.name}: ${problem.issue}.`);
+  const totals = quote(lines, s);
+  if (totals.belowMinimum) throw new UserError(`The minimum order is $${(s.minOrderCents / 100).toFixed(2)} before GST.`);
+
+  if (c.method === "invoice" && customer.creditLimitCents !== null) {
+    const balance = await openBalance(db, customer.id);
+    if (balance + totals.totalCents > customer.creditLimitCents) {
+      throw new UserError("This order would go over your account's credit limit. Please pay by card or bank transfer, or contact us.");
+    }
+  }
+
+  const order = await db.transaction(async (tx) => {
+    for (const l of lines) {
+      const ok = await tx
+        .update(products)
+        .set({ stock: sql`${products.stock} - ${l.qty}` })
+        .where(and(eq(products.id, l.id), eq(products.active, true), gte(products.stock, l.qty)))
+        .returning({ id: products.id });
+      if (!ok.length) throw new UserError(`${l.name} just sold out. Please update your cart.`);
+    }
+    const confirmed = c.method !== "card";
+    const [so] = await tx
+      .insert(salesOrders)
+      .values({
+        number: sql`'FP-' || nextval('${sql.raw(salesOrderNo.seqName!)}')`,
+        customerId: customer.id,
+        userId,
+        status: confirmed ? "confirmed" : "pending",
+        paymentStatus: "unpaid",
+        paymentMethod: c.method,
+        subtotalCents: totals.subtotalCents,
+        deliveryFeeCents: totals.deliveryFeeCents,
+        gstCents: totals.gstCents,
+        totalCents: totals.totalCents,
+        deliveryDate: c.deliveryDate,
+        recipient: c.recipient,
+        phone: c.phone,
+        address: c.address,
+        instructions: c.instructions,
+        windowStartMin: c.windowStartMin,
+        windowEndMin: c.windowEndMin,
+        notes: c.notes,
+        dueDate: c.method === "invoice" ? shiftDate(c.deliveryDate, dueIn[customer.paymentTerms]) : null,
+        idempotencyKey: c.idempotencyKey,
+      })
+      .returning();
+    await tx.insert(salesOrderItems).values(
+      lines.map((l) => ({
+        salesOrderId: so.id,
+        productId: l.id,
+        sku: l.sku,
+        name: l.name,
+        packSize: l.packSize,
+        unit: l.unit,
+        unitPriceCents: l.priceCents!,
+        qty: l.qty,
+        gst: l.gst,
+        lineCents: l.lineCents,
+      })),
+    );
+    await tx.delete(cartItems).where(eq(cartItems.customerId, customer.id));
+    return confirmed ? { ...so, deliveryOrderId: await createDeliveryOrder(tx as unknown as DB, so, customer, lines) } : so;
+  });
+  return order;
+}
+
+/** The stop the planner routes. Same number as the sales order so drivers and customers see one reference. */
+async function createDeliveryOrder(db: DB, so: typeof salesOrders.$inferSelect, customer: Customer, lines?: { qty: number }[]) {
+  const qty = lines ? lines.reduce((t, l) => t + l.qty, 0) : await itemCount(db, so.id);
+  const [row] = await db
+    .insert(orders)
+    .values({
+      orderNumber: so.number,
+      deliveryDate: so.deliveryDate,
+      customerName: customer.name,
+      phone: so.phone,
+      address: so.address,
+      windowStartMin: so.windowStartMin,
+      windowEndMin: so.windowEndMin,
+      demand: Math.max(1, qty),
+      notes: [so.recipient && `Deliver to ${so.recipient}`, so.instructions].filter(Boolean).join(" · ") || null,
+      customerId: customer.id,
+      source: "shop",
+    })
+    .onConflictDoNothing()
+    .returning({ id: orders.id });
+  if (!row) return null;
+  await db.update(salesOrders).set({ deliveryOrderId: row.id }).where(eq(salesOrders.id, so.id));
+  return row.id;
+}
+
+async function itemCount(db: DB, salesOrderId: string) {
+  const [r] = await db
+    .select({ n: sql<number>`coalesce(sum(${salesOrderItems.qty}), 0)::int` })
+    .from(salesOrderItems)
+    .where(eq(salesOrderItems.salesOrderId, salesOrderId));
+  return r.n;
+}
+
+/** Card payment succeeded (Stripe webhook or return page). Safe to call more than once. */
+export async function markCardPaid(db: DB, salesOrderId: string) {
+  const [so] = await db.select().from(salesOrders).where(eq(salesOrders.id, salesOrderId)).limit(1);
+  if (!so || so.paymentStatus === "paid" || so.status === "cancelled") return so ?? null;
+  const [customer] = await db.select().from(customers).where(eq(customers.id, so.customerId)).limit(1);
+  const [updated] = await db
+    .update(salesOrders)
+    .set({ status: "confirmed", paymentStatus: "paid", paidAt: new Date() })
+    .where(and(eq(salesOrders.id, so.id), ne(salesOrders.paymentStatus, "paid")))
+    .returning();
+  if (updated && !updated.deliveryOrderId) await createDeliveryOrder(db, updated, customer);
+  return updated ?? so;
+}
+
+/** Confirms a pending order without payment (e.g. staff accept it). */
+export async function confirmOrder(db: DB, salesOrderId: string) {
+  const [so] = await db
+    .update(salesOrders)
+    .set({ status: "confirmed" })
+    .where(and(eq(salesOrders.id, salesOrderId), eq(salesOrders.status, "pending")))
+    .returning();
+  if (!so) return;
+  const [customer] = await db.select().from(customers).where(eq(customers.id, so.customerId)).limit(1);
+  if (!so.deliveryOrderId) await createDeliveryOrder(db, so, customer);
+}
+
+/**
+ * Cancels an order: gives the stock back and removes its delivery from the planner. Refused
+ * once the van has left or it's been delivered, because the goods are no longer in the warehouse.
+ */
+export async function cancelOrder(db: DB, salesOrderId: string) {
+  return db.transaction(async (tx) => {
+    const [so] = await tx.select().from(salesOrders).where(eq(salesOrders.id, salesOrderId)).limit(1);
+    if (!so) throw new UserError("Order not found.");
+    if (so.status === "cancelled") return so;
+    if (so.deliveryOrderId) {
+      const [d] = await tx.select({ status: orders.status }).from(orders).where(eq(orders.id, so.deliveryOrderId)).limit(1);
+      if (d && (d.status === "dispatched" || d.status === "delivered")) {
+        throw new UserError("This order is already out for delivery or delivered, so it can't be cancelled here.");
+      }
+      await tx.delete(routeStops).where(and(eq(routeStops.orderId, so.deliveryOrderId), eq(routeStops.status, "pending")));
+      await tx.delete(orders).where(eq(orders.id, so.deliveryOrderId));
+    }
+    const items = await tx.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id));
+    for (const it of items) {
+      if (it.productId) await tx.update(products).set({ stock: sql`${products.stock} + ${it.qty}` }).where(eq(products.id, it.productId));
+    }
+    const [updated] = await tx
+      .update(salesOrders)
+      .set({ status: "cancelled", cancelledAt: new Date(), deliveryOrderId: null })
+      .where(eq(salesOrders.id, so.id))
+      .returning();
+    return updated;
+  });
+}

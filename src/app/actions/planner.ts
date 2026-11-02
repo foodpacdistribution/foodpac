@@ -6,9 +6,9 @@ import { assertUser, STAFF } from "@/lib/auth/dal";
 import { applyManualEdit, type OptimiseInput, optimisePlan, setPlanDispatched, UserError } from "@/lib/planning";
 
 function revalidate() {
-  revalidatePath("/planner");
-  revalidatePath("/orders");
-  revalidatePath("/");
+  revalidatePath("/admin/planner");
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin");
   revalidatePath("/driver");
 }
 

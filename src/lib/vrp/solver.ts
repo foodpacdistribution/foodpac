@@ -82,27 +82,33 @@ export function solve(problem: Problem, opts: SolveOptions = {}): Solution {
   // 1pm window looks short and gets loaded with the whole afternoon.
   const finish = (e: RouteEval, v: number) => (e.jobIds.length ? e.end - vehicles[v].startTime : 0);
 
+  // The latest finish alone gives no reason to share work once something else fixes it
+  // (e.g. a 1pm window): one driver could then sit idle all day. The longest working day
+  // breaks that tie. Half weight, so it never buys balance with a later finish.
+  type Peaks = { finish: number; work: number };
+  const balanceCost = (p: Peaks) => balanceWeight * (p.finish + 0.5 * p.work);
+
   function totalCost(s: State) {
     let sum = 0;
-    let max = 0;
-    s.evals.forEach((e, v) => {
-      sum += e.cost;
-      max = Math.max(max, finish(e, v));
-    });
+    s.evals.forEach((e) => (sum += e.cost));
     for (const j of s.unassigned) sum += penalty(j);
-    return sum + balanceWeight * max;
+    return sum + balanceCost(currentPeaks(s));
   }
 
-  /** Latest finish across routes, with routes `skip` replaced by `extra` (same order). */
-  function maxFinishExcept(s: State, skip: number[], extra: Eval[]) {
-    let max = 0;
-    for (let v = 0; v < s.evals.length; v++) if (!skip.includes(v)) max = Math.max(max, finish(s.evals[v], v));
-    extra.forEach((e, k) => (max = Math.max(max, finish(e, skip[k]))));
-    return max;
+  /** Latest finish and longest working day across routes, with routes `skip` replaced by `extra` (same order). */
+  function peaksExcept(s: State, skip: number[], extra: Eval[]): Peaks {
+    const p = { finish: 0, work: 0 };
+    const add = (e: RouteEval, v: number) => {
+      p.finish = Math.max(p.finish, finish(e, v));
+      p.work = Math.max(p.work, e.duration);
+    };
+    for (let v = 0; v < s.evals.length; v++) if (!skip.includes(v)) add(s.evals[v], v);
+    extra.forEach((e, k) => add(e, skip[k]));
+    return p;
   }
 
-  function currentMax(s: State) {
-    return maxFinishExcept(s, [], []);
+  function currentPeaks(s: State) {
+    return peaksExcept(s, [], []);
   }
 
   // ---------- insertion ----------
@@ -132,7 +138,8 @@ export function solve(problem: Problem, opts: SolveOptions = {}): Solution {
 
     while (pending.size > 0) {
       if (Date.now() > deadline + 2000) break; // hard stop for huge inputs
-      const maxNow = currentMax(s);
+      const peaksNow = currentPeaks(s);
+      const balanceNow = balanceCost(peaksNow);
       let pick: { j: number; ins: Ins; regret: number; score: number } | null = null;
 
       for (const j of pending) {
@@ -141,7 +148,10 @@ export function solve(problem: Problem, opts: SolveOptions = {}): Solution {
         for (let v = 0; v < vehicles.length; v++) {
           if (row[v] === undefined) row[v] = bestInsertionInRoute(s, j, v);
           const ins = row[v];
-          if (ins) options.push({ ins, score: ins.delta + balanceWeight * Math.max(0, finish(ins.ev, v) - maxNow) });
+          if (ins) {
+            const peaks = { finish: Math.max(peaksNow.finish, finish(ins.ev, v)), work: Math.max(peaksNow.work, ins.ev.duration) };
+            options.push({ ins, score: ins.delta + balanceCost(peaks) - balanceNow });
+          }
         }
         if (options.length === 0) continue;
         options.sort((a, b) => a.score - b.score);
@@ -183,8 +193,8 @@ export function solve(problem: Problem, opts: SolveOptions = {}): Solution {
       newSum += evs[k].cost;
     }
     if (balanceWeight > 0) {
-      oldSum += balanceWeight * currentMax(s);
-      newSum += balanceWeight * maxFinishExcept(s, vs, evs);
+      oldSum += balanceCost(currentPeaks(s));
+      newSum += balanceCost(peaksExcept(s, vs, evs));
     }
     if (newSum < oldSum - 1e-6) {
       vs.forEach((v, k) => s.setRoute(v, seqs[k], evs[k]));
