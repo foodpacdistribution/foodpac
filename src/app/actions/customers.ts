@@ -1,13 +1,13 @@
 "use server";
 
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { hashPassword } from "@/lib/auth/password";
 import { linkOrdersToCustomer } from "@/lib/customers";
 import { getDb } from "@/lib/db";
-import { customers, type PaymentTerms, users } from "@/lib/db/schema";
+import { customers, type PaymentTerms, salesOrders, users } from "@/lib/db/schema";
 import { parseDollars } from "@/lib/money";
 import { UserError } from "@/lib/planning";
 
@@ -75,5 +75,20 @@ export async function removeCustomerLogin(customerId: string) {
     await db.delete(users).where(and(eq(users.customerId, customerId), eq(users.role, "customer")));
     revalidatePath("/admin/customers");
     return { message: "Portal login removed" };
+  });
+}
+
+/** Admin only. Their login, addresses, cart and price list go too; delivery orders stay but are unlinked. */
+export async function deleteCustomer(id: string) {
+  return attempt(async () => {
+    const user = await assertUser(STAFF);
+    if (user.role !== "admin") throw new UserError("Only an admin can delete customers.");
+    const db = await getDb();
+    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(salesOrders).where(eq(salesOrders.customerId, id));
+    if (n > 0) throw new UserError(`This customer has ${n} shop order${n === 1 ? "" : "s"}. Delete those in Sales Orders first.`);
+    const [c] = await db.delete(customers).where(eq(customers.id, id)).returning({ name: customers.name });
+    if (!c) throw new UserError("Customer not found.");
+    revalidatePath("/admin/customers");
+    return { message: `${c.name} deleted` };
   });
 }

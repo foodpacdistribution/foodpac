@@ -1,10 +1,10 @@
 "use client";
 
-import { Download, FileUp, ImageIcon, PackagePlus, Pencil, Plus, Search } from "lucide-react";
+import { Download, FileUp, ImageIcon, PackagePlus, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
-import { adjustStock, saveProduct } from "@/app/actions/products";
+import { adjustStock, deleteProduct, saveProduct } from "@/app/actions/products";
 import { FormError, Modal, SubmitButton, Toast, type ToastMessage } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import { aud } from "@/lib/money";
@@ -30,7 +30,7 @@ type Product = {
 
 const LOW_STOCK = 10;
 
-export function ProductsClient({ products, categories }: { products: Product[]; categories: string[] }) {
+export function ProductsClient({ products, categories, isAdmin }: { products: Product[]; categories: string[]; isAdmin: boolean }) {
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "low" | "inactive">("all");
@@ -98,7 +98,7 @@ export function ProductsClient({ products, categories }: { products: Product[]; 
                 <th className="px-2 py-2.5 text-right font-medium">Price ex GST</th>
                 <th className="px-2 py-2.5 text-right font-medium">Stock</th>
                 <th className="px-2 py-2.5 font-medium">Receive / adjust</th>
-                <th className="w-10" />
+                <th className="w-20" />
               </tr>
             </thead>
             <tbody>
@@ -131,9 +131,25 @@ export function ProductsClient({ products, categories }: { products: Product[]; 
                     <StockAdjust id={p.id} onResult={(t) => (setToast(t), router.refresh())} />
                   </td>
                   <td className="pr-3">
-                    <button className={btn("ghost", "icon")} onClick={() => setEditing(p)} aria-label={`Edit ${p.name}`}>
-                      <Pencil className="size-3.5" />
-                    </button>
+                    <div className="flex">
+                      <button className={btn("ghost", "icon")} onClick={() => setEditing(p)} aria-label={`Edit ${p.name}`}>
+                        <Pencil className="size-3.5" />
+                      </button>
+                      {isAdmin && (
+                        <button
+                          className={btn("ghost", "icon", "text-slate-400 hover:text-red-600")}
+                          aria-label={`Delete ${p.name}`}
+                          onClick={async () => {
+                            if (!confirm(`Delete ${p.name} (${p.sku})?\n\nIt leaves the shop, carts and customer price lists. Past orders keep its name and SKU.`)) return;
+                            const r = await deleteProduct(p.id);
+                            setToast({ id: Date.now(), text: r.ok ? (r.message ?? "Deleted") : r.error, tone: r.ok ? "ok" : "warn" });
+                            if (r.ok) router.refresh();
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

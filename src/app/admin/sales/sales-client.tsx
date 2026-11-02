@@ -1,10 +1,10 @@
 "use client";
 
-import { ClipboardList, ShoppingBag } from "lucide-react";
+import { ClipboardList, ShoppingBag, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { setFulfilment } from "@/app/actions/sales";
+import { deleteSales, setFulfilment } from "@/app/actions/sales";
 import { Toast, type ToastMessage } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { prettyDate } from "@/lib/dates";
@@ -35,7 +35,7 @@ type Row = {
   dueDate: string | null;
 };
 
-export function SalesClient({ rows, view, today, todaySalesCents, unpaidCount }: { rows: Row[]; view: string; today: string; todaySalesCents: number; unpaidCount: number }) {
+export function SalesClient({ rows, view, today, todaySalesCents, unpaidCount, isAdmin }: { rows: Row[]; view: string; today: string; todaySalesCents: number; unpaidCount: number; isAdmin: boolean }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, start] = useTransition();
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -90,6 +90,25 @@ export function SalesClient({ rows, view, today, todaySalesCents, unpaidCount }:
                 {FULFILMENT[f].label}
               </button>
             ))}
+            {isAdmin && (
+              <button
+                disabled={pending}
+                className={btn("danger", "sm")}
+                onClick={() => {
+                  if (!confirm(`Permanently delete ${ids.length} order${ids.length === 1 ? "" : "s"}?\n\nTheir items, delivery and proof of delivery are removed and undelivered stock goes back on the shelf. Use it for test orders only. Card payments are not refunded by this.`)) return;
+                  start(async () => {
+                    const r = await deleteSales(ids);
+                    setToast({ id: Date.now(), text: r.ok ? (r.message ?? "Deleted") : r.error, tone: r.ok ? "ok" : "warn" });
+                    if (r.ok) {
+                      setSelected(new Set());
+                      router.refresh();
+                    }
+                  });
+                }}
+              >
+                <Trash2 className="size-3.5" /> Delete
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -108,8 +127,8 @@ export function SalesClient({ rows, view, today, todaySalesCents, unpaidCount }:
                   <input
                     type="checkbox"
                     aria-label="Select all"
-                    checked={confirmed.length > 0 && confirmed.every((r) => selected.has(r.id))}
-                    onChange={(e) => setSelected(e.target.checked ? new Set(confirmed.map((r) => r.id)) : new Set())}
+                    checked={rows.length > 0 && rows.every((r) => selected.has(r.id))}
+                    onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())}
                   />
                 </th>
                 <th className="px-2 py-2.5 font-medium">Order</th>
@@ -125,7 +144,7 @@ export function SalesClient({ rows, view, today, todaySalesCents, unpaidCount }:
               {rows.map((r) => (
                 <tr key={r.id} className={cx("border-b border-line last:border-0 hover:bg-slate-50/60", r.status === "cancelled" && "opacity-60")}>
                   <td className="px-3 py-2.5">
-                    <input type="checkbox" aria-label={`Select ${r.number}`} disabled={r.status !== "confirmed"} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
+                    <input type="checkbox" aria-label={`Select ${r.number}`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
                   </td>
                   <td className="px-2 py-2.5">
                     <Link href={`/admin/sales/${r.id}`} className="font-semibold text-blue-700 hover:underline">

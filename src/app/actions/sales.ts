@@ -1,15 +1,16 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { type FulfilmentStatus, salesOrders } from "@/lib/db/schema";
+import { type FulfilmentStatus, orders, products, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { refundOrExpire } from "@/lib/payments";
 import { UserError } from "@/lib/planning";
 import { cancelOrder, confirmOrder } from "@/lib/shop";
+import { pruneEmptyRoutes } from "@/lib/shipments";
 import { geocodeOrderIds } from "@/lib/sync";
 
 function revalidate(id?: string) {
@@ -85,5 +86,40 @@ export async function cancelSale(id: string) {
     await refundOrExpire(so);
     revalidate(id);
     return { message: so.paymentMethod === "card" && so.paymentStatus === "paid" ? "Cancelled and refunded" : "Order cancelled" };
+  });
+}
+
+/**
+ * Admin only: permanently deletes shop orders (e.g. test orders) with their items and their
+ * delivery (stop, photo, signature). Stock goes back on the shelf unless the goods were delivered.
+ */
+export async function deleteSales(ids: string[]) {
+  return attempt(async () => {
+    const user = await assertUser(STAFF);
+    if (user.role !== "admin") throw new UserError("Only an admin can delete orders.");
+    const db = await getDb();
+    const rows = await db.select().from(salesOrders).where(inArray(salesOrders.id, ids.slice(0, 500)));
+    const dates: string[] = [];
+    for (const so of rows) {
+      await db.transaction(async (tx) => {
+        const [d] = so.deliveryOrderId ? await tx.select().from(orders).where(eq(orders.id, so.deliveryOrderId)).limit(1) : [];
+        if (so.status !== "cancelled" && d?.status !== "delivered") {
+          const items = await tx.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id));
+          for (const it of items) {
+            if (it.productId) await tx.update(products).set({ stock: sql`${products.stock} + ${it.qty}` }).where(eq(products.id, it.productId));
+          }
+        }
+        if (d) {
+          dates.push(d.deliveryDate);
+          await tx.delete(orders).where(eq(orders.id, d.id));
+        }
+        await tx.delete(salesOrders).where(eq(salesOrders.id, so.id));
+      });
+    }
+    await pruneEmptyRoutes(db, dates);
+    revalidate();
+    revalidatePath("/admin/shipments");
+    revalidatePath("/admin/products");
+    return { message: `Deleted ${rows.length} order${rows.length === 1 ? "" : "s"}` };
   });
 }

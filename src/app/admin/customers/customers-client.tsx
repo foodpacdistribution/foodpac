@@ -4,7 +4,7 @@ import { Building2, KeyRound, Mail, MapPin, Package, Pencil, Phone, Plus, Tags }
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { removeCustomerLogin, saveCustomer } from "@/app/actions/customers";
+import { deleteCustomer, removeCustomerLogin, saveCustomer } from "@/app/actions/customers";
 import { FormError, Modal, SubmitButton } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import type { PaymentTerms } from "@/lib/db/schema";
@@ -25,7 +25,7 @@ type Customer = {
   orderCount: number;
 };
 
-export function CustomersClient({ customers }: { customers: Customer[] }) {
+export function CustomersClient({ customers, isAdmin }: { customers: Customer[]; isAdmin: boolean }) {
   const [editing, setEditing] = useState<Customer | "new" | null>(null);
   const router = useRouter();
 
@@ -102,6 +102,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
       <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? "Add customer" : "Edit customer"}>
         {editing !== null && (
           <CustomerForm
+            isAdmin={isAdmin}
             customer={editing === "new" ? null : editing}
             onDone={() => {
               setEditing(null);
@@ -114,9 +115,10 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
   );
 }
 
-function CustomerForm({ customer, onDone }: { customer: Customer | null; onDone: () => void }) {
+function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null; onDone: () => void; isAdmin: boolean }) {
   const [state, action] = useActionState(saveCustomer, undefined);
   const [removing, startRemove] = useTransition();
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   useEffect(() => {
     if (state?.ok) onDone();
   }, [state, onDone]);
@@ -197,7 +199,25 @@ function CustomerForm({ customer, onDone }: { customer: Customer | null; onDone:
       </fieldset>
 
       <FormError message={state && !state.ok ? state.error : null} />
+      {deleteError && <FormError message={deleteError} />}
       <SubmitButton className="w-full">{customer ? "Save changes" : "Add customer"}</SubmitButton>
+      {customer && isAdmin && (
+        <button
+          type="button"
+          disabled={removing}
+          className={btn("ghost", "md", "w-full text-red-600")}
+          onClick={() => {
+            if (!confirm(`Delete ${customer.name}?\n\nTheir portal login, saved addresses, cart and price list are removed. Delivery orders stay but are no longer linked to them.`)) return;
+            startRemove(async () => {
+              const r = await deleteCustomer(customer.id);
+              if (r.ok) onDone();
+              else setDeleteError(r.error);
+            });
+          }}
+        >
+          Delete customer
+        </button>
+      )}
     </form>
   );
 }

@@ -16,7 +16,7 @@ import { SaleActions } from "./sale-actions";
 export const metadata: Metadata = { title: "Sales Order" };
 
 export default async function SalePage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUser(STAFF);
+  const me = await requireUser(STAFF);
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = await getDb();
@@ -48,7 +48,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
             {so.status === "confirmed" && <Badge tone={FULFILMENT[so.fulfilment].tone}>Warehouse: {FULFILMENT[so.fulfilment].label}</Badge>}
           </div>
         </div>
-        <SaleActions id={so.id} status={so.status} paymentStatus={so.paymentStatus} paymentMethod={so.paymentMethod} fulfilment={so.fulfilment} canCancel={canCancel} />
+        <SaleActions id={so.id} status={so.status} paymentStatus={so.paymentStatus} paymentMethod={so.paymentMethod} fulfilment={so.fulfilment} canCancel={canCancel} isAdmin={me.role === "admin"} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">

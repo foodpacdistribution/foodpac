@@ -8,7 +8,7 @@ import { CustomersClient } from "./customers-client";
 export const metadata: Metadata = { title: "Customers" };
 
 export default async function CustomersPage() {
-  await requireUser(STAFF);
+  const me = await requireUser(STAFF);
   const db = await getDb();
   const [rows, logins, counts] = await Promise.all([
     db.select().from(customers).orderBy(asc(customers.approved), asc(customers.name)),
@@ -17,6 +17,7 @@ export default async function CustomersPage() {
   ]);
   return (
     <CustomersClient
+      isAdmin={me.role === "admin"}
       customers={rows.map((c) => ({
         ...c,
         createdAt: undefined,

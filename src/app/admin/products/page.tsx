@@ -9,7 +9,7 @@ import { ProductsClient } from "./products-client";
 export const metadata: Metadata = { title: "Products & Stock" };
 
 export default async function ProductsPage() {
-  await requireUser(STAFF);
+  const me = await requireUser(STAFF);
   const db = await getDb();
   const rows = await db
     .select({
@@ -32,5 +32,5 @@ export default async function ProductsPage() {
     .from(products)
     .orderBy(asc(products.category), asc(products.name));
   const categories = [...new Set([...CATEGORIES.map((c) => c.title), ...rows.map((r) => r.category)])];
-  return <ProductsClient products={rows} categories={categories} />;
+  return <ProductsClient products={rows} categories={categories} isAdmin={me.role === "admin"} />;
 }

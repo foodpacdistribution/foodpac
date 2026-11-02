@@ -163,3 +163,16 @@ export async function importProducts(rows: ProductImportRow[], opts: { pricesInc
     return { data: { created: toCreate.length, updated: toUpdate.length, errors: [] } };
   });
 }
+
+/** Admin only. Past orders keep the product's name and SKU; it leaves carts and price lists. */
+export async function deleteProduct(id: string) {
+  return attempt(async () => {
+    const user = await assertUser(STAFF);
+    if (user.role !== "admin") throw new UserError("Only an admin can delete products.");
+    const db = await getDb();
+    const [p] = await db.delete(products).where(eq(products.id, id)).returning({ name: products.name });
+    if (!p) throw new UserError("Product not found.");
+    revalidate();
+    return { message: `${p.name} deleted` };
+  });
+}

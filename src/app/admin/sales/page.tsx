@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Sales Orders" };
 const VIEWS = ["open", "unpaid", "all", "cancelled"] as const;
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  await requireUser(STAFF);
+  const me = await requireUser(STAFF);
   const sp = await searchParams;
   const view = VIEWS.find((v) => v === sp.view) ?? "open";
   const db = await getDb();
@@ -48,6 +48,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
 
   return (
     <SalesClient
+      isAdmin={me.role === "admin"}
       view={view}
       today={today}
       todaySalesCents={todaySales}
