@@ -240,7 +240,7 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
               <div className="flex items-center justify-end gap-3">
                 {missingRequired && <span className="text-sm text-amber-700">{tr("Choose which column holds the SKU.")}</span>}
                 <button disabled={pending || bad > 0 || missingRequired} onClick={submit} className={btn("primary", "lg")}>
-                  {pending ? <Spinner className="size-4" /> : <Upload className="size-4" />} {" "}{tr("Import")}{" "}{rows.length} {" "}{tr("product")}{rows.length === 1 ? "" : "s"}
+                  {pending ? <Spinner className="size-4" /> : <Upload className="size-4" />} {" "}{tr(rows.length === 1 ? "Import {n} product" : "Import {n} products", { n: rows.length })}
                 </button>
               </div>
             </>

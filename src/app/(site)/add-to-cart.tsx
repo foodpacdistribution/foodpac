@@ -24,9 +24,9 @@ export function AddToCart({ productId, minQty, stock, size = "md" }: { productId
   const out = stock <= 0;
   const lg = size === "lg";
   return (
-    <div className="flex items-center gap-2">
-      <div className={cx("flex items-center rounded-full border border-leaf-950/15 bg-white", lg ? "h-12" : "h-9")}>
-        <button type="button" aria-label={tr("Less")} disabled={qty <= minQty} onClick={() => setQty((q) => Math.max(minQty, q - 1))} className={cx("grid place-items-center text-leaf-900 disabled:opacity-30", lg ? "size-12" : "size-9")}>
+    <div className={cx("flex items-center", lg ? "gap-2" : "gap-1.5")}>
+      <div className={cx("flex shrink-0 items-center rounded-full border border-leaf-950/15 bg-white", lg ? "h-12" : "h-9")}>
+        <button type="button" aria-label={tr("Less")} disabled={qty <= minQty} onClick={() => setQty((q) => Math.max(minQty, q - 1))} className={cx("grid place-items-center text-leaf-900 disabled:opacity-30", lg ? "size-12" : "size-8 sm:size-9")}>
           <Minus className="size-3.5" />
         </button>
         <input
@@ -35,9 +35,9 @@ export function AddToCart({ productId, minQty, stock, size = "md" }: { productId
           value={qty}
           onChange={(e) => setQty(Math.max(0, Number(e.target.value.replace(/\D/g, "")) || 0))}
           onBlur={() => setQty((q) => Math.max(minQty, q))}
-          className={cx("bg-transparent text-center font-semibold tabular-nums outline-none", lg ? "w-12 text-base" : "w-8 text-sm")}
+          className={cx("bg-transparent text-center font-semibold tabular-nums outline-none", lg ? "w-12 text-base" : "w-7 text-sm sm:w-8")}
         />
-        <button type="button" aria-label={tr("More")} onClick={() => setQty((q) => q + 1)} className={cx("grid place-items-center text-leaf-900", lg ? "size-12" : "size-9")}>
+        <button type="button" aria-label={tr("More")} onClick={() => setQty((q) => q + 1)} className={cx("grid place-items-center text-leaf-900", lg ? "size-12" : "size-8 sm:size-9")}>
           <Plus className="size-3.5" />
         </button>
       </div>
@@ -59,9 +59,9 @@ export function AddToCart({ productId, minQty, stock, size = "md" }: { productId
           });
         }}
         className={cx(
-          "inline-flex flex-1 items-center justify-center gap-2 rounded-full font-semibold text-white transition-[background-color,transform] duration-200 active:scale-[0.96] disabled:opacity-50",
+          "inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full font-semibold text-white transition-[background-color,transform] duration-200 active:scale-[0.96] disabled:opacity-50",
           added > 0 ? "bg-leaf-600" : "bg-leaf-700 hover:bg-leaf-800",
-          lg ? "h-12 px-6 text-base" : "h-9 px-3 text-sm",
+          lg ? "h-12 px-6 text-base" : "h-9 px-2 text-sm sm:px-3",
         )}
       >
         {added > 0 ? (
@@ -69,8 +69,8 @@ export function AddToCart({ productId, minQty, stock, size = "md" }: { productId
             <Check className="size-4" strokeWidth={3} /> {" "}{tr("Added")}</span>
         ) : (
           <>
-            <ShoppingCart className="size-4" />
-            {tr(out ? "Out of stock" : "Add")}
+            <ShoppingCart className="size-4 shrink-0" />
+            <span className={cx("truncate", !lg && "max-[380px]:sr-only")}>{tr(out ? "Out of stock" : "Add")}</span>
             {lg && !out && tr(" to cart")}
           </>
         )}

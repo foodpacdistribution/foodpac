@@ -3,7 +3,7 @@ import { ExternalLink, LogOut } from "lucide-react";
 import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 import { requireUser, STAFF } from "@/lib/auth/dal";
-import { BrandMark, Logo } from "@/components/brand";
+import { Logo } from "@/components/brand";
 import { LanguageSwitch } from "@/components/language-switch";
 import { initials } from "@/lib/account";
 import { getDb } from "@/lib/db";
@@ -54,12 +54,21 @@ export default async function StaffLayout({ children }: { children: React.ReactN
 
       {/* Mobile top bar */}
       <header className="no-print sticky top-0 z-30 border-b border-white/10 bg-navy-900 text-white lg:hidden">
-        <div className="flex h-12 items-center justify-between px-4">
-          <span className="flex items-center gap-2 text-sm font-semibold">
-            <BrandMark className="size-6" /> {" "}<T>{"Foodpac Admin"}</T></span>
-          <form action={logout}>
-            <button className="text-xs text-slate-300"><T>{"Sign out"}</T></button>
-          </form>
+        <div className="flex h-14 items-center justify-between gap-2 px-4">
+          <Link href="/admin" aria-label="Dashboard">
+            <Logo badge className="h-9" />
+          </Link>
+          <div className="flex items-center gap-1.5">
+            <LanguageSwitch tone="dark" />
+            <Link href="/account" aria-label="Profile & password" className="grid size-8 place-items-center rounded-full bg-navy-700 text-xs font-semibold text-white">
+              {initials(user.name)}
+            </Link>
+            <form action={logout}>
+              <button className="grid size-8 place-items-center rounded-md text-slate-300 hover:bg-white/10" aria-label="Sign out">
+                <LogOut className="size-4" />
+              </button>
+            </form>
+          </div>
         </div>
         <SideNav role={user.role} mobile newEnquiries={newEnquiries} />
       </header>

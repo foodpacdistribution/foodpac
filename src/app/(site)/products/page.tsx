@@ -42,7 +42,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       <section className="min-w-0">
         <h1 className="font-display text-2xl font-semibold tracking-tight">{q ? `Results for “${q}”` : (category ?? <T>{"All products"}</T>)}</h1>
         <p className="mt-1 text-sm text-leaf-900/60">
-          {items.length} {" "}<T>{"product"}</T>{items.length === 1 ? "" : "s"}
+          <T vars={{ n: items.length }}>{items.length === 1 ? "{n} product" : "{n} products"}</T>
           {q && category && ` in ${category}`}
           {!viewer && (
             <>
@@ -88,7 +88,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             <p className="mt-1 text-sm text-leaf-900/60"><T>{"Try another word or SKU, or ask us — we can usually source it."}</T></p>
           </div>
         ) : (
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
             {items.map((p) => (
               <ProductCard key={p.id} p={p} signedIn={!!viewer} morph />
             ))}

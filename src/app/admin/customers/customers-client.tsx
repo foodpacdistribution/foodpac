@@ -1,9 +1,9 @@
 "use client";
 
-import { Building2, KeyRound, Mail, MapPin, Package, Pencil, Phone, Plus, Tags } from "lucide-react";
+import { Building2, KeyRound, Mail, MapPin, Package, Pencil, Phone, Plus, Search, Tags } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { deleteCustomer, removeCustomerLogin, saveCustomer } from "@/app/actions/customers";
 import { FormError, Modal, SubmitButton } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
@@ -24,12 +24,45 @@ type Customer = {
   creditLimitCents: number | null;
   login: { email: string; name: string } | null;
   orderCount: number;
+  spend90Cents: number;
+  unpaidCents: number;
+  lastOrderAt: string | null;
 };
+
+const FILTERS = [
+  ["all", "All"],
+  ["approval", "Needs approval"],
+  ["portal", "Portal on"],
+  ["unpaid", "Unpaid"],
+  ["inactive", "Inactive"],
+] as const;
 
 export function CustomersClient({ customers, isAdmin }: { customers: Customer[]; isAdmin: boolean }) {
   const tr = useT();
   const [editing, setEditing] = useState<Customer | "new" | null>(null);
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<(typeof FILTERS)[number][0]>("all");
   const router = useRouter();
+  const deferredQ = useDeferredValue(q);
+  const shown = useMemo(() => {
+    const s = deferredQ.trim().toLowerCase();
+    return customers.filter(
+      (c) =>
+        (filter === "all" ||
+          (filter === "approval" && !c.approved) ||
+          (filter === "portal" && !!c.login) ||
+          (filter === "unpaid" && c.unpaidCents > 0) ||
+          (filter === "inactive" && !c.active)) &&
+        (!s || [c.name, c.phone, c.email, c.address, c.abn, c.login?.email].some((v) => v?.toLowerCase().includes(s))),
+    );
+  }, [customers, deferredQ, filter]);
+  const counts = {
+    all: customers.length,
+    approval: customers.filter((c) => !c.approved).length,
+    portal: customers.filter((c) => c.login).length,
+    unpaid: customers.filter((c) => c.unpaidCents > 0).length,
+    inactive: customers.filter((c) => !c.active).length,
+  };
 
   return (
     <>
@@ -41,20 +74,41 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
             <Plus className="size-4" /> {" "}{tr("Add customer")}</button>
         }
       />
+      {customers.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-slate-400" />
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search name, phone, email, address")} className={cx(inputCls, "pl-9")} />
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {FILTERS.map(([f, label]) =>
+              f === "all" || counts[f] > 0 ? (
+                <button key={f} onClick={() => setFilter(f)} className={btn(filter === f ? "primary" : "ghost", "sm")}>
+                  {tr(label)} <span className="opacity-60">{counts[f]}</span>
+                </button>
+              ) : null,
+            )}
+          </div>
+        </div>
+      )}
       {customers.length === 0 ? (
         <Card>
           <EmptyState icon={Building2} title={tr("No customers yet")}>
             {tr("Add the businesses you deliver to. Orders whose customer name or phone matches are linked automatically.")}</EmptyState>
         </Card>
+      ) : shown.length === 0 ? (
+        <Card>
+          <EmptyState icon={Search} title={tr("No customers match")}>{tr("Try another search or filter.")}</EmptyState>
+        </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {customers.map((c) => (
+          {shown.map((c) => (
             <Card key={c.id} className={cx("p-4", !c.active && "opacity-60")}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-slate-900">{c.name}</p>
                   <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
-                    <Package className="size-3.5" /> {c.orderCount} {" "}{tr("linked order")}{c.orderCount === 1 ? "" : "s"}
+                    <Package className="size-3.5" /> {tr(c.orderCount === 1 ? "{n} linked order" : "{n} linked orders", { n: c.orderCount })}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -89,16 +143,30 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
                 )}
                 <li className="text-slate-500">
                   {tr(PAYMENT_TERMS_LABEL[c.paymentTerms])}
-                  {c.creditLimitCents !== null && ` · limit ${aud(c.creditLimitCents)}`}
+                  {c.creditLimitCents !== null && <> · {tr("limit {amount}", { amount: aud(c.creditLimitCents) })}</>}
                 </li>
               </ul>
+              <dl className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                <div>
+                  <dt className="text-slate-500">{tr("90-day sales")}</dt>
+                  <dd className="font-semibold tabular-nums text-slate-900">{aud(c.spend90Cents)}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">{tr("Unpaid")}</dt>
+                  <dd className={cx("font-semibold tabular-nums", c.unpaidCents > 0 ? "text-amber-700" : "text-slate-900")}>{aud(c.unpaidCents)}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">{tr("Last order")}</dt>
+                  <dd className="font-semibold text-slate-900">{c.lastOrderAt ? tr(new Date(c.lastOrderAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })) : "—"}</dd>
+                </div>
+              </dl>
               <Link href={`/admin/customers/${c.id}`} className={cx(btn("secondary", "sm"), "mt-3")}>
                 <Tags className="size-3.5" /> {" "}{tr("Price list")}</Link>
             </Card>
           ))}
         </div>
       )}
-      <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? "Add customer" : "Edit customer"}>
+      <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? tr("Add customer") : tr("Edit customer")}>
         {editing !== null && (
           <CustomerForm
             isAdmin={isAdmin}

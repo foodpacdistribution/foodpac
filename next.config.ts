@@ -16,6 +16,9 @@ const nextConfig: NextConfig = {
   experimental: {
     // Delivery photos + signatures are sent with the "Delivered" action (photos are resized on the phone first).
     serverActions: { bodySizeLimit: "8mb" },
+    // Revisiting a page within 30 s (tabs, back/forward) shows it instantly. Saves and live
+    // updates call revalidatePath / router.refresh, which clear this cache, so data stays current.
+    staleTimes: { dynamic: 30, static: 300 },
   },
   turbopack: {
     rules: {

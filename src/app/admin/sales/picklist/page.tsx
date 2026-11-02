@@ -39,7 +39,7 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
         <div>
           <h1 className="text-xl font-semibold tracking-tight"><T>{"Pick list"}</T></h1>
           <p className="text-sm text-slate-500">
-            {so.length} {" "}<T>{"confirmed order"}</T>{so.length === 1 ? "" : "s"}
+            <T vars={{ n: so.length }}>{so.length === 1 ? "{n} confirmed order" : "{n} confirmed orders"}</T>
             {date && !ids.length && ` for delivery ${prettyDate(date)}`}
           </p>
         </div>

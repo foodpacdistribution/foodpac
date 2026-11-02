@@ -58,7 +58,7 @@ export default async function PortalOrderPage({ params }: { params: Promise<{ id
           <div className="text-sm">
             <p className="font-semibold">
               {o.stopsBefore
-                ? `${o.stopsBefore} stop${o.stopsBefore === 1 ? "" : "s"} before yours`
+                ? <Tx>{`${o.stopsBefore} stop${o.stopsBefore === 1 ? "" : "s"} before yours`}</Tx>
                 : vanKm !== null
                   ? `Your van is about ${vanKm < 1 ? `${Math.max(100, Math.round((vanKm * 1000) / 100) * 100)} m` : `${vanKm.toFixed(1)} km`} away`
                   : <T>{"You're the next stop"}</T>}
@@ -117,7 +117,7 @@ function Headline({ o, time }: { o: PortalOrder; time: (iso: string) => string }
       <div className={cx(box, "bg-amber-50")}>
         <p className="font-display text-xl font-semibold text-amber-900">{o.etaS !== null ? `Arriving around ${formatClock(o.etaS)}` : <T>{"On the way"}</T>}</p>
         <p className="mt-0.5 text-sm text-amber-900/75">
-          {o.stopsBefore === 0 ? <T>{"You're the next stop."}</T> : o.stopsBefore ? `${o.stopsBefore} stop${o.stopsBefore === 1 ? "" : "s"} before yours.` : <T>{"Your order has left our warehouse."}</T>}
+          {o.stopsBefore === 0 ? <T>{"You're the next stop."}</T> : o.stopsBefore ? <Tx>{`${o.stopsBefore} stop${o.stopsBefore === 1 ? "" : "s"} before yours.`}</Tx> : <T>{"Your order has left our warehouse."}</T>}
           {o.pickedUpAt && ` Picked up at ${time(o.pickedUpAt)}.`}
         </p>
       </div>

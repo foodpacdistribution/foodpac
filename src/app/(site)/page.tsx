@@ -142,7 +142,7 @@ function Shelf({ title, link, children }: { title: React.ReactNode; link: { href
           <T>{link.label}</T>
         </Link>
       </div>
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">{children}</div>
     </section>
   );
 }

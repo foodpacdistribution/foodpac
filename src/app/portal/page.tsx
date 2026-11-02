@@ -137,7 +137,7 @@ export default async function PortalOverview() {
                       {next.deliveryDate === today ? <T>{"Today"}</T> : prettyDate(next.deliveryDate, { weekday: "long", day: "numeric", month: "long" })}
                     </p>
                     <p className="mt-0.5 text-sm text-leaf-900/60">
-                      {next.number} · {next.items} {" "}<T>{"item"}</T>{next.items === 1 ? "" : "s"}
+                      {next.number} · <T vars={{ n: next.items }}>{next.items === 1 ? "{n} item" : "{n} items"}</T>
                       {(next.windowStartMin !== null || next.windowEndMin !== null) &&
                         ` · ${next.windowStartMin !== null ? formatMinutesClock(next.windowStartMin) : "any time"}–${next.windowEndMin !== null ? formatMinutesClock(next.windowEndMin) : "close"}`}
                     </p>

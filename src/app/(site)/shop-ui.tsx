@@ -17,7 +17,7 @@ import { T, Tx } from "@/components/i18n";
 export function ProductImage({
   p,
   className,
-  sizes = "(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw",
+  sizes = "(min-width: 1024px) 25vw, 50vw",
   priority,
   morph,
 }: {
@@ -33,7 +33,15 @@ export function ProductImage({
       {p.hasImage ? (
         <Image src={productImageUrl(p)} alt={p.name} fill sizes={sizes} priority={priority} className="object-cover" />
       ) : (
-        <Icon className="size-1/3 text-leaf-700/40" strokeWidth={1.4} />
+        // No photo yet: a calm tile with the category icon instead of a big empty box.
+        <div className="flex size-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-leaf-50 via-cream to-leaf-100/60">
+          <span className="grid size-[38%] max-h-24 max-w-24 place-items-center rounded-full bg-white/80 shadow-sm ring-1 ring-leaf-900/5">
+            <Icon className="size-1/2 text-leaf-700/70" strokeWidth={1.5} />
+          </span>
+          <span className="px-2 text-center text-[10px] font-medium tracking-wider text-leaf-900/45 uppercase sm:text-[11px]">
+            <T>{p.category}</T>
+          </span>
+        </div>
       )}
     </div>
   );
@@ -66,7 +74,7 @@ export function Price({ p, signedIn }: { p: Pick<CatalogItem, "priceCents" | "li
   const special = p.listPriceCents !== null && p.priceCents < p.listPriceCents;
   return (
     <p className="leading-tight">
-      <span className="font-display text-xl font-semibold tabular-nums">{aud(p.priceCents)}</span>
+      <span className="font-display text-lg font-semibold tabular-nums sm:text-xl">{aud(p.priceCents)}</span>
       <span className="text-xs text-leaf-900/60"> / <T>{p.unit}</T></span>
       {special && <span className="ml-1.5 text-xs text-leaf-900/45 line-through">{aud(p.listPriceCents)}</span>}
       <span className="block text-[11px] text-leaf-900/50">{p.gst ? <T>{"+ GST"}</T> : <T>{"GST free"}</T>}{special && <T>{" · your price"}</T>}</span>
@@ -80,16 +88,16 @@ export function ProductCard({ p, signedIn, morph }: { p: CatalogItem; signedIn: 
       <Link href={`/products/${encodeURIComponent(p.sku)}`} className="block overflow-hidden">
         <ProductImage p={p} morph={morph} className="aspect-[4/3] transition-transform duration-500 ease-out group-hover:scale-[1.04]" />
       </Link>
-      <div className="flex flex-1 flex-col p-4">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-leaf-900/45">{p.sku}</p>
-        <Link href={`/products/${encodeURIComponent(p.sku)}`} className="mt-0.5 font-semibold leading-snug hover:text-leaf-700">
+      <div className="flex flex-1 flex-col p-3 sm:p-4">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-leaf-900/45 sm:text-[11px]">{p.sku}</p>
+        <Link href={`/products/${encodeURIComponent(p.sku)}`} className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug hover:text-leaf-700 sm:text-base">
           {p.name}
         </Link>
-        <p className="mt-0.5 text-xs text-leaf-900/60">
+        <p className="mt-0.5 line-clamp-1 text-xs text-leaf-900/60">
           {p.packSize}
           {p.minQty > 1 && <> <Tx>{`· min ${p.minQty}`}</Tx></>}
         </p>
-        <div className="mt-3 flex items-end justify-between gap-2">
+        <div className="mt-auto flex flex-wrap items-end justify-between gap-x-2 gap-y-1 pt-3">
           <Price p={p} signedIn={signedIn} />
           <StockLabel stock={p.stock} />
         </div>

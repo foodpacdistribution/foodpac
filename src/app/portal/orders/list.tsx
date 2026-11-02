@@ -14,7 +14,7 @@ export function SalesOrderList({ rows }: { rows: Awaited<ReturnType<typeof listS
         <Link key={o.id} href={`/portal/orders/${o.id}`} className="group flex items-center gap-3 border-b border-leaf-950/5 px-4 py-3.5 last:border-0 hover:bg-leaf-50/50">
           <div className="min-w-0 flex-1">
             <p className="font-semibold">
-              {o.number} <span className="font-normal text-leaf-900/50">· {o.items} {" "}<T>{"item"}</T>{o.items === 1 ? "" : "s"}</span>
+              {o.number} <span className="font-normal text-leaf-900/50">· <T vars={{ n: o.items }}>{o.items === 1 ? "{n} item" : "{n} items"}</T></span>
             </p>
             <p className="text-xs text-leaf-900/60"><T>{"Delivery"}</T>{" "}{<Tx>{prettyDate(o.deliveryDate)}</Tx>}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">

@@ -176,3 +176,55 @@ export async function deleteProduct(id: string) {
     return { message: `${p.name} deleted` };
   });
 }
+
+export type ProductBulkOp =
+  | { kind: "active"; value: boolean }
+  | { kind: "featured"; value: boolean }
+  | { kind: "category"; value: string }
+  | { kind: "price"; percent: number }
+  | { kind: "delete" };
+
+/** One change applied to many products at once. Price changes round to the cent and never go below 1c. */
+export async function bulkProducts(ids: string[], op: ProductBulkOp) {
+  return attempt(async () => {
+    const user = await assertUser(STAFF);
+    if (!Array.isArray(ids) || !ids.length) throw new UserError("Select at least one product.");
+    if (ids.length > 2000) throw new UserError("Select at most 2000 products at a time.");
+    const db = await getDb();
+    const where = inArray(products.id, ids);
+    const now = new Date();
+    let n: number;
+    switch (op.kind) {
+      case "active":
+      case "featured":
+        n = (await db.update(products).set({ [op.kind]: op.value, updatedAt: now }).where(where).returning({ id: products.id })).length;
+        break;
+      case "category": {
+        const category = op.value.trim().slice(0, 80);
+        if (!category) throw new UserError("Enter a category.");
+        n = (await db.update(products).set({ category, updatedAt: now }).where(where).returning({ id: products.id })).length;
+        break;
+      }
+      case "price": {
+        const pct = Number(op.percent);
+        if (!Number.isFinite(pct) || pct === 0 || pct <= -100 || pct > 500) throw new UserError("Enter a percentage between -99 and 500, e.g. 5 or -10.");
+        n = (
+          await db
+            .update(products)
+            .set({ priceCents: sql`greatest(1, round(${products.priceCents} * ${1 + pct / 100}))::int`, updatedAt: now })
+            .where(where)
+            .returning({ id: products.id })
+        ).length;
+        break;
+      }
+      case "delete":
+        if (user.role !== "admin") throw new UserError("Only an admin can delete products.");
+        n = (await db.delete(products).where(where).returning({ id: products.id })).length;
+        break;
+      default:
+        throw new UserError("Unknown change.");
+    }
+    revalidate();
+    return { message: op.kind === "delete" ? `Deleted ${n} products` : `${n} products updated` };
+  });
+}

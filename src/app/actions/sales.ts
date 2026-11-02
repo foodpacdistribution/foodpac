@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { attempt } from "@/lib/action";
@@ -56,6 +56,28 @@ export async function markPaid(id: string, paid: boolean) {
       .where(eq(salesOrders.id, id));
     revalidate(id);
     return { message: paid ? "Marked as paid" : "Marked as unpaid" };
+  });
+}
+
+/** Marks several bank-transfer / invoice orders as paid at once. Cancelled and card orders are skipped. */
+export async function markManyPaid(ids: string[]) {
+  return attempt(async () => {
+    await assertUser(STAFF);
+    const db = await getDb();
+    const rows = await db
+      .update(salesOrders)
+      .set({ paymentStatus: "paid", paidAt: new Date() })
+      .where(
+        and(
+          inArray(salesOrders.id, ids.slice(0, 500)),
+          ne(salesOrders.status, "cancelled"),
+          ne(salesOrders.paymentMethod, "card"),
+          eq(salesOrders.paymentStatus, "unpaid"),
+        ),
+      )
+      .returning({ id: salesOrders.id });
+    revalidate();
+    return { message: `${rows.length} order${rows.length === 1 ? "" : "s"} marked as paid` };
   });
 }
 

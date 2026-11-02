@@ -119,7 +119,7 @@ export function ShipmentsClient(props: { date: string; today: string; hasDepot: 
         ))}
       </div>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         {/* ---------------------------------------------------------------- ready to ship */}
         <Card className="overflow-hidden xl:sticky xl:top-4">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
@@ -292,7 +292,7 @@ function ShipmentCard({
         </div>
       </div>
 
-      <dl className="mt-3 grid grid-cols-4 gap-2 px-4 text-center text-xs">
+      <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 px-4 text-center text-xs">
         {[
           ["Stops", s.stops.length],
           ["Units", s.capacity !== null ? `${units}/${s.capacity}` : units],
