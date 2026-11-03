@@ -12,6 +12,10 @@ export const SITE = {
   email: "",
   address: "",
   hours: "Mon–Fri · 6am – 4pm",
+  /** The same hours for Google, in schema.org form. */
+  openingHours: ["Mo-Fr 06:00-16:00"],
+  /** The business's other official pages (Google Business Profile, Facebook, Instagram, LinkedIn…), for Google's knowledge panel. */
+  sameAs: [] as string[],
   /** Printed on tax invoices. Required in Australia once you're registered for GST. */
   abn: "",
 };
@@ -39,6 +43,11 @@ export const PROMISES = [
   { title: "Proof on every drop", text: "Photo and signature at the door, so there's never a question about where an order went." },
   { title: "One account, one invoice", text: "Packaging, consumables and dry goods from one supplier, on one delivery." },
 ];
+
+/** A category's own address, e.g. "Cups & lids" → /categories/cups-and-lids. */
+export const categorySlug = (name: string) =>
+  name.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+export const categoryHref = (name: string) => `/categories/${categorySlug(name)}`;
 
 export function categoryInfo(name: string) {
   return CATEGORIES.find((c) => c.title === name) ?? { icon: Package, title: name, text: "" };

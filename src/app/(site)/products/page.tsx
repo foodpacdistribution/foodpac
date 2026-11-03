@@ -5,12 +5,25 @@ import { cx } from "@/components/ui";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { canSeePrices, listCatalog, listCategories, type Sort, SORTS } from "@/lib/shop";
+import { categoryHref, SITE } from "../content";
 import { ProductCard } from "../shop-ui";
 import { T } from "@/components/i18n";
 
-export const metadata: Metadata = { title: "Products" };
+type Search = { q?: string; category?: string; sort?: string; stock?: string };
 
-export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string; sort?: string; stock?: string }> }) {
+export async function generateMetadata({ searchParams }: { searchParams: Promise<Search> }): Promise<Metadata> {
+  const sp = await searchParams;
+  // Searches and filtered or sorted lists repeat other pages: keep them out of the index.
+  if (sp.q || sp.sort || sp.stock) return { title: "Products", robots: { index: false, follow: true } };
+  if (sp.category) return { title: sp.category, alternates: { canonical: categoryHref(sp.category) } };
+  return {
+    title: "All products",
+    description: `Takeaway packaging, cups, bags, cutlery, cleaning supplies and dry goods at trade prices, delivered across ${SITE.serviceArea}.`,
+    alternates: { canonical: "/products" },
+  };
+}
+
+export default async function ProductsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
   const q = sp.q?.trim().slice(0, 100) || undefined;
   const category = sp.category?.slice(0, 100) || undefined;
@@ -35,7 +48,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         <nav className="mt-3 flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
           <CatLink href="/products" active={!category} label={<T>{"All products"}</T>} n={total} />
           {categories.map((c) => (
-            <CatLink key={c.name} href={`/products?category=${encodeURIComponent(c.name)}`} active={category === c.name} label={c.name} n={c.n} />
+            <CatLink key={c.name} href={categoryHref(c.name)} active={category === c.name} label={c.name} n={c.n} />
           ))}
         </nav>
       </aside>

@@ -2,9 +2,13 @@ import { ArrowLeft, Barcode, Box, Layers, Truck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { JsonLd } from "@/components/json-ld";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
+import { productImageUrl } from "@/lib/product-image";
 import { getProductBySku, listCatalog } from "@/lib/shop";
+import { siteUrl } from "@/lib/site-url";
+import { categoryHref, SITE } from "../../content";
 import { AddToCart } from "../../add-to-cart";
 import { Price, ProductCard, ProductImage, StockLabel } from "../../shop-ui";
 import { T, Tx } from "@/components/i18n";
@@ -12,7 +16,14 @@ import { T, Tx } from "@/components/i18n";
 export async function generateMetadata({ params }: { params: Promise<{ sku: string }> }): Promise<Metadata> {
   const { sku } = await params;
   const p = await getProductBySku(await getDb(), null, decodeURIComponent(sku));
-  return { title: p?.name ?? "Product", description: p?.description };
+  if (!p) return { title: "Product" };
+  const description = p.description || `${p.name} (${p.packSize}) – wholesale ${p.category.toLowerCase()} at trade prices, delivered across ${SITE.serviceArea}.`;
+  return {
+    title: `${p.name} · ${p.packSize}`,
+    description,
+    alternates: { canonical: `/products/${encodeURIComponent(p.sku)}` },
+    openGraph: { title: p.name, description, ...(p.hasImage ? { images: [productImageUrl(p)] } : {}) },
+  };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ sku: string }> }) {
@@ -23,9 +34,22 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
   if (!p) notFound();
   const related = (await listCatalog(db, viewer?.customer ?? null, { category: p.category, limit: 5 })).filter((x) => x.id !== p.id).slice(0, 4);
 
+  const base = siteUrl();
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <Link href={`/products?category=${encodeURIComponent(p.category)}`} className="inline-flex items-center gap-1.5 text-sm text-leaf-900/60 hover:text-leaf-900">
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: base },
+            { "@type": "ListItem", position: 2, name: p.category, item: `${base}${categoryHref(p.category)}` },
+            { "@type": "ListItem", position: 3, name: p.name, item: `${base}/products/${encodeURIComponent(p.sku)}` },
+          ],
+        }}
+      />
+      <Link href={categoryHref(p.category)} className="inline-flex items-center gap-1.5 text-sm text-leaf-900/60 hover:text-leaf-900">
         <ArrowLeft className="size-4" /> {p.category}
       </Link>
       <div className="mt-4 grid gap-8 lg:grid-cols-2">

@@ -1,41 +1,60 @@
 import { ArrowRight, Zap } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd } from "@/components/json-ld";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
+import { getDepots } from "@/lib/planning";
 import { listCatalog, listCategories, recentlyBought } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
-import { CATEGORIES, SITE } from "./content";
+import { CATEGORIES, categoryHref, SITE } from "./content";
 import { SearchBox } from "./search-box";
 import { Contact, Delivery, HowItWorks, Promises } from "./sections";
 import { ProductCard } from "./shop-ui";
 import { T, Tx } from "@/components/i18n";
 
+export const metadata: Metadata = { alternates: { canonical: "/" } };
+
 export default async function HomePage() {
   const viewer = await getCurrentCustomer();
   const customer = viewer?.customer ?? null;
   const db = await getDb();
-  const [featured, counts, recent] = await Promise.all([
+  const [featured, counts, recent, [depot]] = await Promise.all([
     listCatalog(db, customer, { featured: true, limit: 8 }),
     listCategories(db),
     customer ? recentlyBought(db, customer, 4) : Promise.resolve([]),
+    getDepots(db),
   ]);
   const popular = featured.length ? featured : await listCatalog(db, customer, { limit: 8 });
 
-  // Tells Google who the business is and which logo to show for it, and enables the site search box.
+  // Tells Google who the business is (name, logo, where, when, how to reach it): what it draws on
+  // for the business panel beside the results. The address is the depot's unless one is set in content.ts.
   const base = siteUrl();
+  const address = SITE.address || depot?.address;
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "Organization",
+        "@type": ["Organization", "WholesaleStore"],
         "@id": `${base}/#organization`,
         name: SITE.name,
         url: base,
         logo: `${base}/brand/foodpac-logo-square.png`,
-        description: `${SITE.tagline} Wholesale supplier serving ${SITE.serviceArea}.`,
-        areaServed: SITE.serviceArea,
+        image: `${base}/opengraph-image.png`,
+        description: `${SITE.tagline} Wholesale food packaging, consumables and dry goods for cafés, restaurants and takeaway shops across ${SITE.serviceArea}.`,
+        areaServed: { "@type": "AdministrativeArea", name: SITE.serviceArea },
+        openingHours: SITE.openingHours,
+        ...(address ? { address: { "@type": "PostalAddress", streetAddress: address, addressRegion: "QLD", addressCountry: "AU" } } : {}),
+        ...(depot ? { geo: { "@type": "GeoCoordinates", latitude: depot.lat, longitude: depot.lng } } : {}),
         ...(SITE.phone ? { telephone: SITE.phone } : {}),
         ...(SITE.email ? { email: SITE.email } : {}),
+        ...(SITE.abn ? { taxID: SITE.abn } : {}),
+        ...(SITE.sameAs.length ? { sameAs: SITE.sameAs } : {}),
+        hasOfferCatalog: {
+          "@type": "OfferCatalog",
+          name: "Products",
+          itemListElement: CATEGORIES.map((c) => ({ "@type": "OfferCatalog", name: c.title, url: `${base}${categoryHref(c.title)}` })),
+        },
       },
       {
         "@type": "WebSite",
@@ -50,7 +69,7 @@ export default async function HomePage() {
 
   return (
     <main>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
+      <JsonLd data={jsonLd} />
       <section className="border-b border-leaf-950/10 bg-leaf-900 text-cream">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.3fr_1fr] lg:py-16">
           <div className="animate-rise">
@@ -70,7 +89,7 @@ export default async function HomePage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {CATEGORIES.slice(0, 4).map(({ icon: Icon, title }) => (
-              <Link key={title} href={`/products?category=${encodeURIComponent(title)}`} className="group rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 transition-colors hover:bg-white/10">
+              <Link key={title} href={categoryHref(title)} className="group rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 transition-colors hover:bg-white/10">
                 <Icon className="size-6 text-tomato" />
                 <p className="mt-3 text-sm font-semibold"><T>{title}</T></p>
                 <p className="text-xs text-cream/55">{counts.find((c) => c.name === title)?.n ?? 0} {" "}<T>{"products"}</T></p>
@@ -92,7 +111,7 @@ export default async function HomePage() {
         <h2 className="font-display text-2xl font-semibold tracking-tight"><T>{"Shop by category"}</T></h2>
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {CATEGORIES.map(({ icon: Icon, title }) => (
-            <Link key={title} href={`/products?category=${encodeURIComponent(title)}`} className="flex flex-col items-center rounded-2xl border border-leaf-950/10 bg-white p-4 text-center transition-colors hover:border-leaf-700/30">
+            <Link key={title} href={categoryHref(title)} className="flex flex-col items-center rounded-2xl border border-leaf-950/10 bg-white p-4 text-center transition-colors hover:border-leaf-700/30">
               <span className="grid size-12 place-items-center rounded-full bg-leaf-50 text-leaf-700">
                 <Icon className="size-5" />
               </span>

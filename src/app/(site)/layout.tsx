@@ -9,7 +9,7 @@ import { getCurrentCustomer, getCurrentUser } from "@/lib/auth/dal";
 import { accountLinks } from "@/lib/account";
 import { getDb } from "@/lib/db";
 import { cartItems } from "@/lib/db/schema";
-import { CATEGORIES, SITE } from "./content";
+import { CATEGORIES, categoryHref, SITE } from "./content";
 import { CartBadge } from "./cart-badge";
 import { SearchBox } from "./search-box";
 import { T } from "@/components/i18n";
@@ -24,7 +24,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
     : [{ n: 0 }];
 
   return (
-    <div className="min-h-dvh bg-cream text-leaf-950">
+    // A column the height of the window: on short pages the content grows and the footer sits at the bottom.
+    <div className="flex min-h-dvh flex-col bg-cream text-leaf-950">
       <header className="site-header sticky top-0 z-40 border-b border-leaf-950/10 bg-cream/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Foodpac Distribution home">
@@ -61,7 +62,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             <Link href="/products" className="font-semibold text-leaf-950 hover:text-leaf-700">
               <T>{"All products"}</T></Link>
             {CATEGORIES.map((c) => (
-              <Link key={c.title} href={`/products?category=${encodeURIComponent(c.title)}`} className="hover:text-leaf-700">
+              <Link key={c.title} href={categoryHref(c.title)} className="hover:text-leaf-700">
                 <T>{c.title}</T>
               </Link>
             ))}
@@ -76,7 +77,9 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       </header>
 
       {/* Crossfades page content on navigation; the header and footer stay put. */}
-      <ViewTransition>{children}</ViewTransition>
+      <ViewTransition>
+        <div className="flex-1">{children}</div>
+      </ViewTransition>
 
       <footer className="bg-leaf-950 text-leaf-100/70">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:grid-cols-[1.5fr_1fr_1fr] sm:px-6">
