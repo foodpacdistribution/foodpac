@@ -130,7 +130,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
           <div className="rounded-3xl border border-leaf-950/10 bg-white p-5 text-sm">
             <h2 className="flex items-center gap-1.5 font-semibold">
               <FileText className="size-4 text-leaf-700" /> {" "}<T>{"Payment"}</T></h2>
-            <p className="mt-2">{PAYMENT_METHOD_LABEL[so.paymentMethod]}</p>
+            <p className="mt-2"><Tx>{PAYMENT_METHOD_LABEL[so.paymentMethod]}</Tx></p>
             {so.dueDate && so.paymentStatus === "unpaid" && <p className="text-leaf-900/70"><T>{"Due"}</T>{" "}{<Tx>{prettyDate(so.dueDate)}</Tx>}</p>}
             {so.paymentMethod === "bank_transfer" && so.paymentStatus === "unpaid" && so.status !== "cancelled" && (
               <p className="mt-2 rounded-xl bg-[#f5f1e8] p-3 text-xs whitespace-pre-wrap text-leaf-900/80">

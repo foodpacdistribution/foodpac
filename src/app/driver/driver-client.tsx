@@ -15,7 +15,8 @@ import type { RouteView, StopView } from "@/lib/planning";
 import { formatClock, formatMinutesClock } from "@/lib/time";
 import { OutcomeForm } from "./outcome-form";
 import { readSharePref, useLocationSharing, writeSharePref } from "./use-location-sharing";
-import { Tx, useT } from "@/components/i18n";
+import { Tx, useLocale, useT } from "@/components/i18n";
+import { intlLocale } from "@/lib/i18n";
 
 type Props = {
   name: string;
@@ -38,6 +39,9 @@ function greeting(nowS: number) {
 
 export function DriverClient({ name, linked, date, today, days, nowS, depot, route, requirePhoto, requireSignature }: Props) {
   const tr = useT();
+  // Clock times read "2:44pm" in English and "14:44" in Chinese.
+  const clock = (s: number | null) => tr(formatClock(s));
+  const locale = intlLocale(useLocale());
   const [sharePref, setSharePref] = useState(readSharePref);
   const sharing = useLocationSharing(route?.status === "in_progress" && sharePref);
   const [pending, startTransition] = useTransition();
@@ -154,7 +158,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
     color: route.color,
     status: s.status,
     title: `${s.seq}. ${s.order.customerName || s.order.orderNumber}`,
-    lines: [s.order.address, `ETA ${formatClock(s.etaS)}`],
+    lines: [s.order.address, `${tr("ETA")} ${clock(s.etaS)}`],
     navigateUrl: navigationUrls(s.order.lat, s.order.lng).google,
   }));
 
@@ -188,7 +192,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
           <p className="mt-3 flex items-center justify-between text-sm">
             <span className="text-slate-500">{tr("Estimated finish")}</span>
             <span className="font-semibold text-slate-900">
-              {formatClock(projectedFinish)}
+              {clock(projectedFinish)}
               {delay > 600 && route.status === "in_progress" && <span className="ml-1.5 text-xs font-normal text-amber-600">{tr("running late")}</span>}
             </span>
           </p>
@@ -234,7 +238,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
               </div>
               <div className="flex flex-wrap gap-2 text-sm">
                 <span className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700">
-                  <Clock className="size-3.5" /> {" "}{tr("ETA")}{" "}{formatClock(current.etaS)}
+                  <Clock className="size-3.5" /> {" "}{tr("ETA")}{" "}{clock(current.etaS)}
                 </span>
                 {(current.order.windowStartMin !== null || current.order.windowEndMin !== null) && (
                   <span className="rounded-lg bg-amber-50 px-2.5 py-1 text-amber-800">
@@ -302,7 +306,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
               </div>
               <div>
                 <p className="text-xl font-semibold tabular-nums text-slate-900">
-                  {lastDoneAt ? new Date(lastDoneAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }) : "—"}
+                  {lastDoneAt ? new Date(lastDoneAt).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" }) : "—"}
                 </p>
                 <p className="text-[11px] text-slate-500">{tr("Finished")}</p>
               </div>
@@ -317,7 +321,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
             <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
               <Warehouse className="size-4" /> {" "}{tr("Reload at")}{" "}{depot.name} {" "}{tr("before this stop")}</p>
             <p className="mt-1 text-xs text-amber-800">
-              {tr("Trip")}{" "}{current.trip}{tr(": be at the depot around")}{" "}{formatClock(reloadBefore.arrivalS)}{tr(", leave by")}{" "}{formatClock(reloadBefore.departureS)}.
+              {tr("Trip")}{" "}{current.trip}{tr(": be at the depot around")}{" "}{clock(reloadBefore.arrivalS)}{tr(", leave by")}{" "}{clock(reloadBefore.departureS)}.
             </p>
             <a href={navigationUrls(depot.lat, depot.lng).google} target="_blank" rel="noreferrer" className={btn("secondary", "sm", "mt-2.5")}>
               <Navigation className="size-3.5" /> {" "}{tr("Navigate to depot")}</a>
@@ -375,7 +379,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                       <span className="block truncate text-xs text-slate-500">{s.order.address}</span>
                     </span>
                     {s.status === "pending" ? (
-                      <span className="text-sm font-semibold tabular-nums text-slate-700">{formatClock(s.etaS)}</span>
+                      <span className="text-sm font-semibold tabular-nums text-slate-700">{clock(s.etaS)}</span>
                     ) : (
                       <Badge tone={s.status === "delivered" ? "green" : "red"}>{s.status === "delivered" ? tr("Delivered") : tr("Failed")}</Badge>
                     )}
@@ -396,7 +400,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                   </div>
                   {reload && (
                     <p className="flex items-center gap-2 bg-amber-50/70 px-4 py-2 text-xs text-amber-800">
-                      <RefreshCcw className="size-3.5" /> {" "}{tr("Reload at depot ·")}{" "}{formatClock(reload.arrivalS)}–{formatClock(reload.departureS)}
+                      <RefreshCcw className="size-3.5" /> {" "}{tr("Reload at depot ·")}{" "}{clock(reload.arrivalS)}–{clock(reload.departureS)}
                     </p>
                   )}
                 </li>

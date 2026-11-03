@@ -360,7 +360,7 @@ export const vehicleLocations = pgTable(
     recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
     createdAt: createdAt(),
   },
-  (t) => [index("vehicle_locations_driver_time_idx").on(t.driverId, t.recordedAt), index("vehicle_locations_route_idx").on(t.routeId)],
+  (t) => [index("vehicle_locations_driver_time_idx").on(t.driverId, t.recordedAt), index("vehicle_locations_route_idx").on(t.routeId, t.recordedAt)],
 );
 
 /** Proof-of-delivery photos and signatures, stored in the database (see lib/proofs.ts to move to object storage). */
@@ -554,7 +554,14 @@ export const salesOrders = pgTable(
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (t) => [index("sales_orders_customer_idx").on(t.customerId), index("sales_orders_created_idx").on(t.createdAt)],
+  (t) => [
+    index("sales_orders_customer_idx").on(t.customerId),
+    index("sales_orders_created_idx").on(t.createdAt),
+    // Joins from a delivery back to its shop order (shipments, dockets, sales list).
+    index("sales_orders_delivery_order_idx").on(t.deliveryOrderId),
+    // "Waiting on the office" badge and confirmed orders missing a delivery.
+    index("sales_orders_status_idx").on(t.status, t.fulfilment),
+  ],
 );
 
 export const salesOrderItems = pgTable(

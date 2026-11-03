@@ -12,7 +12,8 @@ import { Badge, btn, Card, ColorDot, cx, EmptyState, Field, GEOCODE_STATUS, inpu
 import { DELIVERY_PLACE_WARN_M, describeDeliveryPlace, mapPinUrl } from "@/lib/orders";
 import type { orders as ordersTable } from "@/lib/db/schema";
 import { formatMinutesClock, minutesToInput } from "@/lib/time";
-import { Tx, useT } from "@/components/i18n";
+import { Tx, useLocale, useT } from "@/components/i18n";
+import { intlLocale } from "@/lib/i18n";
 
 type Order = Omit<typeof ordersTable.$inferSelect, "createdAt" | "updatedAt"> & { createdAt: string; updatedAt: string };
 type Driver = { id: string; name: string; color: string };
@@ -409,6 +410,7 @@ type RecordEvent = {
 
 function DeliveryRecord({ orderId }: { orderId: string }) {
   const tr = useT();
+  const locale = intlLocale(useLocale());
   const [events, setEvents] = useState<RecordEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -429,7 +431,7 @@ function DeliveryRecord({ orderId }: { orderId: string }) {
               {e.type === "delivered" ? tr("Delivered") : e.type === "failed" ? tr("Delivery failed") : tr("Route started")}
             </Badge>
             <span className="text-xs text-slate-500">
-              {new Date(e.at).toLocaleString("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+              {new Date(e.at).toLocaleString(locale, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
               {e.driverName && ` · ${e.driverName}`}
             </span>
           </div>

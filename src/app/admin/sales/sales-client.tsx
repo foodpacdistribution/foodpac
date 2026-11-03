@@ -89,8 +89,8 @@ export function SalesClient({
                 <Download className="size-4" /> {tr("Export CSV")}
               </button>
             )}
-            <Link href={`/admin/sales/picklist?${ids.length ? `ids=${ids.join(",")}` : `date=${today}`}`} className={btn("secondary")}>
-              <ClipboardList className="size-4" /> {ids.length ? tr(`Pick list (${ids.length})`) : tr("Today's pick list")}
+            <Link href={ids.length ? `/admin/sales/picklist?ids=${ids.join(",")}` : "/admin/sales/picklist"} className={btn("secondary")}>
+              <ClipboardList className="size-4" /> {ids.length ? tr(`Pick list (${ids.length})`) : tr("Pick list")}
             </Link>
           </>
         }

@@ -85,6 +85,13 @@
       "when": 1793601950745,
       "tag": "0011_proof_sha256",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793673651217,
+      "tag": "0012_query_indexes",
+      "breakpoints": true
     }
   ]
 }

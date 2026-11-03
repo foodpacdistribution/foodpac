@@ -63,7 +63,7 @@ export default async function TrackingPage() {
             <T>{"Once today's plan is dispatched and drivers start their routes, their live positions appear here."}</T></EmptyState>
         </Card>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
           <Card className="h-[480px] overflow-hidden xl:h-[calc(100dvh-10rem)] xl:min-h-[560px]">
             <DeliveryMap
               fitOnce

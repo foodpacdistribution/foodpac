@@ -62,7 +62,7 @@ export default async function InvoicesPage() {
                   </Link>
                   <span className="block text-xs text-leaf-900/50">{<Tx>{prettyDate(r.createdAt.toISOString().slice(0, 10))}</Tx>}</span>
                 </td>
-                <td className="px-2 py-3 text-leaf-900/70">{PAYMENT_METHOD_LABEL[r.paymentMethod]}</td>
+                <td className="px-2 py-3 text-leaf-900/70"><Tx>{PAYMENT_METHOD_LABEL[r.paymentMethod]}</Tx></td>
                 <td className="px-2 py-3 text-leaf-900/70">{r.dueDate ? prettyDate(r.dueDate) : "—"}</td>
                 <td className="px-2 py-3">
                   {r.paymentStatus === "unpaid" && r.dueDate && r.dueDate < today ? <Pill tone="red"><T>{"Overdue"}</T></Pill> : <PaymentPill s={r.paymentStatus} />}

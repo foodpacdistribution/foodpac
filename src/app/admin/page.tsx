@@ -17,6 +17,8 @@ import { formatClock, nowSecondsIn, todayIn } from "@/lib/time";
 import { DemoOrdersButton } from "./demo-orders-button";
 import { databaseUrl } from "@/lib/db/url";
 import { T, Tx } from "@/components/i18n";
+import { intlLocale } from "@/lib/i18n";
+import { getLocale } from "@/lib/i18n/server";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -24,6 +26,7 @@ export default async function DashboardPage() {
   const user = await requireUser(STAFF);
   const db = await getDb();
   const s = await getSettings(db);
+  const locale = intlLocale(await getLocale());
   const today = todayIn(s.timezone);
   const nowS = nowSecondsIn(s.timezone);
   await restoreDeliveries(db, s.timezone);
@@ -154,7 +157,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="min-w-0 space-y-4">
           <Card className="overflow-hidden">
             <CardHeader
@@ -362,7 +365,7 @@ export default async function DashboardPage() {
                       </p>
                     </div>
                     <span className="shrink-0 text-xs text-slate-400">
-                      {e.createdAt.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit", timeZone: s.timezone })}
+                      {e.createdAt.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit", timeZone: s.timezone })}
                     </span>
                   </li>
                 ))}

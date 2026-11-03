@@ -147,7 +147,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
             <Stat label={<T>{"Driving saved"}</T>} value={<Tx>{formatDuration(total.saved)}</Tx>} icon={TrendingDown} tone="amber" hint={<T>{"vs. unoptimised order, same road data"}</T>} />
           </div>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <Card className="min-w-0">
               <CardHeader title={<T>{"By day"}</T>} subtitle={<T>{"Actual time comes from drivers' start and last-stop taps, when available."}</T>} />
               <div className="overflow-x-auto">

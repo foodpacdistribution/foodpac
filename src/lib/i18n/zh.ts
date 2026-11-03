@@ -1425,6 +1425,9 @@ export const ZH: Record<string, string> = {
   "{n} planned, not sent": "{n} 个已规划未发送",
   "{n} need an address check": "{n} 个需要核实地址",
   "Add & send to driver": "加入并发送给司机",
+  "still to pick, from today on": "今天起尚未拣货的订单",
+  "delivery": "配送",
+  "Print": "打印",
 };
 
 /** Messages with a variable part. */

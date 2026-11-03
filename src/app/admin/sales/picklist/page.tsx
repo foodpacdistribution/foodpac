@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, gte, inArray } from "drizzle-orm";
 import type { Metadata } from "next";
 import { PrintButton } from "@/components/print-button";
 import { btn, Card } from "@/components/ui";
@@ -6,23 +6,35 @@ import { requireUser, STAFF } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
+import { getSettings } from "@/lib/planning";
+import { todayIn } from "@/lib/time";
 import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Pick list" };
 
-/** Warehouse pick list: totals per product (pick once), then each order's lines (pack per customer). */
+/**
+ * Warehouse pick list: totals per product (pick once), then each order's lines (pack per customer).
+ * Chosen orders (?ids=), one delivery day (?date=), or by default everything not yet packed from
+ * today on, since goods are usually picked the day before they go out.
+ */
 export default async function PickListPage({ searchParams }: { searchParams: Promise<{ ids?: string; date?: string }> }) {
   await requireUser(STAFF);
   const sp = await searchParams;
   const ids = (sp.ids ?? "").split(",").filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 300);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? "") ? sp.date! : null;
   const db = await getDb();
+  const today = todayIn((await getSettings(db)).timezone);
+  const which = ids.length
+    ? inArray(salesOrders.id, ids)
+    : date
+      ? eq(salesOrders.deliveryDate, date)
+      : and(inArray(salesOrders.fulfilment, ["new", "picking"]), gte(salesOrders.deliveryDate, today));
   const so = await db
     .select({ so: salesOrders, customer: customers.name })
     .from(salesOrders)
     .innerJoin(customers, eq(customers.id, salesOrders.customerId))
-    .where(and(eq(salesOrders.status, "confirmed"), ids.length ? inArray(salesOrders.id, ids) : eq(salesOrders.deliveryDate, date ?? "")))
-    .orderBy(asc(salesOrders.number));
+    .where(and(eq(salesOrders.status, "confirmed"), which))
+    .orderBy(asc(salesOrders.deliveryDate), asc(salesOrders.number));
   const items = so.length
     ? await db.select().from(salesOrderItems).where(inArray(salesOrderItems.salesOrderId, so.map((r) => r.so.id))).orderBy(asc(salesOrderItems.sku))
     : [];
@@ -40,7 +52,7 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
           <h1 className="text-xl font-semibold tracking-tight"><T>{"Pick list"}</T></h1>
           <p className="text-sm text-slate-500">
             <T vars={{ n: so.length }}>{so.length === 1 ? "{n} confirmed order" : "{n} confirmed orders"}</T>
-            {date && !ids.length && ` for delivery ${prettyDate(date)}`}
+            {!ids.length && (date ? <> · <T>{"delivery"}</T> <Tx>{prettyDate(date)}</Tx></> : <> · <T>{"still to pick, from today on"}</T></>)}
           </p>
         </div>
         <PrintButton className={btn("primary", "md", "no-print")} />

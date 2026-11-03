@@ -134,7 +134,7 @@ export default async function PortalOverview() {
                   <div>
                     <p className="flex items-center gap-2 font-display text-xl font-semibold">
                       <CalendarClock className="size-5 text-leaf-700" />
-                      {next.deliveryDate === today ? <T>{"Today"}</T> : prettyDate(next.deliveryDate, { weekday: "long", day: "numeric", month: "long" })}
+                      {next.deliveryDate === today ? <T>{"Today"}</T> : <Tx>{prettyDate(next.deliveryDate, { weekday: "long", day: "numeric", month: "long" })}</Tx>}
                     </p>
                     <p className="mt-0.5 text-sm text-leaf-900/60">
                       {next.number} · <T vars={{ n: next.items }}>{next.items === 1 ? "{n} item" : "{n} items"}</T>
