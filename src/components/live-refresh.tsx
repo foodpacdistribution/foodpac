@@ -65,7 +65,7 @@ export function LiveRefresh({ scope, intervalMs = 12_000, notify }: { scope: "ad
           if (notify === "staff" && now.sales > prev.sales) setToast({ id: Date.now(), tone: "ok", text: now.sales - prev.sales > 1 ? `${now.sales - prev.sales} new online orders` : "New online order" });
           else if (notify === "staff" && now.enquiries > prev.enquiries) setToast({ id: Date.now(), tone: "ok", text: "New website enquiry" });
           if (notify === "driver" && now.stops > prev.stops) {
-            setToast({ id: Date.now(), tone: "ok", text: now.stops - prev.stops > 1 ? `${now.stops - prev.stops} new stops added` : "New stop added to your route" });
+            setToast({ id: Date.now(), tone: "ok", text: `${now.stops - prev.stops} new stop(s) added · route re-ordered for the fastest drive` });
             navigator.vibrate?.([120, 60, 120]);
           }
           if (heldRef.current) setWaiting(true);

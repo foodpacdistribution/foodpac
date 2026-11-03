@@ -1,12 +1,14 @@
-import { desc, eq } from "drizzle-orm";
-import { CheckCircle2, Circle, Clock, Map as MapIcon, Package, PackageCheck, PackageX, Radio, Truck, Upload } from "lucide-react";
+import { and, asc, desc, eq, gt, ne, or, sql } from "drizzle-orm";
+import { CheckCircle2, Circle, Clock, Map as MapIcon, Package, PackageCheck, PackageX, Radio, ShoppingBag, Truck, Upload } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { Badge, btn, Card, CardHeader, ColorDot, cx, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { deliveryEvents, drivers, orders } from "@/lib/db/schema";
+import { customers, deliveryEvents, drivers, orders, salesOrders } from "@/lib/db/schema";
+import { restoreDeliveries } from "@/lib/deliveries";
+import { aud } from "@/lib/money";
 import { prettyDate } from "@/lib/dates";
 import { formatAgo, vehicleMarkers } from "@/lib/live-map";
 import { getDepots, getPlanView, getSettings } from "@/lib/planning";
@@ -24,10 +26,27 @@ export default async function DashboardPage() {
   const s = await getSettings(db);
   const today = todayIn(s.timezone);
   const nowS = nowSecondsIn(s.timezone);
-  const [view, dayOrders, depotList] = await Promise.all([
+  await restoreDeliveries(db, s.timezone);
+  const [view, dayOrders, depotList, newSales, upcoming] = await Promise.all([
     getPlanView(db, today),
-    db.select().from(orders).where(eq(orders.deliveryDate, today)),
+    db.select().from(orders).where(and(eq(orders.deliveryDate, today), ne(orders.source, "quick_route"))),
     getDepots(db),
+    // Shop orders waiting on the office (same rule as the sidebar badge), newest first.
+    db
+      .select({ id: salesOrders.id, number: salesOrders.number, status: salesOrders.status, deliveryDate: salesOrders.deliveryDate, totalCents: salesOrders.totalCents, customer: customers.name })
+      .from(salesOrders)
+      .innerJoin(customers, eq(customers.id, salesOrders.customerId))
+      .where(or(eq(salesOrders.status, "pending"), and(eq(salesOrders.status, "confirmed"), eq(salesOrders.fulfilment, "new"))))
+      .orderBy(desc(salesOrders.createdAt))
+      .limit(6),
+    // The next delivery days after today, and how much of each still needs a shipment.
+    db
+      .select({ date: orders.deliveryDate, total: sql<number>`count(*)::int`, unshipped: sql<number>`count(*) filter (where ${orders.status} = 'pending')::int` })
+      .from(orders)
+      .where(and(gt(orders.deliveryDate, today), ne(orders.source, "quick_route"), ne(orders.status, "delivered"), ne(orders.status, "failed")))
+      .groupBy(orders.deliveryDate)
+      .orderBy(asc(orders.deliveryDate))
+      .limit(5),
   ]);
   const [live, events] = await Promise.all([
     liveFleet(db, view.routes.filter((r) => r.status !== "planned")),
@@ -96,7 +115,7 @@ export default async function DashboardPage() {
           // Always point at the next unfinished step of the day, so it's clear what to do now.
           nextStep ? (
             <Link href={nextStep.href} className={btn("primary")}>
-              <nextStep.icon className="size-4" /> {nextStep.label}
+              <nextStep.icon className="size-4" /> <Tx>{nextStep.label}</Tx>
             </Link>
           ) : (
             <Link href="/admin/tracking" className={btn("primary")}>
@@ -106,8 +125,23 @@ export default async function DashboardPage() {
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Stat label={<T>{"Today's orders"}</T>} value={dayOrders.length} icon={Package} tone="slate" hint={notLocated ? `${notLocated} need an address check` : undefined} />
-        <Stat label={<T>{"Unplanned"}</T>} value={count("pending")} icon={Circle} tone="violet" hint={count("planned") ? `${count("planned")} planned, not sent` : undefined} />
+        <Stat
+          label={<T>{"Today's orders"}</T>}
+          value={dayOrders.length}
+          icon={Package}
+          tone="slate"
+          hint={
+            notLocated ? (
+              <T vars={{ n: notLocated }}>{"{n} need an address check"}</T>
+            ) : !dayOrders.length && upcoming[0] ? (
+              <>
+                <T>{"Next:"}</T> <Tx>{prettyDate(upcoming[0].date, { weekday: "short", day: "numeric", month: "short" })}</Tx> ·{" "}
+                <T vars={{ n: upcoming[0].total }}>{"{n} orders"}</T>
+              </>
+            ) : undefined
+          }
+        />
+        <Stat label={<T>{"Unplanned"}</T>} value={count("pending")} icon={Circle} tone="violet" hint={count("planned") ? <T vars={{ n: count("planned") }}>{"{n} planned, not sent"}</T> : undefined} />
         <Stat label={<T>{"Out for delivery"}</T>} value={outForDelivery} icon={Truck} tone="blue" />
         <Stat label={<T>{"Delivered"}</T>} value={delivered} icon={PackageCheck} tone="green" hint={dayOrders.length ? `${Math.round((delivered / dayOrders.length) * 100)}% of today` : undefined} />
         <Stat label={<T>{"Failed"}</T>} value={failed} icon={PackageX} tone={failed ? "red" : "slate"} />
@@ -116,7 +150,7 @@ export default async function DashboardPage() {
           value={projectedFinish ? formatClock(projectedFinish) : "—"}
           icon={Clock}
           tone="amber"
-          hint={activeDrivers ? `${activeDrivers} driver(s) on the road` : plan ? "Planned finish" : "No plan yet"}
+          hint={activeDrivers ? `${activeDrivers} driver(s) on the road` : <T>{plan ? "Planned finish" : "No plan yet"}</T>}
         />
       </div>
 
@@ -239,6 +273,53 @@ export default async function DashboardPage() {
         </div>
 
         <div className="space-y-4">
+          {(newSales.length > 0 || upcoming.length > 0) && (
+            <Card>
+              <CardHeader title={<T>{"Coming up"}</T>} subtitle={<T>{"New shop orders and the next delivery days"}</T>} />
+              {newSales.length > 0 && (
+                <ul className="divide-y divide-line border-b border-line">
+                  {newSales.map((o) => (
+                    <li key={o.id}>
+                      <Link href={`/admin/sales/${o.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50">
+                        <ShoppingBag className="size-4 shrink-0 text-blue-600" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-slate-900">
+                            {o.number} · {o.customer}
+                          </span>
+                          <span className="block text-xs text-slate-500">
+                            <T>{"Delivery"}</T>{" "}<Tx>{prettyDate(o.deliveryDate, { weekday: "short", day: "numeric", month: "short" })}</Tx> · {aud(o.totalCents)}
+                          </span>
+                        </span>
+                        <Badge tone={o.status === "pending" ? "amber" : "blue"}>
+                          <T>{o.status === "pending" ? "To confirm" : "To pick"}</T>
+                        </Badge>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {upcoming.length > 0 && (
+                <ul className="divide-y divide-line">
+                  {upcoming.map((d) => (
+                    <li key={d.date}>
+                      <Link href={`/admin/shipments?date=${d.date}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50">
+                        <Truck className="size-4 shrink-0 text-slate-400" />
+                        <span className="flex-1 text-sm text-slate-800">
+                          <Tx>{prettyDate(d.date, { weekday: "short", day: "numeric", month: "short" })}</Tx>
+                          <span className="text-slate-500"> · <T vars={{ n: d.total }}>{"{n} orders"}</T></span>
+                        </span>
+                        {d.unshipped > 0 ? (
+                          <Badge tone="amber"><T vars={{ n: d.unshipped }}>{"{n} to ship"}</T></Badge>
+                        ) : (
+                          <Badge tone="green"><T>{"All shipped"}</T></Badge>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
           <Card>
             <CardHeader title={<T>{"Today's checklist"}</T>} />
             <ol className="space-y-1 p-3">

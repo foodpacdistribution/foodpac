@@ -1414,6 +1414,17 @@ export const ZH: Record<string, string> = {
   "Shipment {number} ready: print the docket, then send it to the driver.": "配送单 {number} 已创建:打印配送单,然后发送给司机。",
   "{n} stops": "{n} 个站点",
   "This shipment is for {day}. You can look it over now; deliver it on the day.": "这是 {day} 的配送单。现在可以先查看,当天再配送。",
+  "Showing today's plan": "显示今日计划",
+  "No plan yet": "尚无计划",
+  "Not planned": "待安排配送",
+  "Coming up": "接下来",
+  "New shop orders and the next delivery days": "新的商城订单和接下来的配送日",
+  "To confirm": "待确认",
+  "{n} to ship": "{n} 个待发货",
+  "All shipped": "已全部发货",
+  "{n} planned, not sent": "{n} 个已规划未发送",
+  "{n} need an address check": "{n} 个需要核实地址",
+  "Add & send to driver": "加入并发送给司机",
 };
 
 /** Messages with a variable part. */
@@ -1492,4 +1503,5 @@ export const ZH_PATTERNS: [RegExp, string][] = [
   [new RegExp("^All (\\d+) rows look good \u00b7 (\\d+) new, (\\d+) update existing products$"), "全部 $1 行无误 · 新增 $2 个,更新 $3 个现有产品"],
   [new RegExp("^(\\d+) products back to list price$"), "$1 个产品已恢复标准价"],
   [new RegExp("^([\\d.]+)% off (\\d+) products$"), "$2 个产品已优惠 $1%"],
+  [new RegExp("^(\\d+) new stop\\(s\\) added · route re-ordered for the fastest drive$"), "新增 $1 个站点 · 已重新排出最快路线"],
 ];

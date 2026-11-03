@@ -13,6 +13,7 @@ describe("translate", () => {
     expect(translate(zh, "Place order")).toBe("提交订单");
     expect(translate(zh, "{n} units over capacity", { n: 3 })).toBe("超出载量 3 件");
     expect(translate(zh, "Welcome back, Alex")).toBe("欢迎回来,Alex");
+    expect(translate(zh, "2 new stop(s) added · route re-ordered for the fastest drive")).toBe("新增 2 个站点 · 已重新排出最快路线");
   });
 
   it("keeps unknown text in English", () => {

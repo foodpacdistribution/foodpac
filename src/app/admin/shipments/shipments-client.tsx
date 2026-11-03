@@ -199,16 +199,14 @@ export function ShipmentsClient(props: { date: string; today: string; hasDepot: 
                 {existing ? `Add ${selected.size || ""} to ${existing.number}` : `Create shipment${selected.size ? ` (${selected.size})` : ""}`}
               </button>
               {/* Skips the separate "Send" step when the docket isn't needed first. */}
-              {(!existing || existing.status === "planned") && (
-                <button
-                  className={btn("success")}
-                  disabled={!selected.size || !effectiveDriver || !props.hasDepot || pending}
-                  onClick={() => run("create-send", () => createShipment(props.date, effectiveDriver, [...selected], { send: true }), () => setSelected(new Set()))}
-                >
-                  {busy === "create-send" ? <Spinner /> : <Send className="size-4" />}
-                  {tr("Create & send to driver")}
-                </button>
-              )}
+              <button
+                className={btn("success")}
+                disabled={!selected.size || !effectiveDriver || !props.hasDepot || pending}
+                onClick={() => run("create-send", () => createShipment(props.date, effectiveDriver, [...selected], { send: true }), () => setSelected(new Set()))}
+              >
+                {busy === "create-send" ? <Spinner /> : <Send className="size-4" />}
+                {tr(existing ? "Add & send to driver" : "Create & send to driver")}
+              </button>
               {selected.size > 0 && (
                 <span className="text-xs text-slate-500">
                   {units} {" "}{tr("units")}{driver?.capacity != null && units > driver.capacity && <span className="text-amber-700"> {" "}{tr("· over")}{" "}{driver.name}{tr("'s capacity (")}{driver.capacity})</span>}

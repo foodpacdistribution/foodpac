@@ -1,9 +1,10 @@
 import "server-only";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { DB } from "./db";
-import { drivers, orders, plans, routes, routeStops, salesOrders } from "./db/schema";
+import { drivers, orders, plans, routes, routeStops, salesOrders, vehicleLocations } from "./db/schema";
 import { type LatLng, routeGeometry, travelMatrix } from "./geo/routing";
-import { depotFor, getDepots, getSettings, refreshPlanSummary, UserError } from "./planning";
+import { depotFor, getDepots, getSettings, learnTiming, refreshPlanSummary, UserError } from "./planning";
+import { nowSecondsIn, todayIn } from "./time";
 import { evaluateRoute } from "./vrp/evaluate";
 import { solve } from "./vrp/solver";
 import type { Job, Problem, Vehicle } from "./vrp/types";
@@ -15,9 +16,11 @@ import type { Job, Problem, Vehicle } from "./vrp/types";
 export const MAX_SHIPMENT_STOPS = 80;
 
 /**
- * Creates the driver's shipment for the day, or adds orders to it if they already have one
- * that hasn't started. The stop order is optimised with real road times, delivery windows,
- * unload times and vehicle capacity, starting and (optionally) ending at the driver's depot.
+ * Creates the driver's shipment for the day, or adds orders to the one they already have. The
+ * stop order is optimised with real road times, delivery windows, unload times and vehicle
+ * capacity, starting and (optionally) ending at the driver's depot. On a shipment the driver
+ * has started, delivered stops stay as they are and the rest (with any new orders) is
+ * re-ordered from where the driver is now, so their next stop is always the best one.
  */
 export async function buildShipment(db: DB, date: string, driverId: string, addOrderIds: string[], removeOrderIds: string[] = []) {
   const s = await getSettings(db);
@@ -28,11 +31,21 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
 
   const [plan] = await db.select().from(plans).where(eq(plans.deliveryDate, date)).limit(1);
   const [route] = plan ? await db.select().from(routes).where(and(eq(routes.planId, plan.id), eq(routes.driverId, driverId))).limit(1) : [];
-  if (route && route.status !== "planned") throw new UserError(`${driver.name} has already started this shipment. Use the Route Planner to change a route that's on the road.`);
+  const started = !!route && route.status !== "planned";
 
-  const current = route ? (await db.select({ orderId: routeStops.orderId }).from(routeStops).where(eq(routeStops.routeId, route.id))).map((r) => r.orderId) : [];
+  const stopRows = route
+    ? await db
+        .select({ stop: routeStops, lat: orders.lat, lng: orders.lng, demand: orders.demand })
+        .from(routeStops)
+        .innerJoin(orders, eq(orders.id, routeStops.orderId))
+        .where(eq(routeStops.routeId, route.id))
+        .orderBy(asc(routeStops.seq))
+    : [];
+  const done = stopRows.filter((r) => r.stop.status !== "pending");
+  if (done.some((d) => removeOrderIds.includes(d.stop.orderId))) throw new UserError("That stop has already been completed.");
+  const current = stopRows.filter((r) => r.stop.status === "pending").map((r) => r.stop.orderId);
   const wanted = [...new Set([...current.filter((id) => !removeOrderIds.includes(id)), ...addOrderIds])];
-  if (wanted.length > MAX_SHIPMENT_STOPS) throw new UserError(`A shipment can hold up to ${MAX_SHIPMENT_STOPS} stops.`);
+  if (done.length + wanted.length > MAX_SHIPMENT_STOPS) throw new UserError(`A shipment can hold up to ${MAX_SHIPMENT_STOPS} stops.`);
 
   const rows = wanted.length ? await db.select().from(orders).where(inArray(orders.id, wanted)) : [];
   for (const id of addOrderIds) {
@@ -43,32 +56,66 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
     if (o.lat === null || o.lng === null) throw new UserError(`Order ${o.orderNumber}'s address hasn't been located yet. Verify it on the Orders page first.`);
   }
 
-  // Empty shipment: give the orders back and remove the route.
+  // Nothing left to deliver: an unstarted shipment goes away; a started one keeps its history.
   if (!rows.length) {
-    if (route) await deleteShipmentRoute(db, route.id);
-    return null;
+    if (route && !started) await deleteShipmentRoute(db, route.id);
+    else if (route) await dropPendingStops(db, route.id, removeOrderIds, plan!);
+    return route && started ? route : null;
   }
 
-  // ----- the single-driver routing problem -----
-  const points: LatLng[] = [{ lat: depot.lat, lng: depot.lng }, ...rows.map((o) => ({ lat: o.lat!, lng: o.lng! }))];
-  const matrix = await travelMatrix(points);
-  const durations = matrix.durations.map((row) => row.map((d) => Math.round(d * s.trafficFactor)));
+  // ----- where and when the driver sets off -----
+  const shiftLength = (driver.maxShiftMin ?? s.defaultMaxShiftMin) * 60;
+  const last = done.at(-1);
+  let from: LatLng = { lat: depot.lat, lng: depot.lng };
+  let startTime = (driver.shiftStartMin ?? s.defaultStartMin) * 60;
+  let maxDuration = shiftLength;
+  let maxTrips = Math.max(1, driver.maxTrips);
+  let firstTripCapacity = driver.capacity;
+  if (started) {
+    // Their latest GPS fix if it's fresh, else the stop they last finished, else the depot.
+    const [fix] = await db
+      .select({ lat: vehicleLocations.lat, lng: vehicleLocations.lng })
+      .from(vehicleLocations)
+      .where(and(eq(vehicleLocations.routeId, route.id), gte(vehicleLocations.recordedAt, new Date(Date.now() - FRESH_FIX_MS))))
+      .orderBy(desc(vehicleLocations.recordedAt))
+      .limit(1);
+    if (fix) from = fix;
+    else if (last?.lat != null && last.lng != null) from = { lat: last.lat, lng: last.lng };
+    const nowS = date === todayIn(s.timezone) ? nowSecondsIn(s.timezone) : 0;
+    startTime = Math.max(last?.stop.etdS ?? route.startS, nowS);
+    maxDuration = Math.max(0, shiftLength - (startTime - route.startS));
+    if (last) {
+      // Mid-trip: only what's left on the van counts for the first trip; used trips are gone.
+      maxTrips = Math.max(1, maxTrips - (last.stop.trip - 1));
+      if (driver.capacity !== null) {
+        const used = done.filter((d) => d.stop.trip === last.stop.trip).reduce((t, d) => t + d.demand, 0);
+        firstTripCapacity = Math.max(0, driver.capacity - used);
+      }
+    }
+  }
+
+  // ----- the single-driver routing problem: node 0 = start, 1..n = orders, n + 1 = depot -----
+  const depotNode = rows.length + 1;
+  const points: LatLng[] = [from, ...rows.map((o) => ({ lat: o.lat!, lng: o.lng! })), { lat: depot.lat, lng: depot.lng }];
+  const [matrix, learned] = await Promise.all([travelMatrix(points), learnTiming(db, s.timezone)]);
+  const trafficFactor = learned?.trafficFactor ?? s.trafficFactor;
+  const durations = matrix.durations.map((row) => row.map((d) => Math.round(d * trafficFactor)));
   const vehicle: Vehicle = {
     id: driver.id,
     startNode: 0,
-    endNode: s.returnToDepot ? 0 : null,
-    depotNode: 0,
-    startTime: (driver.shiftStartMin ?? s.defaultStartMin) * 60,
-    maxDuration: (driver.maxShiftMin ?? s.defaultMaxShiftMin) * 60,
+    endNode: s.returnToDepot ? depotNode : null,
+    depotNode,
+    startTime,
+    maxDuration,
     capacity: driver.capacity,
-    firstTripCapacity: driver.capacity,
-    maxTrips: Math.max(1, driver.maxTrips),
+    firstTripCapacity,
+    maxTrips,
     reloadTime: s.reloadMin * 60,
   };
   const jobs: Job[] = rows.map((o, i) => ({
     id: o.id,
     node: i + 1,
-    service: (o.serviceMin ?? s.defaultServiceMin) * 60,
+    service: (o.serviceMin ?? learned?.serviceMin ?? s.defaultServiceMin) * 60,
     twStart: o.windowStartMin !== null ? o.windowStartMin * 60 : null,
     twEnd: o.windowEndMin !== null ? o.windowEndMin * 60 : null,
     demand: o.demand,
@@ -82,13 +129,18 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
   for (let i = 0; i < jobs.length; i++) if (!order.includes(i)) order.push(i);
   const ev = evaluateRoute(problem, vehicle, order);
 
-  const pathPts: LatLng[] = [points[0]];
+  // The line on the map: what's been driven, then the new order from where the driver is.
+  const depotPoint = points[depotNode];
+  const pathPts: LatLng[] = started ? [depotPoint, ...done.filter((d) => d.lat !== null).map((d) => ({ lat: d.lat!, lng: d.lng! })), from] : [from];
   ev.stops.forEach((st, i) => {
-    if (i > 0 && st.trip !== ev.stops[i - 1].trip) pathPts.push(points[0]);
+    if (i > 0 && st.trip !== ev.stops[i - 1].trip) pathPts.push(depotPoint);
     pathPts.push(points[jobs.findIndex((j) => j.id === st.jobId) + 1]);
   });
-  if (s.returnToDepot) pathPts.push(points[0]);
+  if (s.returnToDepot) pathPts.push(depotPoint);
   const geometry = await routeGeometry(pathPts);
+
+  const tripOffset = last ? last.stop.trip - 1 : 0;
+  const sum = (f: (d: (typeof done)[number]) => number) => done.reduce((t, d) => t + f(d), 0);
 
   return db.transaction(async (tx) => {
     const [p] = await tx
@@ -97,30 +149,36 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
       .onConflictDoUpdate({ target: plans.deliveryDate, set: { updatedAt: new Date() } })
       .returning();
     const values = {
-      startS: ev.start,
+      startS: started ? route.startS : ev.start,
       endS: ev.end,
-      distanceM: ev.distance,
-      driveS: ev.driveTime,
-      serviceS: ev.serviceTime,
-      waitS: ev.waitTime,
+      distanceM: sum((d) => d.stop.legDistanceM) + ev.distance,
+      driveS: sum((d) => d.stop.legDriveS) + ev.driveTime,
+      serviceS: sum((d) => Math.max(0, d.stop.etdS - d.stop.etaS - d.stop.waitS)) + ev.serviceTime,
+      waitS: sum((d) => d.stop.waitS) + ev.waitTime,
       overtimeS: ev.overtime,
       overCapacity: ev.overCapacity,
-      trips: Math.max(1, ev.trips),
-      reloads: ev.reloads.map((r) => ({ afterSeq: r.afterIndex + 1, arrivalS: r.arrival, departureS: r.departure })),
+      trips: tripOffset + Math.max(1, ev.trips),
+      reloads: [
+        ...(route?.reloads ?? []).filter((r) => r.afterSeq < done.length),
+        ...ev.reloads.map((r) => ({ afterSeq: done.length + r.afterIndex + 1, arrivalS: r.arrival, departureS: r.departure })),
+      ],
       geometry,
+      // New stops on a finished route put the driver back on the road.
+      ...(started ? { status: "in_progress" as const, completedAt: null } : {}),
     };
     const [r] = await tx
       .insert(routes)
       .values({ planId: p.id, driverId: driver.id, ...values })
       .onConflictDoUpdate({ target: [routes.planId, routes.driverId], set: values })
       .returning();
-    await tx.delete(routeStops).where(eq(routeStops.routeId, r.id));
+    // Delivered and failed stops are the record of what happened; only the stops still to do are replaced.
+    await tx.delete(routeStops).where(and(eq(routeStops.routeId, r.id), eq(routeStops.status, "pending")));
     await tx.insert(routeStops).values(
       ev.stops.map((st, i) => ({
         routeId: r.id,
         orderId: st.jobId,
-        seq: i + 1,
-        trip: st.trip,
+        seq: done.length + i + 1,
+        trip: tripOffset + st.trip,
         etaS: st.arrival,
         etdS: st.departure,
         waitS: st.wait,
@@ -143,6 +201,19 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
     }
     await refreshPlanSummary(tx as unknown as DB, p.id, date);
     return r;
+  });
+}
+
+/** GPS fixes older than this don't say where the van is now. */
+const FRESH_FIX_MS = 20 * 60_000;
+
+/** A started shipment with nothing left to deliver: its remaining stops go back to "ready to ship". */
+async function dropPendingStops(db: DB, routeId: string, orderIds: string[], plan: { id: string; deliveryDate: string }) {
+  await db.transaction(async (tx) => {
+    await tx.delete(routeStops).where(and(eq(routeStops.routeId, routeId), eq(routeStops.status, "pending")));
+    if (orderIds.length) await tx.update(orders).set({ status: "pending", driverId: null, updatedAt: new Date() }).where(inArray(orders.id, orderIds));
+    await tx.update(routes).set({ status: "completed", completedAt: new Date() }).where(eq(routes.id, routeId));
+    await refreshPlanSummary(tx as unknown as DB, plan.id, plan.deliveryDate);
   });
 }
 

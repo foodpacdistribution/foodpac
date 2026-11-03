@@ -45,11 +45,14 @@ const SECTIONS = [
   { title: "System", items: [{ href: "/admin/settings", label: "Settings", icon: Settings, adminOnly: true }] },
 ];
 
-export function SideNav({ role, mobile, newEnquiries = 0 }: { role: Role; mobile?: boolean; newEnquiries?: number }) {
+/** Counts shown next to menu items, by link. */
+export type NavBadges = Partial<Record<string, number>>;
+
+export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: boolean; badges?: NavBadges }) {
   const pathname = usePathname();
   const tr = useT();
   const isActive = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname.startsWith(href));
-  const count = (href: string) => (href === "/admin/enquiries" && newEnquiries > 0 ? newEnquiries : null);
+  const count = (href: string) => (badges[href] ? badges[href] : null);
   const sections = SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => !("adminOnly" in i) || role === "admin") })).filter(
     (s) => s.items.length,
   );
@@ -68,7 +71,7 @@ export function SideNav({ role, mobile, newEnquiries = 0 }: { role: Role; mobile
           >
             <Icon className="size-3.5" />
             {tr(label)}
-            {count(href) && <span className="rounded-full bg-blue-500 px-1.5 text-[10px] text-white">{count(href)}</span>}
+            {count(href) && <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">{count(href)}</span>}
             <LinkPending className="hidden" />
           </Link>
         ))}
@@ -94,7 +97,7 @@ export function SideNav({ role, mobile, newEnquiries = 0 }: { role: Role; mobile
                 <Icon className="size-4" />
                 {tr(label)}
                 {count(href) && (
-                  <span className="ml-auto rounded-full bg-blue-500 px-1.5 py-px text-[10px] font-semibold tabular-nums text-white">{count(href)}</span>
+                  <span className="ml-auto rounded-full bg-red-500 px-1.5 py-px text-[10px] font-semibold tabular-nums text-white">{count(href)}</span>
                 )}
                 <LinkPending className="ml-auto" />
               </Link>
