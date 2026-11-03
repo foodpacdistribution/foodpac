@@ -3,7 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { type DB, getDb } from "./db";
 import { customers, salesOrderItems, salesOrders, users } from "./db/schema";
 import { prettyDate } from "./dates";
-import { esc, layout, officeEmail, rows, sendEmail } from "./email";
+import { esc, itemTable, layout, mailto, note, officeEmail, rows, sendEmail } from "./email";
 import { aud, PAYMENT_METHOD_LABEL } from "./money";
 import { getSettings } from "./planning";
 import { siteUrl } from "./site-url";
@@ -42,19 +42,21 @@ export async function orderConfirmed(salesOrderId: string, opts: { office: boole
   const base = siteUrl();
   const window =
     so.windowStartMin !== null || so.windowEndMin !== null ? ` · ${formatMinutesClock(so.windowStartMin)}–${formatMinutesClock(so.windowEndMin)}` : "";
-  const lines = `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:12px 0;font-size:14px;border-top:1px solid #eee">${items
-    .map(
-      (it) =>
-        `<tr><td style="padding:8px 0;border-bottom:1px solid #eee">${esc(it.name)}<br><span style="color:#6b7c72;font-size:12px">${esc(it.sku)} · ${esc(it.packSize)}</span></td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">${it.qty} × ${aud(it.unitPriceCents)}</td><td style="padding:8px 0 8px 12px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">${aud(it.lineCents)}</td></tr>`,
-    )
-    .join("")}</table>`;
+  const lines =
+    itemTable(items.map((it) => ({ name: it.name, detail: `${it.sku} · ${it.packSize}`, qty: it.qty, price: aud(it.unitPriceCents), total: aud(it.lineCents) }))) +
+    rows([
+      ["Subtotal (ex GST)", aud(so.subtotalCents)],
+      ["Delivery", so.deliveryFeeCents ? aud(so.deliveryFeeCents) : "Free"],
+      ["GST", aud(so.gstCents)],
+      ["Total", `<strong style="font-size:16px">${aud(so.totalCents)}</strong>`],
+    ]);
   const summary = rows([
     ["Order", `<strong>${esc(so.number)}</strong>`],
     ["Delivery", `${esc(prettyDate(so.deliveryDate, { weekday: "long", day: "numeric", month: "long" }))}${esc(window)}`],
     ["Deliver to", `${esc(so.recipient)}<br>${esc(so.address)}`],
     ["Payment", esc(PAYMENT_METHOD_LABEL[so.paymentMethod])],
-    ["Total", `<strong>${aud(so.totalCents)}</strong> <span style="color:#6b7c72">incl. GST</span>`],
   ]);
+  const shortDate = prettyDate(so.deliveryDate, { weekday: "short", day: "numeric", month: "short" });
   const text = [
     `Order ${so.number}`,
     `Delivery: ${prettyDate(so.deliveryDate, { weekday: "long", day: "numeric", month: "long" })}${window}`,
@@ -67,11 +69,12 @@ export async function orderConfirmed(salesOrderId: string, opts: { office: boole
     const bank = so.paymentMethod === "bank_transfer" && so.paymentStatus !== "paid" && s.bankDetails;
     await sendEmail({
       to,
-      subject: `Order ${so.number} confirmed – delivery ${prettyDate(so.deliveryDate, { weekday: "short", day: "numeric", month: "short" })}`,
+      subject: `Order ${so.number} confirmed – delivery ${shortDate}`,
       html: layout({
+        preview: `${so.number} · delivery ${shortDate} · ${aud(so.totalCents)}`,
         heading: "Thanks, your order is confirmed",
-        body: `<p style="margin:0">We've got your order and it's booked in for delivery.</p>${summary}${lines}${
-          bank ? `<p style="margin:16px 0 0;padding:12px;background:#faf6ee;border-radius:8px;font-size:14px"><strong>Bank transfer</strong><br>${esc(bank).replace(/\n/g, "<br>")}<br>Please use <strong>${esc(so.number)}</strong> as the reference.</p>` : ""
+        body: `<p style="margin:0">We've got your order and it's booked in for delivery. We'll let you know when it's on its way.</p>${summary}${lines}${
+          bank ? note(`<strong>Paying by bank transfer</strong><br>${esc(bank).replace(/\n/g, "<br>")}<br>Please use <strong>${esc(so.number)}</strong> as the reference.`) : ""
         }`,
         button: { label: "Track your order", url: `${base}/portal/orders/${so.id}` },
       }),
@@ -83,7 +86,12 @@ export async function orderConfirmed(salesOrderId: string, opts: { office: boole
     await sendEmail({
       to: office,
       subject: `New order ${so.number} · ${customer} · ${aud(so.totalCents)}`,
-      html: layout({ heading: `New order from ${customer}`, body: `${summary}${lines}`, button: { label: "Open in the back office", url: `${base}/admin/sales/${so.id}` } }),
+      html: layout({
+        preview: `${so.number} · ${customer} · delivery ${shortDate} · ${aud(so.totalCents)}`,
+        heading: `New order from ${customer}`,
+        body: `${summary}${lines}`,
+        button: { label: "Open in the back office", url: `${base}/admin/sales/${so.id}` },
+      }),
       text: `New order from ${customer}\n\n${text}\n\n${base}/admin/sales/${so.id}`,
       ...(to ? { replyTo: to } : {}),
     });
@@ -100,14 +108,15 @@ export async function enquiryReceived(e: { name: string; email: string; message:
     replyTo: e.email,
     subject: `Website enquiry from ${e.name}${e.business ? ` (${e.business})` : ""}`,
     html: layout({
+      preview: e.message.slice(0, 120),
       heading: "New website enquiry",
       body: `${rows([
         ["Name", esc(e.name)],
         ["Business", esc(e.business ?? "—")],
-        ["Email", `<a href="mailto:${esc(e.email)}">${esc(e.email)}</a>`],
+        ["Email", mailto(e.email)],
         ["Phone", esc(e.phone ?? "—")],
         ["Suburb", esc(e.suburb ?? "—")],
-      ])}<p style="margin:12px 0 0;padding:12px;background:#faf6ee;border-radius:8px;white-space:pre-wrap">${esc(e.message)}</p>`,
+      ])}${note(esc(e.message).replace(/\n/g, "<br>"))}`,
       button: { label: "Open enquiries", url: `${base}/admin/enquiries` },
       footer: "Reply to this email to answer them directly.",
     }),
@@ -125,11 +134,12 @@ export async function accountRequested(c: { id: string; name: string; contact: s
     replyTo: c.email,
     subject: `New trade account to approve: ${c.name}`,
     html: layout({
+      preview: `${c.name} · ${c.contact} · ${c.email}`,
       heading: "A new business wants to order",
       body: `${rows([
         ["Business", esc(c.name)],
         ["Contact", esc(c.contact)],
-        ["Email", `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`],
+        ["Email", mailto(c.email)],
         ["Phone", esc(c.phone ?? "—")],
         ["Address", esc(c.address ?? "—")],
       ])}<p style="margin:12px 0 0">Approve the account (and set their price list) so they can see prices and order.</p>`,
@@ -150,6 +160,7 @@ export async function accountApproved(customerId: string) {
     to,
     subject: "Your Foodpac trade account is ready",
     html: layout({
+      preview: "Your prices and online ordering are now open.",
       heading: `Welcome aboard, ${c.name}`,
       body: `<p style="margin:0">Your trade account is approved. Sign in to see your prices, order online and choose your delivery day.</p>`,
       button: { label: "Start ordering", url: `${base}/products` },
@@ -164,6 +175,7 @@ export async function passwordReset(to: string, name: string, link: string) {
     to,
     subject: "Reset your Foodpac password",
     html: layout({
+      preview: "Choose a new password. The link works once, for the next hour.",
       heading: `Hi ${name.split(" ")[0]}, reset your password`,
       body: `<p style="margin:0">Someone (hopefully you) asked to reset the password for this email. The link works once, for the next hour.</p>`,
       button: { label: "Choose a new password", url: link },

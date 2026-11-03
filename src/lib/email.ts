@@ -1,4 +1,6 @@
 import "server-only";
+import { SITE } from "@/app/(site)/site-info";
+import { siteUrl } from "./site-url";
 
 // Email through Resend (https://resend.com). Set RESEND_API_KEY to turn it on; without it
 // nothing is sent and the app works as before. Until a domain is verified in Resend, mail can
@@ -46,28 +48,74 @@ export async function sendEmail(msg: Email): Promise<boolean> {
 export const esc = (s: string | number | null | undefined) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
+const C = { ink: "#0b2a1c", muted: "#5f7268", line: "#ece6da", cream: "#faf6ee", green: "#113a27", orange: "#e0620c" };
+const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
 /**
- * Wraps already-escaped HTML in the Foodpac email layout. Inline styles only: that's what
- * email clients render reliably.
+ * Wraps already-escaped HTML in the Foodpac email: logo header, white card, footer with the
+ * company's details. Tables and inline styles only, since that's what every mail client renders.
+ * `preview` is the line inboxes show next to the subject.
  */
-export function layout(opts: { heading: string; body: string; button?: { label: string; url: string }; footer?: string }) {
+export function layout(opts: { preview?: string; heading: string; body: string; button?: { label: string; url: string }; footer?: string }) {
+  const base = siteUrl();
   const button = opts.button
-    ? `<p style="margin:24px 0 8px"><a href="${esc(opts.button.url)}" style="display:inline-block;background:#e0620c;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px">${esc(opts.button.label)}</a></p>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 4px"><tr><td style="border-radius:999px;background:${C.orange}">
+<a href="${esc(opts.button.url)}" style="display:inline-block;padding:13px 26px;font-family:${FONT};font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:999px">${esc(opts.button.label)} &rarr;</a></td></tr></table>`
     : "";
-  return `<!doctype html><html><body style="margin:0;background:#faf6ee;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0d2a1c">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf6ee;padding:24px 12px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden">
-<tr><td style="background:#113a27;padding:18px 24px;color:#faf6ee;font-weight:700;font-size:18px;letter-spacing:0.2px">Foodpac Distribution</td></tr>
-<tr><td style="padding:24px;font-size:15px;line-height:1.55">
-<h1 style="margin:0 0 12px;font-size:20px;line-height:1.3">${esc(opts.heading)}</h1>
-${opts.body}${button}
+  const contact = [SITE.phone && esc(SITE.phone), SITE.email && `<a href="mailto:${esc(SITE.email)}" style="color:${C.muted}">${esc(SITE.email)}</a>`]
+    .filter(Boolean)
+    .join(" &nbsp;·&nbsp; ");
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light">
+<title>${esc(opts.heading)}</title></head>
+<body style="margin:0;padding:0;background:${C.cream};-webkit-text-size-adjust:100%">
+${opts.preview ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${C.cream}">${esc(opts.preview)}&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;</div>` : ""}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.cream}"><tr><td align="center" style="padding:28px 12px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
+<tr><td style="background:#ffffff;border-radius:18px 18px 0 0;padding:22px 32px 18px;border-bottom:3px solid ${C.orange}">
+<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="vertical-align:middle"><a href="${esc(base)}" style="text-decoration:none"><img src="${esc(base)}/brand/foodpac-logo.png" width="150" height="54" alt="Foodpac Distribution" style="display:block;border:0;width:150px;height:auto"></a></td>
+<td style="vertical-align:middle;padding-left:14px"><span style="display:block;border-left:1px solid ${C.line};padding-left:14px;font-family:${FONT};font-size:10px;font-weight:600;letter-spacing:.22em;color:${C.green}">DISTRIBUTION</span></td>
+</tr></table>
 </td></tr>
-<tr><td style="padding:16px 24px;border-top:1px solid #eee;font-size:12px;color:#6b7c72">${opts.footer ?? "Foodpac Distribution · Food &amp; packaging supplies, delivered across South East Queensland."}</td></tr>
+<tr><td style="background:#ffffff;padding:30px 32px 32px;font-family:${FONT};font-size:15px;line-height:1.6;color:${C.ink}">
+<h1 style="margin:0 0 14px;font-size:22px;line-height:1.3;font-weight:700;color:${C.green}">${esc(opts.heading)}</h1>
+${opts.body}${button}
+${opts.footer ? `<p style="margin:26px 0 0;font-size:13px;color:${C.muted}">${opts.footer}</p>` : ""}
+</td></tr>
+<tr><td style="background:${C.green};border-radius:0 0 18px 18px;padding:22px 32px;font-family:${FONT};font-size:12px;line-height:1.7;color:#c9d8ce">
+<strong style="color:#ffffff;font-size:13px">${esc(SITE.name)}</strong><br>
+${esc(SITE.tagline)} Serving ${esc(SITE.serviceArea)} &nbsp;·&nbsp; ${esc(SITE.hours)}<br>
+${contact ? `${contact}<br>` : ""}<a href="${esc(base)}" style="color:#ffffff;text-decoration:underline">${esc(base.replace(/^https?:\/\//, ""))}</a>
+</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
-/** A two-column table of label → value rows (values already escaped). */
+/** Order details and similar facts: label → value rows on a cream panel (values already escaped). */
 export const rows = (items: [string, string][]) =>
-  `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:12px 0;font-size:14px">${items
-    .map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#6b7c72;white-space:nowrap;vertical-align:top">${esc(k)}</td><td style="padding:6px 0">${v}</td></tr>`)
-    .join("")}</table>`;
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:${C.cream};border-radius:12px"><tr><td style="padding:6px 18px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;line-height:1.5">${items
+    .map(
+      ([k, v], i) =>
+        `<tr><td style="padding:10px 16px 10px 0;color:${C.muted};white-space:nowrap;vertical-align:top;width:1%;${i ? `border-top:1px solid ${C.line}` : ""}">${esc(k)}</td><td style="padding:10px 0;vertical-align:top;${i ? `border-top:1px solid ${C.line}` : ""}">${v}</td></tr>`,
+    )
+    .join("")}</table></td></tr></table>`;
+
+/** A mailto link in the brand colour (mail clients otherwise show default blue). */
+export const mailto = (address: string) => `<a href="mailto:${esc(address)}" style="color:${C.green};font-weight:600">${esc(address)}</a>`;
+
+/** A short note on a cream panel (e.g. bank details, the customer's message). */
+export const note = (html: string) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0"><tr><td style="padding:14px 18px;background:${C.cream};border-left:3px solid ${C.orange};border-radius:8px;font-size:14px;line-height:1.6">${html}</td></tr></table>`;
+
+/** The order's lines: product, quantity × price, line total. */
+export const itemTable = (items: { name: string; detail: string; qty: number; price: string; total: string }[]) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 0;font-size:14px;line-height:1.45">
+<tr><td style="padding:0 0 8px;color:${C.muted};font-size:12px;text-transform:uppercase;letter-spacing:.06em">Item</td><td style="padding:0 0 8px;color:${C.muted};font-size:12px;text-transform:uppercase;letter-spacing:.06em;text-align:right">Qty</td><td style="padding:0 0 8px;color:${C.muted};font-size:12px;text-transform:uppercase;letter-spacing:.06em;text-align:right">Total</td></tr>
+${items
+  .map(
+    (it) =>
+      `<tr><td style="padding:12px 12px 12px 0;border-top:1px solid ${C.line}">${esc(it.name)}<br><span style="color:${C.muted};font-size:12px">${esc(it.detail)}</span></td><td style="padding:12px 0;border-top:1px solid ${C.line};text-align:right;white-space:nowrap;color:${C.muted}">${it.qty} × ${esc(it.price)}</td><td style="padding:12px 0 12px 12px;border-top:1px solid ${C.line};text-align:right;white-space:nowrap;font-weight:600">${esc(it.total)}</td></tr>`,
+  )
+  .join("")}</table>`;

@@ -4,21 +4,9 @@ import { Coffee, Package, ShoppingBag, SprayCan, Utensils, Wheat } from "lucide-
 // product ranges and contact details can be changed without touching the layout.
 // Leave phone/email/address empty to hide them; the contact form always works.
 
-export const SITE = {
-  name: "Foodpac Distribution",
-  tagline: "Food & packaging supplies, delivered.",
-  serviceArea: "South East Queensland",
-  phone: "",
-  email: "",
-  address: "",
-  hours: "Mon–Fri · 6am – 4pm",
-  /** The same hours for Google, in schema.org form. */
-  openingHours: ["Mo-Fr 06:00-16:00"],
-  /** The business's other official pages (Google Business Profile, Facebook, Instagram, LinkedIn…), for Google's knowledge panel. */
-  sameAs: [] as string[],
-  /** Printed on tax invoices. Required in Australia once you're registered for GST. */
-  abn: "",
-};
+// Company details (name, phone, email, hours…) live in site-info.ts, which emails and
+// invoices use too.
+export { SITE } from "./site-info";
 
 /** Shop categories with an icon and blurb; products use these names in their category field. */
 export const CATEGORIES = [
