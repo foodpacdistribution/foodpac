@@ -2,6 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
+import { restoreDeliveries } from "@/lib/deliveries";
 import { drivers } from "@/lib/db/schema";
 import { getDepots, getPlanView, getSettings } from "@/lib/planning";
 import { readyToShip } from "@/lib/shipments";
@@ -15,6 +16,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const db = await getDb();
   const s = await getSettings(db);
+  await restoreDeliveries(db, s.timezone);
   const today = todayIn(s.timezone);
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : today;
   const [ready, view, driverRows, depots] = await Promise.all([

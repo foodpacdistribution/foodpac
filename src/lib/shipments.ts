@@ -224,16 +224,30 @@ export async function readyToShip(db: DB, date: string) {
   }));
 }
 
-/** After orders are deleted: drop routes left with no stops and refresh those days' totals. */
+/**
+ * After orders are deleted: drop routes left with no stops and refresh those days' totals.
+ * A plan with no routes left is deleted too, so test days don't linger in History.
+ */
 export async function pruneEmptyRoutes(db: DB, dates: string[]) {
   if (!dates.length) return;
   const ps = await db.select().from(plans).where(inArray(plans.deliveryDate, [...new Set(dates)]));
   for (const p of ps) {
     const rs = await db.select({ id: routes.id }).from(routes).where(eq(routes.planId, p.id));
+    let left = rs.length;
     for (const r of rs) {
       const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(routeStops).where(eq(routeStops.routeId, r.id));
-      if (n === 0) await db.delete(routes).where(eq(routes.id, r.id));
+      if (n === 0) {
+        await db.delete(routes).where(eq(routes.id, r.id));
+        left--;
+      }
+    }
+    if (left === 0) {
+      await db.delete(plans).where(eq(plans.id, p.id));
+      continue;
     }
     await refreshPlanSummary(db, p.id, p.deliveryDate);
+    // Stops were removed: the optimiser's "before" was for a different set of orders.
+    const [after] = await db.select({ summary: plans.summary }).from(plans).where(eq(plans.id, p.id));
+    if (after.summary?.assigned !== p.summary?.assigned) await db.update(plans).set({ baseline: null }).where(eq(plans.id, p.id));
   }
 }

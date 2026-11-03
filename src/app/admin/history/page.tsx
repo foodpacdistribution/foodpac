@@ -11,6 +11,7 @@ import { getSettings } from "@/lib/planning";
 import { formatDuration, formatKm, nowSecondsIn, todayIn } from "@/lib/time";
 import { loadFixes, trackDistance } from "@/lib/tracking";
 import { T, Tx } from "@/components/i18n";
+import { DeletePlanButton } from "./delete-plan-button";
 
 export const metadata: Metadata = { title: "Delivery History" };
 
@@ -70,7 +71,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       delivered: delivered.length,
       failed: st.filter((x) => x.stop.status === "failed").length,
       onTime: delivered.filter(onTime).length,
-      saved: p.baseline && p.summary ? Math.max(0, p.baseline.driveTime - p.summary.driveTime) : 0,
+      saved: st.length && p.baseline && p.summary ? Math.max(0, p.baseline.driveTime - p.summary.driveTime) : 0,
       actualS: actual.reduce((a, r) => a + (r.route.completedAt!.getTime() - r.route.startedAt!.getTime()) / 1000, 0),
       gpsM: rs.reduce((a, r) => a + gpsM(r.route.id), 0),
       gpsPlannedM: rs.filter((r) => fixes.has(r.route.id)).reduce((a, r) => a + r.route.distanceM, 0),
@@ -143,7 +144,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
             />
             <Stat label={<T>{"On-time rate"}</T>} value={total.delivered ? `${Math.round((total.onTime / total.delivered) * 100)}%` : "—"} icon={Clock} tone="blue" hint={<T>{"Delivered before window closed"}</T>} />
             <Stat label={<T>{"Planned driving"}</T>} value={formatKm(total.km)} icon={RouteIcon} tone="violet" hint={formatDuration(total.drive)} />
-            <Stat label={<T>{"Driving saved"}</T>} value={formatDuration(total.saved)} icon={TrendingDown} tone="amber" hint={<T>{"vs. unoptimised order, same road data"}</T>} />
+            <Stat label={<T>{"Driving saved"}</T>} value={<Tx>{formatDuration(total.saved)}</Tx>} icon={TrendingDown} tone="amber" hint={<T>{"vs. unoptimised order, same road data"}</T>} />
           </div>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -160,19 +161,25 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                       <th className="px-4 py-2.5 text-right"><T>{"On time"}</T></th>
                       <th className="px-4 py-2.5 text-right"><T>{"Distance"}</T></th>
                       <th className="px-4 py-2.5 text-right"><T>{"Planned vs actual"}</T></th>
-                      <th className="px-4 py-2.5 text-right"><T>{"Saved"}</T></th>
+                      <th className="px-4 py-2.5 text-right"><T>{"Time saved"}</T></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
                     {perPlan.map((x) => (
                       <tr key={x.p.id} className="hover:bg-slate-50/70">
-                        <td className="px-4 py-2.5">
+                        <td className="whitespace-nowrap px-4 py-2.5">
                           <Link href={`/admin/planner?date=${x.p.deliveryDate}`} className="font-medium text-blue-700 hover:underline">
                             {<Tx>{prettyDate(x.p.deliveryDate, { weekday: "short", day: "numeric", month: "short" })}</Tx>}
                           </Link>
                           {x.p.status === "draft" && (
                             <Badge tone="violet" className="ml-2">
                               <T>{"Draft"}</T></Badge>
+                          )}
+                          {/* Nothing delivered yet, so nothing to keep: test or abandoned days can go. */}
+                          {x.delivered + x.failed === 0 && (
+                            <span className="ml-1 inline-block align-middle">
+                              <DeletePlanButton date={x.p.deliveryDate} label={prettyDate(x.p.deliveryDate, { weekday: "short", day: "numeric", month: "short" })} />
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-2.5">
@@ -181,30 +188,31 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                               <div className="h-full bg-blue-500" style={{ width: `${(x.stops / maxStops) * 100}%` }} />
                             </div>
                             <span className="tabular-nums text-slate-700">{x.stops}</span>
-                            <span className="text-xs text-slate-400">· {x.routes} {" "}<T>{"drivers"}</T></span>
+                            <span className="whitespace-nowrap text-xs text-slate-400">· {x.routes} {" "}<T>{"drivers"}</T></span>
                           </div>
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums">{x.delivered}</td>
                         <td className={cx("px-4 py-2.5 text-right tabular-nums", x.failed && "text-red-600")}>{x.failed}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums">{x.delivered ? `${Math.round((x.onTime / x.delivered) * 100)}%` : "—"}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums">
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">
                           {formatKm(x.p.summary?.distance)}
                           {x.gpsM > 0 && (
-                            <span className="block text-[11px] text-slate-500" title="Measured from drivers' GPS, for routes that shared location">
+                            <span className="block whitespace-normal text-[11px] text-slate-500" title="Measured from drivers' GPS, for routes that shared location">
                               <T>{"GPS"}</T>{" "}{formatKm(x.gpsM)} {" "}<T>{"vs"}</T>{" "}{formatKm(x.gpsPlannedM)} {" "}<T>{"planned"}</T></span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-700">
                           {x.actualS ? (
                             <>
-                              {formatDuration(x.plannedForActualS)} →{" "}
-                              <span className={x.actualS > x.plannedForActualS * 1.1 ? "text-amber-600" : "text-emerald-600"}>{formatDuration(x.actualS)}</span>
+                              <Tx>{formatDuration(x.plannedForActualS)}</Tx> →{" "}
+                              <span className={x.actualS > x.plannedForActualS * 1.1 ? "text-amber-600" : "text-emerald-600"}><Tx>{formatDuration(x.actualS)}</Tx></span>
                             </>
                           ) : (
-                            <span className="text-slate-400">{formatDuration(x.p.summary?.driverTime)} {" "}<T>{"planned"}</T></span>
+                            <span className="text-slate-400"><Tx>{formatDuration(x.p.summary?.driverTime)}</Tx> {" "}<T>{"planned"}</T></span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600">{x.saved ? formatDuration(x.saved) : "—"}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-emerald-600">{x.saved ? <Tx>{formatDuration(x.saved)}</Tx> : "—"}</td>
+
                       </tr>
                     ))}
                   </tbody>

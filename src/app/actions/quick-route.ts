@@ -2,12 +2,16 @@
 
 import { type ActionResult, attempt } from "@/lib/action";
 import { assertUser } from "@/lib/auth/dal";
+import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
+import { deliveryEvents, orders } from "@/lib/db/schema";
 import { geocodeAddress, reverseGeocode } from "@/lib/geo/geocode";
 import { type LatLng, routeGeometry, travelMatrix } from "@/lib/geo/routing";
-import { depotForUser, getSettings, UserError } from "@/lib/planning";
+import { clean, readOutcome } from "@/lib/outcome";
+import { depotForUser, getSettings, learnTiming, UserError } from "@/lib/planning";
+import { saveProof } from "@/lib/proofs";
 import { MAX_QUICK_STOPS, planSingleRoute } from "@/lib/quick-route";
-import { nowSecondsIn } from "@/lib/time";
+import { nowSecondsIn, todayIn } from "@/lib/time";
 
 export type QuickEnd = "last_stop" | "start" | "depot";
 
@@ -46,6 +50,8 @@ export type QuickRouteResult = {
   exact: boolean;
   matrixSource: "osrm" | "estimate";
   trafficFactor: number;
+  /** The traffic factor was learned from past deliveries rather than the settings guess. */
+  learned: boolean;
   path: [number, number][];
 };
 
@@ -130,9 +136,11 @@ export async function planQuickRoute(req: QuickRouteRequest): Promise<ActionResu
     const points: LatLng[] = [start, ...located, ...(end ? [end] : [])];
     const endNode = end ? located.length + 1 : null;
 
-    const matrix = await travelMatrix(points);
-    // OSRM times assume empty roads; the same traffic buffer as the Route Planner covers congestion and parking.
-    const durations = matrix.durations.map((row) => row.map((d) => Math.round(d * s.trafficFactor)));
+    const [matrix, learned] = await Promise.all([travelMatrix(points), learnTiming(db, s.timezone)]);
+    // OSRM times assume empty roads. Drivers' real pace (learned from their delivery taps) beats
+    // the settings guess once there's enough of it; either way it covers congestion and parking.
+    const trafficFactor = learned?.trafficFactor ?? s.trafficFactor;
+    const durations = matrix.durations.map((row) => row.map((d) => Math.round(d * trafficFactor)));
     const startS = nowSecondsIn(s.timezone);
     const plan = planSingleRoute(
       { durations, distances: matrix.distances },
@@ -162,9 +170,70 @@ export async function planQuickRoute(req: QuickRouteRequest): Promise<ActionResu
         entered: plan.entered,
         exact: plan.exact,
         matrixSource: matrix.source,
-        trafficFactor: s.trafficFactor,
+        trafficFactor,
+        learned: !!learned,
         path,
       },
     };
+  });
+}
+
+/**
+ * A Quick route stop delivered or not. Quick routes aren't planned orders, so each outcome is
+ * kept as a one-off order (source "quick_route") with its delivery event, photo and signature,
+ * which puts it in the office's order list with the same proof-of-delivery record.
+ */
+export async function recordQuickStop(_prev: unknown, form: FormData): Promise<ActionResult<{ orderId: string }>> {
+  return attempt(async () => {
+    const user = await assertUser(["admin", "dispatcher", "driver"]);
+    const db = await getDb();
+    const s = await getSettings(db);
+    const address = clean(form.get("address"), 300);
+    const lat = Number(form.get("stopLat"));
+    const lng = Number(form.get("stopLng"));
+    if (!address || !validPoint(lat, lng)) throw new UserError("This stop is missing its address. Plan the route again.");
+    const type = form.get("outcome") === "failed" ? "failed" : "delivered";
+    const outcome = await readOutcome(form, type, { ...s, proofRequired: true });
+
+    const date = todayIn(s.timezone);
+    const orderId = await db.transaction(async (tx) => {
+      const [order] = await tx
+        .insert(orders)
+        .values({
+          orderNumber: `QR-${date.replaceAll("-", "")}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`,
+          deliveryDate: date,
+          customerName: clean(form.get("label"), 200) ?? address,
+          address,
+          lat,
+          lng,
+          geocodeStatus: "ok",
+          status: type,
+          driverId: user.driverId,
+          source: "quick_route",
+        })
+        .returning({ id: orders.id });
+      const [event] = await tx
+        .insert(deliveryEvents)
+        .values({
+          orderId: order.id,
+          driverId: user.driverId,
+          userId: user.id,
+          type,
+          reason: outcome.type === "failed" ? outcome.reason : null,
+          recipient: outcome.type === "delivered" ? outcome.recipient : null,
+          note: outcome.note,
+          lat: outcome.at?.lat ?? null,
+          lng: outcome.at?.lng ?? null,
+          accuracyM: outcome.at?.accuracy ?? null,
+        })
+        .returning({ id: deliveryEvents.id });
+      for (const kind of ["photo", "signature"] as const) {
+        const p = outcome[kind];
+        if (p) await saveProof(tx, { orderId: order.id, eventId: event.id, kind, mime: p.mime, data: p.data });
+      }
+      return order.id;
+    });
+    revalidatePath("/admin/orders");
+    return { message: type === "delivered" ? "Marked as delivered" : "Delivery issue reported", data: { orderId } };
   });
 }

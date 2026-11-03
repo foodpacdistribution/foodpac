@@ -7,8 +7,8 @@ import { evaluateRoute } from "./vrp/evaluate";
 import { solve } from "./vrp/solver";
 import type { Job, Matrix, Problem, Vehicle } from "./vrp/types";
 
-/** Up to this many stops every visiting order is checked, so the result is the true optimum for the matrix. */
-export const EXACT_LIMIT = 9;
+/** Up to this many stops the order is solved exactly, so the result is the true optimum for the matrix. */
+export const EXACT_LIMIT = 15;
 export const MAX_QUICK_STOPS = 25;
 
 export type QuickLeg = { stop: number; durationS: number; distanceM: number; arrivalS: number; departureS: number };
@@ -34,33 +34,50 @@ export type QuickPlanOptions = {
   serviceS: number;
 };
 
-/** Depth-first search over all orders, pruning any partial route already slower than the best found. */
-function exactOrder(durations: number[][], n: number, endNode: number | null) {
-  let best = Infinity;
-  let bestSeq: number[] = [];
-  const seq: number[] = [];
-  const used = new Array<boolean>(n + 1).fill(false);
-  const visit = (node: number, cost: number) => {
-    if (cost >= best) return;
-    if (seq.length === n) {
-      const total = cost + (endNode !== null ? durations[node][endNode] : 0);
-      if (total < best) {
-        best = total;
-        bestSeq = [...seq];
+/**
+ * Exact shortest visiting order (Held–Karp dynamic programming): for every set of visited stops
+ * and every last stop, the quickest way to get there. 15 stops ≈ 7 million steps, well under a
+ * second, and it's the true best order for the travel times given, not an approximation.
+ * Nodes: 0 is the start, 1..n the stops; `endNode` is where the route must finish (null = anywhere).
+ */
+export function exactOrder(durations: number[][], n: number, endNode: number | null): number[] {
+  if (n === 0) return [];
+  const full = (1 << n) - 1;
+  const cost = new Float64Array((full + 1) * n).fill(Infinity);
+  const prev = new Int8Array((full + 1) * n).fill(-1);
+  for (let j = 0; j < n; j++) cost[(1 << j) * n + j] = durations[0][j + 1];
+  for (let mask = 1; mask <= full; mask++) {
+    for (let j = 0; j < n; j++) {
+      const here = cost[mask * n + j];
+      if (here === Infinity || !(mask & (1 << j))) continue;
+      for (let k = 0; k < n; k++) {
+        if (mask & (1 << k)) continue;
+        const next = mask | (1 << k);
+        const c = here + durations[j + 1][k + 1];
+        if (c < cost[next * n + k]) {
+          cost[next * n + k] = c;
+          prev[next * n + k] = j;
+        }
       }
-      return;
     }
-    for (let s = 1; s <= n; s++) {
-      if (used[s]) continue;
-      used[s] = true;
-      seq.push(s);
-      visit(s, cost + durations[node][s]);
-      seq.pop();
-      used[s] = false;
+  }
+  let last = 0;
+  let best = Infinity;
+  for (let j = 0; j < n; j++) {
+    const c = cost[full * n + j] + (endNode !== null ? durations[j + 1][endNode] : 0);
+    if (c < best) {
+      best = c;
+      last = j;
     }
-  };
-  visit(0, 0);
-  return bestSeq.map((node) => node - 1);
+  }
+  const order: number[] = [];
+  for (let mask = full, j = last; j !== -1; ) {
+    order.push(j);
+    const p = prev[mask * n + j];
+    mask &= ~(1 << j);
+    j = p;
+  }
+  return order.reverse();
 }
 
 export function planSingleRoute(matrix: Matrix, opts: QuickPlanOptions): QuickPlan {

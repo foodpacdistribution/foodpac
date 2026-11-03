@@ -41,7 +41,7 @@ export function OrderActions({ id, canCancel, canPay }: { id: string; canCancel:
       {canCancel && (
         <button
           disabled={pending}
-          onClick={() => confirm("Cancel this order? Any card payment will be refunded.") && run(() => cancelMyOrder(id), () => router.refresh())}
+          onClick={() => confirm("Cancel this order? Any card payment will be refunded.") && run(() => cancelMyOrder(id))}
           className={`${btn} border border-red-200 bg-white text-red-700 hover:bg-red-50`}
         >
           <XCircle className="size-4" /> {" "}{tr("Cancel order")}</button>

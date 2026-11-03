@@ -1,8 +1,9 @@
 // Translation for the English / 中文 switch. The English text is the key; the Chinese
 // dictionary maps it. Anything without a translation simply stays in English, so missing
-// entries never break a screen. Client-safe.
+// entries never break a screen. Client-safe. The dictionary is fetched on demand (loadZh),
+// so visitors reading English never download it.
 
-import { ZH, ZH_PATTERNS } from "./zh";
+import type * as zh from "./zh";
 import { zhDates } from "./zh-dates";
 
 export type Locale = "en" | "zh";
@@ -16,15 +17,28 @@ export function isLocale(v: unknown): v is Locale {
   return v === "en" || v === "zh";
 }
 
-/** Translates `text` into `locale`. `{name}` placeholders are filled from `vars`. */
-export function translate(locale: Locale, text: string, vars?: Record<string, string | number>): string {
+export type Dictionary = Pick<typeof zh, "ZH" | "ZH_PATTERNS">;
+
+let zhDict: Promise<Dictionary> | undefined;
+
+/** The Chinese dictionary, loaded once (a failed download is retried next time). */
+export function loadZh(): Promise<Dictionary> {
+  zhDict ??= import("./zh").catch((err) => {
+    zhDict = undefined;
+    throw err;
+  });
+  return zhDict;
+}
+
+/** Translates `text` with `dict` (null = English). `{name}` placeholders are filled from `vars`. */
+export function translate(dict: Dictionary | null, text: string, vars?: Record<string, string | number>): string {
   let out = text;
-  if (locale === "zh") {
-    const hit = ZH[text];
+  if (dict) {
+    const hit = dict.ZH[text];
     if (hit !== undefined) out = hit;
     else {
       // Messages with a variable part, e.g. "Jasmine rice deleted" → "已删除 Jasmine rice".
-      for (const [re, to] of ZH_PATTERNS) {
+      for (const [re, to] of dict.ZH_PATTERNS) {
         if (re.test(text)) {
           out = text.replace(re, to);
           break;

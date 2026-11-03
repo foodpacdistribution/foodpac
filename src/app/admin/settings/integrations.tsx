@@ -1,7 +1,6 @@
 "use client";
 
 import { Check, Copy, KeyRound, Link2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState, useSyncExternalStore, useTransition } from "react";
 import { createKey, deleteFeed, revokeKey, saveFeed, syncFeedNow } from "@/app/actions/settings";
 import { FormError, Modal, SubmitButton } from "@/components/client-ui";
@@ -26,7 +25,6 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-AU"
 
 export function IntegrationsCard({ keys, feeds }: { keys: Key[]; feeds: Feed[] }) {
   const tr = useT();
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [keyName, setKeyName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
@@ -45,7 +43,6 @@ export function IntegrationsCard({ keys, feeds }: { keys: Key[]; feeds: Feed[] }
       const r = await fn();
       setNotice(r.ok ? { ok: true, text: r.message ?? "Done" } : { ok: false, text: r.error ?? "Failed" });
       if (r.ok && after) after(r.data);
-      router.refresh();
     });
 
   return (
@@ -193,7 +190,7 @@ export function IntegrationsCard({ keys, feeds }: { keys: Key[]; feeds: Feed[] }
 
       <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? "Add order feed" : "Edit order feed"} wide>
         {editing !== null && (
-          <FeedForm key={editing === "new" ? "new" : editing.id} feed={editing === "new" ? null : editing} onDone={() => (setEditing(null), router.refresh())} />
+          <FeedForm key={editing === "new" ? "new" : editing.id} feed={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
         )}
       </Modal>
     </Card>

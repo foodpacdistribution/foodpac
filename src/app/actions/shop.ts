@@ -205,7 +205,7 @@ export async function cancelMyOrder(salesOrderId: string) {
     }
     await cancelOrder(db, so.id);
     await refundOrExpire(so);
-    revalidatePath("/portal");
+    revalidatePath("/portal", "layout");
     revalidatePath("/admin/sales");
     return { message: "Order cancelled" };
   });

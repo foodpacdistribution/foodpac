@@ -2,7 +2,6 @@
 
 import { BadgeCheck, ClipboardList, Download, Search, ShoppingBag, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteSales, markManyPaid, setFulfilment } from "@/app/actions/sales";
 import { Toast, type ToastMessage } from "@/components/client-ui";
@@ -58,7 +57,6 @@ export function SalesClient({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, start] = useTransition();
   const [toast, setToast] = useState<ToastMessage | null>(null);
-  const router = useRouter();
   const toggle = (id: string) => setSelected((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s.add(id))));
   const confirmed = rows.filter((r) => r.status === "confirmed");
   const toPick = confirmed.filter((r) => r.fulfilment === "new").length;
@@ -71,10 +69,7 @@ export function SalesClient({
     start(async () => {
       const r = await fn();
       setToast({ id: Date.now(), text: r.ok ? (r.message ?? "Updated") : (r.error ?? "Something went wrong"), tone: r.ok ? "ok" : "warn" });
-      if (r.ok) {
-        if (clear) setSelected(new Set());
-        router.refresh();
-      }
+      if (r.ok && clear) setSelected(new Set());
     });
 
   const paymentBadge = (r: Row) => {

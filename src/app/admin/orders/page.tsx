@@ -2,6 +2,7 @@ import { and, asc, eq, ilike, or, type SQL } from "drizzle-orm";
 import type { Metadata } from "next";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
+import { restoreDeliveries } from "@/lib/deliveries";
 import { depots, drivers, type OrderStatus, orders } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
@@ -15,6 +16,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const db = await getDb();
   const s = await getSettings(db);
+  await restoreDeliveries(db, s.timezone);
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayIn(s.timezone);
   const status = sp.status as OrderStatus | "attention" | undefined;
   const q = sp.q?.trim();

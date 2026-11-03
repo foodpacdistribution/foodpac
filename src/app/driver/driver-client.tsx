@@ -2,26 +2,28 @@
 
 import { CheckCircle2, ChevronDown, Clock, History, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useActionState, useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { logout } from "@/app/actions/auth";
 import { markDelivered, markFailed, startRoute } from "@/app/actions/driver";
-import { FormError, Modal, SubmitButton, Toast, type ToastMessage } from "@/components/client-ui";
+import { Modal, Toast, type ToastMessage } from "@/components/client-ui";
 import { LanguageSwitch } from "@/components/language-switch";
 import { DeliveryMap, type MapStop } from "@/components/map";
-import { Badge, btn, cx, Field, inputCls, Spinner } from "@/components/ui";
+import { Badge, btn, cx, Spinner } from "@/components/ui";
 import { prettyDate } from "@/lib/dates";
-import { FAILURE_REASONS, multiStopNavigation, navigationUrls } from "@/lib/orders";
+import { multiStopNavigation, navigationUrls } from "@/lib/orders";
 import type { RouteView, StopView } from "@/lib/planning";
 import { formatClock, formatMinutesClock } from "@/lib/time";
-import { PhotoCapture, SignaturePad } from "./proof-inputs";
-import { readSharePref, useBestFix, useLocationSharing, writeSharePref } from "./use-location-sharing";
+import { OutcomeForm } from "./outcome-form";
+import { readSharePref, useLocationSharing, writeSharePref } from "./use-location-sharing";
 import { Tx, useT } from "@/components/i18n";
 
 type Props = {
   name: string;
   linked: boolean;
   date: string;
+  today: string;
+  /** Days from today on with a route sent to this driver, and how many stops each has. */
+  days: { date: string; stops: number }[];
   nowS: number;
   depot: { id: string; lat: number; lng: number; name: string } | null;
   route: RouteView | null;
@@ -34,9 +36,8 @@ function greeting(nowS: number) {
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-export function DriverClient({ name, linked, date, nowS, depot, route, requirePhoto, requireSignature }: Props) {
+export function DriverClient({ name, linked, date, today, days, nowS, depot, route, requirePhoto, requireSignature }: Props) {
   const tr = useT();
-  const router = useRouter();
   const [sharePref, setSharePref] = useState(readSharePref);
   const sharing = useLocationSharing(route?.status === "in_progress" && sharePref);
   const [pending, startTransition] = useTransition();
@@ -62,9 +63,9 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
     setSheet(null);
     setSelectedId(null);
     setToast({ id: Date.now(), ...t });
-    router.refresh();
   };
-  const delay = current ? Math.max(0, nowS - current.etaS) : 0;
+  // A later day's stops can't be running late yet.
+  const delay = current && date === today ? Math.max(0, nowS - current.etaS) : 0;
   // A planned depot reload sits between the previous stop and this one.
   const reloadBefore = current && route ? route.reloads.find((r) => r.afterSeq === current.seq - 1) : undefined;
   // Remaining stops from the current one in planned order, with the depot inserted where a reload is planned.
@@ -101,11 +102,31 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
     </header>
   );
 
+  // Shipments sent for later days show up as soon as they're sent, not only on the day.
+  const dayTabs = (days.some((d) => d.date !== today) || date !== today) && (
+    <nav className="flex gap-2 overflow-x-auto pb-1" aria-label={tr("Delivery days")}>
+      {[{ date: today, stops: days.find((d) => d.date === today)?.stops ?? 0 }, ...days.filter((d) => d.date !== today)].map((d) => (
+        <Link
+          key={d.date}
+          href={d.date === today ? "/driver" : `/driver?date=${d.date}`}
+          className={cx(
+            "shrink-0 rounded-xl px-3 py-2 text-xs font-medium shadow-card",
+            d.date === date ? "bg-blue-600 text-white" : "bg-white text-slate-700",
+          )}
+        >
+          <span className="block">{d.date === today ? tr("Today") : <Tx>{prettyDate(d.date, { weekday: "short", day: "numeric", month: "short" })}</Tx>}</span>
+          <span className={cx("block text-[11px]", d.date === date ? "text-blue-100" : "text-slate-400")}>{tr("{n} stops", { n: d.stops })}</span>
+        </Link>
+      ))}
+    </nav>
+  );
+
   if (!linked || !route) {
     return (
       <div className="min-h-dvh">
         {header}
-        <main className="mx-auto -mt-10 max-w-lg px-4">
+        <main className="mx-auto -mt-10 max-w-lg space-y-4 px-4">
+          {dayTabs}
           <div className="rounded-2xl bg-white p-8 text-center shadow-card">
             <Truck className="mx-auto size-10 text-slate-300" />
             <p className="mt-3 font-semibold text-slate-900">{linked ? tr("No deliveries dispatched yet") : tr("Account not linked")}</p>
@@ -141,6 +162,12 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
     <div className="min-h-dvh pb-10">
       {header}
       <main className="mx-auto -mt-12 max-w-lg space-y-4 px-4">
+        {dayTabs}
+        {date !== today && (
+          <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-900 ring-1 ring-blue-200">
+            {tr("This shipment is for {day}. You can look it over now; deliver it on the day.", { day: tr(prettyDate(date, { weekday: "long", day: "numeric", month: "long" })) })}
+          </p>
+        )}
         {/* Progress */}
         <section className="rounded-2xl bg-white p-4 shadow-card">
           <div className="grid grid-cols-3 text-center">
@@ -229,7 +256,9 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
                   rel="noreferrer"
                   className={btn("primary", "lg", "rounded-xl")}
                   // Setting off is when the route starts: one tap instead of a separate "Start" step.
-                  onClick={() => route.status === "planned" && startTransition(async () => (await startRoute(route.id), router.refresh()))}
+                  onClick={() => route.status === "planned" && startTransition(async () => {
+                    await startRoute(route.id);
+                  })}
                 >
                   {pending ? <Spinner className="size-5" /> : <Navigation className="size-5" />} {route.status === "planned" ? (pending ? tr("Starting…") : tr("Start route & navigate")) : tr("Navigate")}
                 </a>
@@ -435,7 +464,8 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
         {sheet && (
           <OutcomeForm
             kind="delivered"
-            stopId={sheet.stopId}
+            action={markDelivered}
+            fields={{ stopId: sheet.stopId }}
             reference={sheet.reference}
             requirePhoto={requirePhoto}
             requireSignature={requireSignature}
@@ -444,7 +474,7 @@ export function DriverClient({ name, linked, date, nowS, depot, route, requirePh
         )}
       </Modal>
       <Modal open={sheet?.kind === "failed"} onClose={() => setSheet(null)} title={tr("Report a delivery problem")}>
-        {sheet && <OutcomeForm kind="failed" stopId={sheet.stopId} onDone={() => finishSheet({ tone: "warn", text: `Problem reported · ${sheet.name}` })} />}
+        {sheet && <OutcomeForm kind="failed" action={markFailed} fields={{ stopId: sheet.stopId }} onDone={() => finishSheet({ tone: "warn", text: `Problem reported · ${sheet.name}` })} />}
       </Modal>
       <Toast toast={toast} onDone={clearToast} />
     </div>
@@ -495,98 +525,6 @@ function LocationBar({
         <span className="absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
       </label>
     </section>
-  );
-}
-
-function OutcomeForm({
-  kind,
-  stopId,
-  onDone,
-  requirePhoto = false,
-  requireSignature = false,
-  reference = "",
-}: {
-  kind: "delivered" | "failed";
-  stopId: string;
-  reference?: string;
-  onDone: () => void;
-  requirePhoto?: boolean;
-  requireSignature?: boolean;
-}) {
-  const tr = useT();
-  const [state, action] = useActionState(kind === "delivered" ? markDelivered : markFailed, undefined);
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [signature, setSignature] = useState<File | null>(null);
-  const [recipient, setRecipient] = useState("");
-  const fix = useBestFix();
-  useEffect(() => {
-    if (state?.ok) onDone();
-  }, [state, onDone]);
-  const missing = kind === "delivered" && ((requirePhoto && !photo) || (requireSignature && !signature));
-  return (
-    <form
-      action={(fd) => {
-        // Images live in component state (resized / drawn), so attach them here.
-        if (photo) fd.set("photo", photo);
-        if (signature) fd.set("signature", signature);
-        if (fix) {
-          fd.set("lat", String(fix.lat));
-          fd.set("lng", String(fix.lng));
-          fd.set("accuracy", String(fix.accuracy));
-        }
-        return action(fd);
-      }}
-      className="space-y-4"
-    >
-      <input type="hidden" name="stopId" value={stopId} />
-      {kind === "delivered" ? (
-        <>
-          <PhotoCapture value={photo} onChange={setPhoto} required={requirePhoto} />
-          <Field label={tr(signature || requireSignature ? "Received by *" : "Received by (optional)")}>
-            <input
-              name="recipient"
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-              autoComplete="off"
-              required={!!signature || requireSignature}
-              className={cx(inputCls, "h-11 text-base")}
-            />
-          </Field>
-          <SignaturePad
-            onChange={setSignature}
-            required={requireSignature}
-            signer={recipient}
-            onSignerChange={setRecipient}
-            reference={reference}
-            accuracyM={fix ? fix.accuracy : null}
-          />
-        </>
-      ) : (
-        <>
-          <fieldset className="grid grid-cols-2 gap-2">
-            <legend className="mb-1.5 text-xs font-medium text-slate-600">{tr("What happened?")}</legend>
-            {FAILURE_REASONS.map((r, i) => (
-              <label key={r} className="flex items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-sm has-[:checked]:border-red-400 has-[:checked]:bg-red-50">
-                <input type="radio" name="reason" value={r} required defaultChecked={i === 0} />
-                {tr(r)}
-              </label>
-            ))}
-          </fieldset>
-          <PhotoCapture value={photo} onChange={setPhoto} />
-        </>
-      )}
-      <Field label={tr("Note (optional)")}>
-        <textarea name="note" rows={2} className={cx(inputCls, "h-auto py-2 text-base")} />
-      </Field>
-      <p className={cx("flex items-center gap-1.5 text-xs", fix && fix.accuracy <= 30 ? "text-emerald-700" : "text-slate-500")}>
-        {fix ? <LocateFixed className="size-3.5" /> : <Spinner className="size-3" />}
-        {fix ? `Location recorded with this delivery · ±${Math.round(fix.accuracy)} m` : tr("Getting your exact location…")}
-      </p>
-      <FormError message={state && !state.ok ? state.error : null} />
-      <SubmitButton disabled={missing} variant={kind === "delivered" ? "success" : "primary"} size="lg" className="w-full rounded-xl" pendingText={tr("Uploading…")}>
-        {kind === "delivered" ? tr("Confirm delivered") : tr("Report problem")}
-      </SubmitButton>
-    </form>
   );
 }
 

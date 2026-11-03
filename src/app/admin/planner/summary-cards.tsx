@@ -25,7 +25,7 @@ export function SummaryCard({ summary, matrixSource }: { summary: PlanSummary | 
         {items.map(([label, value, hint]) => (
           <div key={label} className="bg-white px-4 py-3">
             <dt className="text-[11px] text-slate-500">{<Tx>{label}</Tx>}</dt>
-            <dd className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 tabular-nums">{value}</dd>
+            <dd className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 tabular-nums">{<Tx>{value}</Tx>}</dd>
             {hint && <p className="text-[11px] text-slate-400">{<Tx>{hint}</Tx>}</p>}
           </div>
         ))}
@@ -60,7 +60,7 @@ export function ComparisonCard({ before, after }: { before: PlanSummary | null; 
         <div className="flex items-center gap-2 border-b border-line bg-emerald-50/60 px-4 py-2.5 text-sm text-emerald-800">
           <TrendingDown className="size-4" />
           <span>
-            <strong>{formatDuration(saved)}</strong> {" "}<T>{"less driving ("}</T>{Math.round((saved / Math.max(1, before.driveTime)) * 100)}<T>{"%) and"}</T>{" "}
+            <strong>{<Tx>{formatDuration(saved)}</Tx>}</strong> {" "}<T>{"less driving ("}</T>{Math.round((saved / Math.max(1, before.driveTime)) * 100)}<T>{"%) and"}</T>{" "}
             <strong>{formatKm(before.distance - after.distance)}</strong> {" "}<T>{"fewer"}</T></span>
         </div>
       )}
@@ -80,15 +80,15 @@ export function ComparisonCard({ before, after }: { before: PlanSummary | null; 
             return (
               <tr key={r.label}>
                 <td className="px-4 py-2 text-slate-600">{<Tx>{r.label}</Tx>}</td>
-                <td className="px-2 py-2 text-right tabular-nums text-slate-500">{r.fmt(r.b)}</td>
-                <td className="px-2 py-2 text-right font-semibold tabular-nums text-slate-900">{r.fmt(r.a)}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-slate-500">{<Tx>{r.fmt(r.b)}</Tx>}</td>
+                <td className="px-2 py-2 text-right font-semibold tabular-nums text-slate-900">{<Tx>{r.fmt(r.a)}</Tx>}</td>
                 <td className={cx("px-4 py-2 text-right tabular-nums", diff !== null && diff < 0 ? "text-emerald-600" : diff ? "text-red-600" : "text-slate-400")}>
                   {diff === null || diff === 0
                     ? "—"
                     : pct !== null
                       ? `${pct > 0 ? "+" : ""}${pct}%`
                       : r.label === "All done by"
-                        ? `${diff < 0 ? "−" : "+"}${formatDuration(Math.abs(diff))}`
+                        ? <Tx>{`${diff < 0 ? "−" : "+"}${formatDuration(Math.abs(diff))}`}</Tx>
                         : `${diff > 0 ? "+" : ""}${diff}`}
                 </td>
               </tr>

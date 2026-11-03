@@ -1,25 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { translate } from ".";
+import * as zh from "./zh";
 import { zhDates } from "./zh-dates";
 
 describe("translate", () => {
   it("leaves English alone", () => {
-    expect(translate("en", "Place order")).toBe("Place order");
-    expect(translate("en", "{n} units over capacity", { n: 3 })).toBe("3 units over capacity");
+    expect(translate(null, "Place order")).toBe("Place order");
+    expect(translate(null, "{n} units over capacity", { n: 3 })).toBe("3 units over capacity");
   });
 
   it("uses the dictionary, then patterns, and fills variables", () => {
-    expect(translate("zh", "Place order")).toBe("提交订单");
-    expect(translate("zh", "{n} units over capacity", { n: 3 })).toBe("超出载量 3 件");
-    expect(translate("zh", "Welcome back, Alex")).toBe("欢迎回来,Alex");
+    expect(translate(zh, "Place order")).toBe("提交订单");
+    expect(translate(zh, "{n} units over capacity", { n: 3 })).toBe("超出载量 3 件");
+    expect(translate(zh, "Welcome back, Alex")).toBe("欢迎回来,Alex");
   });
 
   it("keeps unknown text in English", () => {
-    expect(translate("zh", "Kraft takeaway box No.8")).toBe("Kraft takeaway box No.8");
+    expect(translate(zh, "Kraft takeaway box No.8")).toBe("Kraft takeaway box No.8");
   });
 
   it("rewrites dates and times inside a pattern match", () => {
-    expect(translate("zh", "Est. finish 2:44pm")).toBe("预计完成 14:44");
+    expect(translate(zh, "Est. finish 2:44pm")).toBe("预计完成 14:44");
   });
 });
 

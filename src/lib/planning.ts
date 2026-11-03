@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { type DB, getDb } from "./db";
 import {
   depots,
@@ -16,7 +16,9 @@ import {
   users,
 } from "./db/schema";
 import { type LatLng, routeGeometry, travelMatrix } from "./geo/routing";
+import { shiftDate } from "./dates";
 import { nowSecondsIn, todayIn } from "./time";
+import { fitTiming, type Leg, type Timing } from "./vrp/calibrate";
 import { evaluateRoute } from "./vrp/evaluate";
 import { naivePlan, solve } from "./vrp/solver";
 import type { Job, Objective, Problem, RouteEval, Vehicle } from "./vrp/types";
@@ -45,6 +47,49 @@ export function depotFor(list: DepotPoint[], depotId: string | null | undefined)
 export async function depotForUser(db: DB, driverId: string | null) {
   const [d] = driverId ? await db.select({ depotId: drivers.depotId }).from(drivers).where(eq(drivers.id, driverId)).limit(1) : [];
   return depotFor(await getDepots(db), d?.depotId);
+}
+
+// ---------------------------------------------------------------------------
+// Timing learned from deliveries
+// ---------------------------------------------------------------------------
+
+/**
+ * Driving speed and unloading time learned from the last 60 days of "Delivered" taps
+ * (see vrp/calibrate). Null until drivers have completed enough deliveries in a row.
+ */
+export async function learnTiming(db: DB, timezone: string): Promise<Timing | null> {
+  const rows = await db
+    .select({
+      routeId: routeStops.routeId,
+      seq: routeStops.seq,
+      trip: routeStops.trip,
+      status: routeStops.status,
+      completedAt: routeStops.completedAt,
+      legDriveS: routeStops.legDriveS,
+      waitS: routeStops.waitS,
+      customService: orders.serviceMin,
+      trafficFactor: sql<number | null>`(${plans.context}->>'trafficFactor')::float`,
+    })
+    .from(routeStops)
+    .innerJoin(routes, eq(routes.id, routeStops.routeId))
+    .innerJoin(plans, eq(plans.id, routes.planId))
+    .innerJoin(orders, eq(orders.id, routeStops.orderId))
+    .where(and(sql`${routeStops.completedAt} is not null`, sql`${plans.deliveryDate} >= ${shiftDate(todayIn(timezone), -60)}`))
+    .orderBy(asc(routeStops.routeId), asc(routeStops.seq));
+
+  const legs: Leg[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const [prev, st] = [rows[i - 1], rows[i]];
+    // Only a delivery made straight after the planned previous stop measures that leg. Legs with
+    // a depot reload, a wait for the delivery window or a custom unloading time don't fit the model.
+    if (prev.routeId !== st.routeId || prev.seq !== st.seq - 1 || prev.trip !== st.trip) continue;
+    if (st.status !== "delivered" || st.waitS > 0 || st.customService !== null) continue;
+    legs.push({
+      driveS: st.legDriveS / (st.trafficFactor || 1),
+      gapS: (st.completedAt!.getTime() - prev.completedAt!.getTime()) / 1000,
+    });
+  }
+  return fitTiming(legs.slice(-400));
 }
 
 // ---------------------------------------------------------------------------
@@ -248,7 +293,7 @@ export async function refreshPlanSummary(db: Pick<DB, "select" | "update">, plan
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(orders)
-    .where(and(eq(orders.deliveryDate, date), inArray(orders.status, ["pending", "planned", "dispatched", "delivered", "failed"])));
+    .where(and(eq(orders.deliveryDate, date), inArray(orders.status, ["pending", "planned", "dispatched", "delivered", "failed"]), ne(orders.source, "quick_route")));
   const totals: RouteTotals[] = rs.map((r) => {
     const own = stops.filter((st) => st.routeId === r.id);
     return { startS: r.startS, endS: r.endS, distanceM: r.distanceM, driveS: r.driveS, serviceS: r.serviceS, waitS: r.waitS, overtimeS: r.overtimeS, lateStops: own.filter((st) => st.lateS > 0).length, stops: own.length };
@@ -311,6 +356,8 @@ export type OptimiseInput = {
   objective: Objective;
   trafficFactor: number;
   returnToDepot: boolean;
+  /** Use learnTiming's driving speed and unloading time instead of trafficFactor / defaultServiceMin. */
+  learnedTiming?: boolean;
 };
 
 type CompletedStop = { orderId: string; demand: number; lat: number; lng: number; etdS: number; status: string; trip: number };
@@ -819,6 +866,34 @@ async function persistPlan(
   });
 
   return planId;
+}
+
+// ---------------------------------------------------------------------------
+// Delete
+// ---------------------------------------------------------------------------
+
+/**
+ * Deletes a day's plan (routes, stops and history go with it) and puts its open orders back
+ * to unplanned. Days with completed deliveries keep their plan as the record of those deliveries.
+ */
+export async function deletePlan(db: DB, date: string) {
+  const [plan] = await db.select().from(plans).where(eq(plans.deliveryDate, date)).limit(1);
+  if (!plan) return;
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(routeStops)
+    .innerJoin(routes, eq(routes.id, routeStops.routeId))
+    .where(and(eq(routes.planId, plan.id), inArray(routeStops.status, ["delivered", "failed"])));
+  if (n > 0) {
+    throw new UserError("This day has completed deliveries, so its plan is kept as their record. If they were test data, delete those orders first.");
+  }
+  await db.transaction(async (tx) => {
+    await tx.delete(plans).where(eq(plans.id, plan.id));
+    await tx
+      .update(orders)
+      .set({ status: "pending", driverId: null, updatedAt: new Date() })
+      .where(and(eq(orders.deliveryDate, date), inArray(orders.status, ["planned", "dispatched"])));
+  });
 }
 
 // ---------------------------------------------------------------------------

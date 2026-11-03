@@ -1,7 +1,6 @@
 "use client";
 
 import { Building2, Camera, MapPin, Pencil, Plug, Plus, Trash2, UserPlus, Users } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { createStaffUser, deleteUser, saveDepot, saveSettings } from "@/app/actions/settings";
 import { FormError, Modal, SubmitButton } from "@/components/client-ui";
@@ -47,7 +46,6 @@ export function SettingsClient({
   children?: React.ReactNode;
 }) {
   const tr = useT();
-  const router = useRouter();
   const [state, action] = useActionState(saveSettings, undefined);
   const [userState, userAction] = useActionState(createStaffUser, undefined);
   const [notice, setNotice] = useState<string | null>(null);
@@ -150,7 +148,6 @@ export function SettingsClient({
                         startTransition(async () => {
                           const r = await deleteUser(u.id);
                           setNotice(r.ok ? (r.message ?? null) : r.error);
-                          router.refresh();
                         });
                       }}
                     >
@@ -199,7 +196,6 @@ export function SettingsClient({
 function DepotsCard({ depots }: { depots: Depot[] }) {
   const tr = useT();
   const [editing, setEditing] = useState<Depot | "new" | null>(null);
-  const router = useRouter();
   return (
     <Card>
       <CardHeader
@@ -237,7 +233,7 @@ function DepotsCard({ depots }: { depots: Depot[] }) {
       )}
       <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? "Add depot" : "Edit depot"}>
         {editing !== null && (
-          <DepotForm key={editing === "new" ? "new" : editing.id} depot={editing === "new" ? null : editing} onDone={() => (setEditing(null), router.refresh())} />
+          <DepotForm key={editing === "new" ? "new" : editing.id} depot={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
         )}
       </Modal>
     </Card>

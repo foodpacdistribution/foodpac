@@ -19,9 +19,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { describeLocation, locateAddress, planQuickRoute, type QuickEnd, type QuickRouteRequest, type QuickRouteResult } from "@/app/actions/quick-route";
+import { describeLocation, locateAddress, planQuickRoute, recordQuickStop, type QuickEnd, type QuickRouteRequest, type QuickRouteResult } from "@/app/actions/quick-route";
+import { OutcomeForm } from "@/app/driver/outcome-form";
 import { AddressInput } from "@/components/address-input";
-import { FormError, Toast, type ToastMessage } from "@/components/client-ui";
+import { FormError, Modal, Toast, type ToastMessage } from "@/components/client-ui";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { btn, cx, Field, inputCls, Spinner } from "@/components/ui";
 import { multiStopNavigation, navigationUrls } from "@/lib/orders";
@@ -45,7 +46,8 @@ type Form = {
 };
 /** An address as located for the driver to confirm. "manual" = the driver placed or moved the pin. */
 type Check = { address: string; status: "ok" | "approximate" | "failed" | "manual"; lat: number | null; lng: number | null; label: string | null };
-type Done = { address: string; status: "delivered" | "failed" };
+/** A finished stop; orderId = its delivery record in the office (with photo / signature). */
+type Done = { address: string; status: "delivered" | "failed"; orderId?: string };
 type Saved = {
   form: Form;
   step: "enter" | "review";
@@ -94,9 +96,9 @@ const END_OPTIONS: { value: QuickEnd; label: string; needsDepot?: boolean }[] = 
   { value: "depot", label: "Return to the depot", needsDepot: true },
 ];
 
-type Props = { backHref: string; depotName: string | null; defaultServiceMin: number };
+type Props = { backHref: string; depotName: string | null; defaultServiceMin: number; requirePhoto: boolean; requireSignature: boolean };
 
-export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Props) {
+export function QuickRouteClient({ backHref, depotName, defaultServiceMin, requirePhoto, requireSignature }: Props) {
   const tr = useT();
   const [state, setState] = useState(() =>
     load({ startKind: "gps", startAddress: "", addresses: "", end: "last_stop", serviceMin: defaultServiceMin }),
@@ -113,6 +115,8 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const clearToast = useCallback(() => setToast(null), []);
+  /** The proof sheet open for the current stop. */
+  const [sheet, setSheet] = useState<Done["status"] | null>(null);
 
   const update = (patch: Partial<Saved>) =>
     setState((prev) => {
@@ -263,12 +267,14 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
       { next: 0 },
     );
 
-  const finishStop = (status: Done["status"]) => {
+  // Called once the outcome (with its photo / signature or reason) is saved in the office.
+  const finishStop = (status: Done["status"], orderId?: string) => {
     if (!result) return;
     const now = Date.now();
+    setSheet(null);
     setNowMs(now);
-    update({ next: next + 1, leftAtMs: now, done: [...done, { address: result.stops[next].address, status }] });
-    setToast({ id: now, tone: status === "delivered" ? "ok" : "warn", text: `${status === "delivered" ? "Delivered" : "Not delivered"} · ${result.stops[next].address}` });
+    update({ next: next + 1, leftAtMs: now, done: [...done, { address: result.stops[next].address, status, orderId }] });
+    setToast({ id: now, tone: status === "delivered" ? "ok" : "warn", text: `${tr(status === "delivered" ? "Delivered" : "Not delivered")} · ${result.stops[next].address}` });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -620,37 +626,39 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
         <section className="rounded-2xl bg-white p-4 shadow-card">
           <div className="grid grid-cols-3 text-center">
             {[
-              ["Stops", result.stops.length],
+              ["Stops", String(result.stops.length)],
               ["Driving", formatDuration(result.driveS)],
               ["Distance", formatKm(result.distanceM)],
             ].map(([l, v]) => (
               <div key={l}>
-                <p className="text-xl font-semibold tabular-nums text-slate-900">{v}</p>
-                <p className="text-xs text-slate-500">{l}</p>
+                <p className="text-xl font-semibold tabular-nums text-slate-900">{<Tx>{v}</Tx>}</p>
+                <p className="text-xs text-slate-500">{tr(l)}</p>
               </div>
             ))}
           </div>
           <p className="mt-3 flex items-center justify-between border-t border-line pt-3 text-sm">
             <span className="text-slate-500">{driving ? tr("Expected to finish") : tr("All done by")}</span>
             <span className="font-semibold text-slate-900">
-              {formatClock(finishS)}
+              {<Tx>{formatClock(finishS)}</Tx>}
               {finishS - result.finishS >= LATE_S && (
-                <span className="ml-1.5 text-xs font-normal text-amber-600">{formatDuration(finishS - result.finishS)} {" "}{tr("behind plan")}</span>
+                <span className="ml-1.5 text-xs font-normal text-amber-600">{<Tx>{formatDuration(finishS - result.finishS)}</Tx>} {" "}{tr("behind plan")}</span>
               )}
             </span>
           </p>
           {saved >= 60 && (
             <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-              {formatDuration(saved)} {" "}{tr("less driving than going in the order you typed (")}{formatDuration(result.entered.driveS)}).
+              {<Tx>{formatDuration(saved)}</Tx>} {" "}{tr("less driving than going in the order you typed (")}{<Tx>{formatDuration(result.entered.driveS)}</Tx>}).
             </p>
           )}
           <p className="mt-2 text-[11px] leading-snug text-slate-400">
             {result.exact ? tr("Every possible order was compared.") : tr("Optimised order (best found).")}{" "}
             {tr(
-              result.matrixSource === "osrm"
-                ? "Drive times from road data, plus a {pct}% traffic buffer. Planned at {time}."
-                : "Drive times are straight-line estimates (road data unavailable), plus a {pct}% traffic buffer. Planned at {time}.",
-              { pct: Math.round((result.trafficFactor - 1) * 100), time: formatClock(result.startS) },
+              result.matrixSource !== "osrm"
+                ? "Drive times are straight-line estimates (road data unavailable), plus a {pct}% traffic buffer. Planned at {time}."
+                : result.learned
+                  ? "Drive times from road data, adjusted to your drivers' real pace (+{pct}%). Planned at {time}."
+                  : "Drive times from road data, plus a {pct}% traffic buffer. Planned at {time}.",
+              { pct: Math.round((result.trafficFactor - 1) * 100), time: tr(formatClock(result.startS)) },
             )}
           </p>
         </section>
@@ -696,7 +704,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                 {tr("Stop")}{" "}{offset + next + 1} {" "}{tr("of")}{" "}{total}
               </p>
               <span className="text-xs text-slate-500">
-                {formatDuration(current.legDurationS)} · {formatKm(current.legDistanceM)}
+                <Tx>{`${formatDuration(current.legDurationS)} · ${formatKm(current.legDistanceM)}`}</Tx>
               </span>
             </div>
             <div className="space-y-3 p-4">
@@ -706,17 +714,17 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                 {current.approximate && <p className="mt-1 text-xs text-amber-700">{tr("Approximate location: check the address on arrival.")}</p>}
               </div>
               <p className="text-sm text-slate-600">
-                {tr("Arrive around")}{" "}<span className="font-semibold text-slate-900">{formatClock(projected[0].arrivalS)}</span>
-                {lateBy(0) >= LATE_S && <span className="ml-1.5 text-xs text-amber-600">{tr("(planned")}{" "}{formatClock(current.arrivalS)})</span>}
+                {tr("Arrive around")}{" "}<span className="font-semibold text-slate-900">{<Tx>{formatClock(projected[0].arrivalS)}</Tx>}</span>
+                {lateBy(0) >= LATE_S && <span className="ml-1.5 text-xs text-amber-600">{tr("(planned")}{" "}{<Tx>{formatClock(current.arrivalS)}</Tx>})</span>}
               </p>
               <a href={navigationUrls(current.lat, current.lng).google} target="_blank" rel="noreferrer" className={btn("primary", "lg", "w-full rounded-xl")}>
                 <Navigation className="size-5" /> {" "}{tr("Navigate (Google Maps)")}</a>
               <a href={navigationUrls(current.lat, current.lng).apple} target="_blank" rel="noreferrer" className="block text-center text-xs text-slate-500 underline">
                 {tr("Open in Apple Maps instead")}</a>
               <div className="grid grid-cols-2 gap-2 border-t border-line pt-3">
-                <button className={btn("success", "lg", "rounded-xl")} onClick={() => finishStop("delivered")}>
+                <button className={btn("success", "lg", "rounded-xl")} onClick={() => setSheet("delivered")}>
                   <CheckCircle2 className="size-5" /> {" "}{tr("Delivered")}</button>
-                <button className={btn("danger", "lg", "rounded-xl")} onClick={() => finishStop("failed")}>
+                <button className={btn("danger", "lg", "rounded-xl")} onClick={() => setSheet("failed")}>
                   <TriangleAlert className="size-5" /> {" "}{tr("Couldn't deliver")}</button>
               </div>
             </div>
@@ -727,7 +735,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
               <Flag className="size-4 text-emerald-600" /> {" "}{tr("All stops done. Head back to")}{" "}{<Tx>{result.end!.label}</Tx>}
             </p>
             <p className="text-sm text-slate-500">
-              {tr("About")}{" "}{formatDuration(result.returnLeg?.durationS)} · {formatKm(result.returnLeg?.distanceM)}
+              {tr("About")}{" "}<Tx>{`${formatDuration(result.returnLeg?.durationS)} · ${formatKm(result.returnLeg?.distanceM)}`}</Tx>
             </p>
             <a href={navigationUrls(result.end!.lat, result.end!.lng).google} target="_blank" rel="noreferrer" className={btn("primary", "lg", "w-full rounded-xl")}>
               <Navigation className="size-5" /> {" "}{tr("Navigate back")}</a>
@@ -750,7 +758,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                 <Route className="size-4" /> {" "}{tr("Google Maps: next")}{" "}{multiNav.count} {" "}{tr("stops in this order")}</a>
             )}
             <button className={btn("secondary", "md", "w-full rounded-xl")} disabled={pending} onClick={replanRemaining}>
-              {pending ? <Spinner /> : <LocateFixed className="size-4" />} {pending ? tr("Re-planning…") : `Re-plan the ${remaining.length} remaining from my location`}
+              {pending ? <Spinner /> : <LocateFixed className="size-4" />} {pending ? tr("Re-planning…") : tr("Re-plan the {n} remaining from my location", { n: remaining.length })}
             </button>
             <button className={btn("secondary", "md", "w-full rounded-xl")} onClick={() => setShowMap(!showMap)}>
               {showMap ? tr("Hide route map") : tr("Show route map")}
@@ -766,7 +774,7 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             <li className="flex items-center gap-3 px-4 py-2.5 text-slate-500">
               <span className="grid size-7 shrink-0 place-items-center rounded-full bg-navy-900 text-xs font-bold text-white">S</span>
               <span className="min-w-0 flex-1 truncate">{<Tx>{result.start.label}</Tx>}</span>
-              <span className="tabular-nums">{formatClock(result.startS)}</span>
+              <span className="tabular-nums">{<Tx>{formatClock(result.startS)}</Tx>}</span>
             </li>
             {done.map((d, i) => (
               <li key={`done-${i}`} className="flex items-center gap-3 px-4 py-2.5 text-slate-400">
@@ -788,14 +796,16 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-slate-900">{s.address}</span>
                     <span className="block text-xs text-slate-500">
-                      +{formatDuration(s.legDurationS)} {" "}{tr("drive ·")}{" "}{formatKm(s.legDistanceM)}
+                      +{<Tx>{formatDuration(s.legDurationS)}</Tx>} {" "}{tr("drive ·")}{" "}{formatKm(s.legDistanceM)}
                       {s.approximate && <span className="text-amber-700"> {" "}{tr("· approx. location")}</span>}
                     </span>
                   </span>
                   <span className="text-right">
-                    <span className="block font-semibold tabular-nums text-slate-900">{formatClock(projected[k].arrivalS)}</span>
+                    <span className="block font-semibold tabular-nums text-slate-900">{<Tx>{formatClock(projected[k].arrivalS)}</Tx>}</span>
                     <span className={cx("block text-[11px]", late >= LATE_S ? "text-amber-600" : "text-slate-400")}>
-                      {late >= LATE_S ? `+${formatDuration(late)} late` : `${formatDuration(projected[k].arrivalS - result.startS)} in`}
+                      {late >= LATE_S
+                        ? tr("+{d} late", { d: tr(formatDuration(late)) })
+                        : tr("{d} in", { d: tr(formatDuration(projected[k].arrivalS - result.startS)) })}
                     </span>
                   </span>
                 </li>
@@ -809,10 +819,10 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">{<Tx>{result.end.label}</Tx>}</span>
                   <span className="block text-xs">
-                    +{formatDuration(result.returnLeg.durationS)} {" "}{tr("drive ·")}{" "}{formatKm(result.returnLeg.distanceM)}
+                    +{<Tx>{formatDuration(result.returnLeg.durationS)}</Tx>} {" "}{tr("drive ·")}{" "}{formatKm(result.returnLeg.distanceM)}
                   </span>
                 </span>
-                <span className="font-semibold tabular-nums text-slate-900">{formatClock(finishS)}</span>
+                <span className="font-semibold tabular-nums text-slate-900">{<Tx>{formatClock(finishS)}</Tx>}</span>
               </li>
             )}
           </ol>
@@ -823,6 +833,34 @@ export function QuickRouteClient({ backHref, depotName, defaultServiceMin }: Pro
             {tr("Cancel this route and start over")}</button>
         )}
       </main>
+      {current && (
+        <>
+          <Modal open={sheet === "delivered"} onClose={() => setSheet(null)} title={tr("Confirm delivery")}>
+            {sheet === "delivered" && (
+              <OutcomeForm
+                kind="delivered"
+                action={recordQuickStop}
+                fields={{ outcome: "delivered", address: current.address, label: current.label, stopLat: String(current.lat), stopLng: String(current.lng) }}
+                reference={current.address}
+                requirePhoto={requirePhoto}
+                requireSignature={requireSignature}
+                proofRequired
+                onDone={(d) => finishStop("delivered", d?.orderId)}
+              />
+            )}
+          </Modal>
+          <Modal open={sheet === "failed"} onClose={() => setSheet(null)} title={tr("Report a delivery problem")}>
+            {sheet === "failed" && (
+              <OutcomeForm
+                kind="failed"
+                action={recordQuickStop}
+                fields={{ outcome: "failed", address: current.address, label: current.label, stopLat: String(current.lat), stopLng: String(current.lng) }}
+                onDone={(d) => finishStop("failed", d?.orderId)}
+              />
+            )}
+          </Modal>
+        </>
+      )}
       <Toast toast={toast} onDone={clearToast} />
     </div>
   );

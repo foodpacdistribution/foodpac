@@ -1,7 +1,6 @@
 "use client";
 
 import { Languages } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { setLocale } from "@/app/actions/auth";
 import { LOCALES } from "@/lib/i18n";
@@ -11,7 +10,6 @@ import { cx } from "./ui";
 /** EN / 中文 toggle. Saves the choice and re-renders the page in the new language. */
 export function LanguageSwitch({ tone = "light", className }: { tone?: "light" | "dark"; className?: string }) {
   const current = useLocale();
-  const router = useRouter();
   const [pending, start] = useTransition();
   return (
     <div
@@ -34,7 +32,6 @@ export function LanguageSwitch({ tone = "light", className }: { tone?: "light" |
           onClick={() =>
             start(async () => {
               await setLocale(l.code);
-              router.refresh();
             })
           }
           className={cx(

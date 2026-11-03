@@ -6,6 +6,7 @@ import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { plans, routes } from "@/lib/db/schema";
+import { getT } from "@/lib/i18n/server";
 import { UserError } from "@/lib/planning";
 import { buildShipment, deleteShipment as removeShipment, recallShipment as recall, sendShipment as send } from "@/lib/shipments";
 
@@ -25,15 +26,25 @@ async function routeWithDate(routeId: string) {
   return { db, ...row };
 }
 
-/** New shipment for a driver, or adds the orders to the one they already have that day. */
-export async function createShipment(date: string, driverId: string, orderIds: string[]) {
+/**
+ * New shipment for a driver, or adds the orders to the one they already have that day.
+ * With `send`, it goes straight to the driver's phone as well.
+ */
+export async function createShipment(date: string, driverId: string, orderIds: string[], opts: { send?: boolean } = {}) {
   return attempt(async () => {
     await assertUser(STAFF);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new UserError("Choose a date.");
     if (!orderIds.length) throw new UserError("Select the orders to ship.");
-    const r = await buildShipment(await getDb(), date, driverId, orderIds);
+    const db = await getDb();
+    const r = await buildShipment(db, date, driverId, orderIds);
+    if (opts.send && r) await send(db, r.id);
     revalidate();
-    return { message: `Shipment ${r?.number ?? ""} ready: print the docket, then send it to the driver.` };
+    const t = await getT();
+    return {
+      message: opts.send
+        ? t("{number} sent to the driver's phone", { number: r?.number ?? "" })
+        : t("Shipment {number} ready: print the docket, then send it to the driver.", { number: r?.number ?? "" }),
+    };
   });
 }
 

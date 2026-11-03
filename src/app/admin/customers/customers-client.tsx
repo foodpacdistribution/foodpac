@@ -2,7 +2,6 @@
 
 import { Building2, KeyRound, Mail, MapPin, Package, Pencil, Phone, Plus, Search, Tags } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useActionState, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { deleteCustomer, removeCustomerLogin, saveCustomer } from "@/app/actions/customers";
 import { FormError, Modal, SubmitButton } from "@/components/client-ui";
@@ -43,7 +42,6 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
   const [editing, setEditing] = useState<Customer | "new" | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number][0]>("all");
-  const router = useRouter();
   const deferredQ = useDeferredValue(q);
   const shown = useMemo(() => {
     const s = deferredQ.trim().toLowerCase();
@@ -172,10 +170,7 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
           <CustomerForm
             isAdmin={isAdmin}
             customer={editing === "new" ? null : editing}
-            onDone={() => {
-              setEditing(null);
-              router.refresh();
-            }}
+            onDone={() => setEditing(null)}
           />
         )}
       </Modal>

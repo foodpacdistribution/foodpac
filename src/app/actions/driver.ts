@@ -6,9 +6,9 @@ import { attempt } from "@/lib/action";
 import { assertUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { deliveryEvents, orders, plans, routes, routeStops } from "@/lib/db/schema";
-import { FAILURE_REASONS } from "@/lib/orders";
+import { type Outcome, readOutcome } from "@/lib/outcome";
 import { getSettings, UserError } from "@/lib/planning";
-import { readUpload, saveProof } from "@/lib/proofs";
+import { saveProof } from "@/lib/proofs";
 
 function revalidate() {
   revalidatePath("/driver");
@@ -54,14 +54,8 @@ export async function startRoute(routeId: string) {
   });
 }
 
-type Upload = { data: Uint8Array; mime: string } | null;
-
-async function finishStop(
-  stopId: string,
-  outcome: { type: "delivered"; recipient: string | null; note: string | null } | { type: "failed"; reason: string; note: string | null },
-  proofs: { photo: Upload; signature: Upload },
-  at: Fix | null,
-) {
+async function finishStop(stopId: string, outcome: Outcome) {
+  const { at } = outcome;
   const { db, user, stop, route } = await ownStop(stopId);
   if (stop.status !== "pending") throw new UserError("This stop is already completed.");
   const now = new Date();
@@ -84,7 +78,7 @@ async function finishStop(
       })
       .returning({ id: deliveryEvents.id });
     for (const kind of ["photo", "signature"] as const) {
-      const p = proofs[kind];
+      const p = outcome[kind];
       if (p) await saveProof(tx, { orderId: stop.orderId, eventId: event.id, kind, mime: p.mime, data: p.data });
     }
     const remaining = await tx
@@ -104,42 +98,18 @@ async function finishStop(
   revalidate();
 }
 
-type Fix = { lat: number; lng: number; accuracy: number | null };
-
-/** The phone's GPS fix sent with the outcome; ignored when missing or not a real coordinate. */
-function readFix(form: FormData): Fix | null {
-  const lat = Number(form.get("lat"));
-  const lng = Number(form.get("lng"));
-  const accuracy = Number(form.get("accuracy"));
-  if (!form.get("lat") || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
-  return { lat, lng, accuracy: Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : null };
-}
-
-const clean = (v: FormDataEntryValue | null, max = 500) => {
-  const s = String(v ?? "").trim().slice(0, max);
-  return s || null;
-};
-
 export async function markDelivered(_prev: unknown, form: FormData) {
   return attempt(async () => {
-    const photo = await readUpload(form.get("photo"), "Photo");
-    const signature = await readUpload(form.get("signature"), "Signature");
-    const recipient = clean(form.get("recipient"), 120);
-    const s = await getSettings(await getDb());
-    if (s.requirePhoto && !photo) throw new UserError("A delivery photo is required.");
-    if (s.requireSignature && !signature) throw new UserError("The customer's signature is required.");
-    if (signature && !recipient) throw new UserError("Enter the name of the person who signed.");
-    await finishStop(String(form.get("stopId")), { type: "delivered", recipient, note: clean(form.get("note")) }, { photo, signature }, readFix(form));
+    const outcome = await readOutcome(form, "delivered", await getSettings(await getDb()));
+    await finishStop(String(form.get("stopId")), outcome);
     return { message: "Marked as delivered" };
   });
 }
 
 export async function markFailed(_prev: unknown, form: FormData) {
   return attempt(async () => {
-    const reason = String(form.get("reason") ?? "");
-    if (!FAILURE_REASONS.includes(reason)) throw new UserError("Choose a reason.");
-    const photo = await readUpload(form.get("photo"), "Photo");
-    await finishStop(String(form.get("stopId")), { type: "failed", reason, note: clean(form.get("note")) }, { photo, signature: null }, readFix(form));
+    const outcome = await readOutcome(form, "failed", await getSettings(await getDb()));
+    await finishStop(String(form.get("stopId")), outcome);
     return { message: "Delivery issue reported" };
   });
 }

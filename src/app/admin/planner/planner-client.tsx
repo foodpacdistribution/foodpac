@@ -14,23 +14,25 @@ import {
   RotateCcw,
   Send,
   Sparkles,
+  Trash2,
   Undo2,
   X,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { useHoldLiveRefresh } from "@/components/live-refresh";
-import { dispatch, optimise, saveManualEdit } from "@/app/actions/planner";
+import { deleteDayPlan, dispatch, optimise, saveManualEdit } from "@/app/actions/planner";
 import { DateNav } from "@/components/date-nav";
 import { DeliveryMap, type MapRoute, type MapStop } from "@/components/map";
 import { Badge, btn, Card, CardHeader, ColorDot, cx, Field, inputCls, PageHeader, Spinner, UNASSIGNED_REASON } from "@/components/ui";
+import { intlLocale } from "@/lib/i18n";
+import { MIN_LEGS, type Timing } from "@/lib/vrp/calibrate";
 import type { Objective } from "@/lib/vrp/types";
 import type { PlanView, RouteView, StopView } from "@/lib/planning";
 import { formatClock, formatDuration, formatKm, formatMinutesClock, inputToMinutes, minutesToInput } from "@/lib/time";
 import { ComparisonCard, SummaryCard } from "./summary-cards";
-import { Tx, useT } from "@/components/i18n";
+import { Tx, useLocale, useT } from "@/components/i18n";
 
 type Driver = {
   id: string;
@@ -66,6 +68,8 @@ type Props = {
   depots: { id: string; lat: number; lng: number; name: string }[];
   defaults: { startMin: number; serviceMin: number; trafficFactor: number; returnToDepot: boolean; maxShiftMin: number };
   lastSettings: Record<string, unknown> | null;
+  /** Driving speed and unloading time learned from past deliveries, once there are enough. */
+  timing: Timing | null;
   drivers: Driver[];
   orders: Order[];
   view: PlanView;
@@ -100,11 +104,12 @@ function windowLabel(o: { windowStartMin: number | null; windowEndMin: number | 
 
 export function PlannerClient(props: Props) {
   const tr = useT();
-  const { date, view, drivers, orders, defaults } = props;
+  const locale = useLocale();
+  const timeOf = (iso: string) => new Date(iso).toLocaleTimeString(intlLocale(locale), { hour: "numeric", minute: "2-digit" });
+  const { date, view, drivers, orders, defaults, timing } = props;
   const plan = view.plan;
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [busy, setBusy] = useState<null | "optimise" | "save" | "dispatch">(null);
+  const [busy, setBusy] = useState<null | "optimise" | "save" | "dispatch" | "delete">(null);
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [mode, setMode] = useState<"map" | "board">("map");
   const [focusRouteId, setFocusRouteId] = useState<string | null>(null);
@@ -130,6 +135,9 @@ export function PlannerClient(props: Props) {
   const [objective, setObjective] = useState<Objective>((last?.objective as Objective) ?? "balanced");
   const [traffic, setTraffic] = useState<number>((last?.trafficFactor as number) ?? defaults.trafficFactor);
   const [returnToDepot, setReturnToDepot] = useState<boolean>((last?.returnToDepot as boolean) ?? defaults.returnToDepot);
+  // On by default once there's enough delivery data; turning it off brings back the manual guesses.
+  const [learnedChoice, setLearnedChoice] = useState<boolean>((last?.learnedTiming as boolean | undefined) ?? true);
+  const useLearned = !!timing && learnedChoice;
 
   // ----- manual edit draft -----
   const saved = useMemo(() => buildDraft(view, orders), [view, orders]);
@@ -176,6 +184,7 @@ export function PlannerClient(props: Props) {
   const notLocated = open.filter((o) => o.lat === null);
   const done = orders.filter((o) => o.status === "delivered" || o.status === "failed");
   const startedRoutes = view.routes.filter((r) => r.status !== "planned").length;
+  const hasCompleted = view.routes.some((r) => r.stops.some((s) => s.status !== "pending"));
   // Why "Optimise" can't run yet, with the fix, so a disabled button never leaves the user guessing.
   const blocker: { text: string; href?: string; cta?: string } | null = !props.depots.length
     ? { text: "Add a depot address first.", href: "/admin/settings", cta: "Open settings" }
@@ -195,9 +204,8 @@ export function PlannerClient(props: Props) {
     if (plan?.status === "dispatched" && !confirm("This plan is already with the drivers. Re-optimising updates their remaining stops. Continue?")) return;
     setBusy("optimise");
     startTransition(async () => {
-      report(await optimise({ date, driverIds, startMin, defaultServiceMin: serviceMin, objective, trafficFactor: traffic, returnToDepot }));
+      report(await optimise({ date, driverIds, startMin, defaultServiceMin: serviceMin, objective, trafficFactor: traffic, returnToDepot, learnedTiming: useLearned }));
       setBusy(null);
-      router.refresh();
     });
   }
 
@@ -206,7 +214,6 @@ export function PlannerClient(props: Props) {
     startTransition(async () => {
       report(await saveManualEdit(date, Object.entries(draft.routes).map(([driverId, orderIds]) => ({ driverId, orderIds }))));
       setBusy(null);
-      router.refresh();
     });
   }
 
@@ -216,7 +223,19 @@ export function PlannerClient(props: Props) {
     startTransition(async () => {
       report(await dispatch(date, on));
       setBusy(null);
-      router.refresh();
+    });
+  }
+
+  function removePlan() {
+    const ask =
+      plan?.status === "dispatched"
+        ? tr("Delete this day's plan? Drivers will no longer see these routes, and the orders go back to unplanned.")
+        : tr("Delete this day's plan? The orders stay and go back to unplanned.");
+    if (!confirm(ask)) return;
+    setBusy("delete");
+    startTransition(async () => {
+      report(await deleteDayPlan(date));
+      setBusy(null);
     });
   }
 
@@ -293,7 +312,7 @@ export function PlannerClient(props: Props) {
           plan ? (
             <span className="flex flex-wrap items-center gap-2">
               {plan.status === "dispatched" ? <Badge tone="blue">{tr("Dispatched to drivers")}</Badge> : <Badge tone="violet">{tr("Draft plan")}</Badge>}
-              <span>{tr("Last updated")}{" "}{new Date(plan.updatedAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}</span>
+              <span>{tr("Last updated")}{" "}{timeOf(plan.updatedAt)}</span>
             </span>
           ) : (
             "Set the day's conditions, then let the optimiser build the routes."
@@ -302,11 +321,17 @@ export function PlannerClient(props: Props) {
         actions={
           <>
             <DateNav date={date} today={props.today} basePath="/admin/planner" />
-            {plan && (
+            {plan && view.routes.length > 0 && (
               <a href={`/api/plans/${date}/export`} className={btn("secondary")}>
                 <Download className="size-4" /> {" "}{tr("Export")}</a>
             )}
+            {plan && !hasCompleted && (
+              <button className={btn("ghost", "md", "text-red-600 hover:bg-red-50")} disabled={pending} onClick={removePlan}>
+                {busy === "delete" ? <Spinner /> : <Trash2 className="size-4" />} {tr("Delete plan")}
+              </button>
+            )}
             {plan &&
+              view.routes.length > 0 &&
               (plan.status === "dispatched" ? (
                 <button className={btn("secondary")} disabled={pending || startedRoutes > 0} onClick={() => toggleDispatch(false)} title={startedRoutes ? tr("Drivers have started") : undefined}>
                   <Undo2 className="size-4" /> {" "}{tr("Recall")}</button>
@@ -360,7 +385,7 @@ export function PlannerClient(props: Props) {
           <Card>
             <CardHeader
               title={tr("Planning conditions")}
-              subtitle={props.depots.length ? `${props.depots.length === 1 ? "Depot" : "Depots"}: ${props.depots.map((d) => d.name).join(", ")}` : undefined}
+              subtitle={props.depots.length ? `${tr(props.depots.length === 1 ? "Depot" : "Depots")}: ${props.depots.map((d) => d.name).join(", ")}` : undefined}
             />
             <div className="space-y-4 p-4">
               <div>
@@ -398,17 +423,45 @@ export function PlannerClient(props: Props) {
                 <Field label={tr("Start time")} hint={tr("Unless set per driver")}>
                   <input type="time" value={minutesToInput(startMin)} onChange={(e) => setStartMin(inputToMinutes(e.target.value) ?? startMin)} className={inputCls} />
                 </Field>
-                <Field label={tr("Unload / stop")} hint={tr("Default minutes")}>
-                  <input type="number" min={0} max={240} value={serviceMin} onChange={(e) => setServiceMin(Number(e.target.value))} className={inputCls} />
+                <Field label={tr("Unload / stop")} hint={useLearned ? tr("From your deliveries") : tr("Default minutes")}>
+                  <input
+                    type="number"
+                    min={0}
+                    max={240}
+                    value={useLearned ? timing.serviceMin : serviceMin}
+                    disabled={useLearned}
+                    onChange={(e) => setServiceMin(Number(e.target.value))}
+                    className={inputCls}
+                  />
                 </Field>
               </div>
+              {timing ? (
+                <label className="flex cursor-pointer gap-2.5 rounded-lg bg-emerald-50/70 px-3 py-2 ring-1 ring-emerald-200">
+                  <input type="checkbox" checked={learnedChoice} onChange={(e) => setLearnedChoice(e.target.checked)} className="mt-0.5" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-emerald-900">{tr("Time routes from your deliveries")}</span>
+                    <span className="block text-[11px] text-emerald-800/80">
+                      {tr("Driving {pct} vs road data · {min} min per stop · learned from {n} deliveries", {
+                        pct: `+${Math.round((timing.trafficFactor - 1) * 100)}%`,
+                        min: timing.serviceMin,
+                        n: timing.legs,
+                      })}
+                    </span>
+                  </span>
+                </label>
+              ) : (
+                <p className="text-[11px] leading-relaxed text-slate-500">
+                  {tr("After about {n} deliveries the planner learns your real driving and unloading times, so ETAs get more accurate.", { n: MIN_LEGS })}
+                </p>
+              )}
               {/* The defaults suit most days; keep the extra knobs out of a first-time user's way. */}
               <details className="group rounded-lg border border-line">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
                   <span className="min-w-0">
                     <span className="block text-sm font-medium text-slate-800">{tr("More options")}</span>
                     <span className="block truncate text-[11px] text-slate-500">
-                      {tr(OBJECTIVES.find(([v]) => v === objective)?.[1] ?? "")} · {traffic === 1 ? tr("no traffic buffer") : tr(`+${Math.round((traffic - 1) * 100)}% traffic`)} ·{" "}
+                      {tr(OBJECTIVES.find(([v]) => v === objective)?.[1] ?? "")} ·{" "}
+                      {useLearned ? tr("learned timing") : traffic === 1 ? tr("no traffic buffer") : tr(`+${Math.round((traffic - 1) * 100)}% traffic`)} ·{" "}
                       {returnToDepot ? tr("back to depot") : tr("end at last stop")}
                     </span>
                   </span>
@@ -434,8 +487,17 @@ export function PlannerClient(props: Props) {
                       ))}
                     </div>
                   </Field>
-                  <Field label={tr("Traffic buffer")} hint={tr("Road times are free-flow; add a margin for traffic and parking.")}>
-                    <select value={traffic} onChange={(e) => setTraffic(Number(e.target.value))} className={inputCls}>
+                  <Field
+                    label={tr("Traffic buffer")}
+                    hint={useLearned ? tr("Set from your deliveries. Untick “Time routes from your deliveries” to choose it yourself.") : tr("Road times are free-flow; add a margin for traffic and parking.")}
+                  >
+                    <select
+                      value={useLearned ? "learned" : traffic}
+                      disabled={useLearned}
+                      onChange={(e) => setTraffic(Number(e.target.value))}
+                      className={inputCls}
+                    >
+                      {useLearned && <option value="learned">+{Math.round((timing.trafficFactor - 1) * 100)}%</option>}
                       {[1, 1.1, 1.15, 1.25, 1.35, 1.5].map((f) => (
                         <option key={f} value={f}>
                           {f === 1 ? tr("None") : `+${Math.round((f - 1) * 100)}%`}
@@ -450,7 +512,7 @@ export function PlannerClient(props: Props) {
               </details>
               {blocker?.href ? (
                 <Link href={blocker.href} className={btn("primary", "lg", "w-full")}>
-                  {blocker.cta} →
+                  {tr(blocker.cta ?? "")} →
                 </Link>
               ) : (
                 <button className={btn("primary", "lg", "w-full")} disabled={pending || !!blocker} onClick={runOptimise}>
@@ -464,7 +526,7 @@ export function PlannerClient(props: Props) {
                   )}
                 </button>
               )}
-              {blocker && <p className="text-center text-xs text-slate-500">{<Tx>{blocker.text}</Tx>}</p>}
+              {blocker && <p className="text-center text-xs text-slate-500">{tr(blocker.text)}</p>}
               {plan?.status === "dispatched" && done.length > 0 && (
                 <p className="text-[11px] leading-relaxed text-slate-500">
                   {tr("Completed stops stay as they are. Remaining orders are re-planned from each driver's last stop.")}</p>
@@ -552,12 +614,28 @@ export function PlannerClient(props: Props) {
               <p className="mt-3 text-sm font-semibold text-slate-900">{tr("No routes yet")}</p>
               <p className="mt-1 text-sm text-slate-500">
                 {blocker ? (
-                  blocker.text
+                  tr(blocker.text)
                 ) : (
                   <>
                     {tr("Tick the drivers on shift, then press")}{" "}<strong>{tr("Optimise routes")}</strong>{tr(". The planner uses real road travel times to decide the stop order and which driver takes each order.")}</>
                 )}
               </p>
+            </Card>
+          ) : view.routes.length === 0 ? (
+            // Every order on this plan was deleted or moved: nothing to show, just tidy it away.
+            <Card className="p-6 text-center">
+              <Trash2 className="mx-auto size-8 text-slate-300" />
+              <p className="mt-3 text-sm font-semibold text-slate-900">{tr("This plan has no routes left")}</p>
+              <p className="mt-1 text-sm text-slate-500">
+                {open.length
+                  ? tr("Its orders were moved off the routes. Optimise again, or delete the plan.")
+                  : tr("Its orders were deleted or moved to another day. You can delete the plan.")}
+              </p>
+              {!hasCompleted && (
+                <button className={btn("danger", "md", "mt-4")} disabled={pending} onClick={removePlan}>
+                  {busy === "delete" ? <Spinner /> : <Trash2 className="size-4" />} {tr("Delete plan")}
+                </button>
+              )}
             </Card>
           ) : (
             <>
@@ -651,7 +729,7 @@ export function PlannerClient(props: Props) {
                         </span>
                         <span className="text-right text-slate-500 tabular-nums">
                           {formatKm(r.summary.distance)} · {formatDuration(r.summary.driveTime)} ·{" "}
-                          {new Date(r.createdAt).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}
+                          {timeOf(r.createdAt)}
                         </span>
                       </li>
                     ))}
@@ -739,7 +817,7 @@ function RouteCard(props: {
             {route && !props.dirty && (
               <>
                 {" "}
-                · {formatKm(route.distanceM)} · {formatClock(route.startS)} → {formatClock(route.endS)} ({formatDuration(route.endS - route.startS)})
+                · <Tx>{`${formatKm(route.distanceM)} · ${formatClock(route.startS)} → ${formatClock(route.endS)} (${formatDuration(route.endS - route.startS)})`}</Tx>
               </>
             )}
           </p>
@@ -794,7 +872,7 @@ function RouteCard(props: {
                 </div>
                 <div className="shrink-0 text-right">
                   <p className={cx("text-xs font-semibold tabular-nums", showTimes && st.lateS > 0 ? "text-red-600" : "text-slate-800")}>
-                    {showTimes ? formatClock(st.etaS) : "—"}
+                    {showTimes ? <Tx>{formatClock(st.etaS)}</Tx> : "—"}
                   </p>
                   {w && <p className={cx("text-[10px]", showTimes && st.lateS > 0 ? "text-red-600" : "text-slate-400")}>{w}</p>}
                 </div>
@@ -827,7 +905,7 @@ function RouteCard(props: {
           {route && !props.dirty && pendingIds.length > 0 && route.endS > 0 && (
             <li className="flex items-center justify-between px-4 py-2 text-[11px] text-slate-500">
               <span>{tr("Finish")}{route.stops.length ? tr(" (back at depot if returning)") : ""}</span>
-              <span className="font-semibold tabular-nums text-slate-700">{formatClock(route.endS)}</span>
+              <span className="font-semibold tabular-nums text-slate-700"><Tx>{formatClock(route.endS)}</Tx></span>
             </li>
           )}
         </ol>

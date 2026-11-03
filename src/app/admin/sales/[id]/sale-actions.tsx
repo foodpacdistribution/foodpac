@@ -18,7 +18,6 @@ export function SaleActions(p: { id: string; status: SalesStatus; paymentStatus:
     start(async () => {
       const r = await fn();
       setToast({ id: Date.now(), text: r.ok ? (r.message ?? "Done") : r.error, tone: r.ok ? "ok" : "warn" });
-      if (r.ok) router.refresh();
     });
   const steps: FulfilmentStatus[] = ["new", "picking", "packed", "loaded"];
   const next = steps[steps.indexOf(p.fulfilment) + 1];

@@ -2,7 +2,6 @@
 
 import { Download, Eye, EyeOff, FileUp, ImageIcon, PackagePlus, Pencil, Percent, Plus, Search, Star, Tag, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useActionState, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { adjustStock, bulkProducts, deleteProduct, type ProductBulkOp, saveProduct } from "@/app/actions/products";
 import { FormError, Modal, SubmitButton, Toast, type ToastMessage } from "@/components/client-ui";
@@ -43,7 +42,6 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [pending, start] = useTransition();
-  const router = useRouter();
   const deferredQ = useDeferredValue(q);
   const shown = useMemo(() => {
     const s = deferredQ.trim().toLowerCase();
@@ -66,17 +64,13 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
     start(async () => {
       const r = await bulkProducts(ids, op);
       report(r);
-      if (r.ok) {
-        if (op.kind === "delete") setSelected(new Set());
-        router.refresh();
-      }
+      if (r.ok && op.kind === "delete") setSelected(new Set());
     });
 
   const remove = async (p: Product) => {
     if (!confirm(tr("Delete {name} ({sku})?\n\nIt leaves the shop, carts and customer price lists. Past orders keep its name and SKU.", { name: p.name, sku: p.sku }))) return;
     const r = await deleteProduct(p.id);
     report(r);
-    if (r.ok) router.refresh();
   };
 
   return (
@@ -211,7 +205,7 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
                   </div>
                 </div>
                 <div className="mt-2 flex items-center gap-1.5 border-t border-line pt-2">
-                  <StockAdjust id={p.id} onResult={(t) => (setToast(t), router.refresh())} />
+                  <StockAdjust id={p.id} onResult={setToast} />
                   <button className={cx(btn("ghost", "icon"), "ml-auto")} onClick={() => setEditing(p)} aria-label={`Edit ${p.name}`}>
                     <Pencil className="size-4" />
                   </button>
@@ -268,7 +262,7 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
                     </td>
                     <td className={cx("px-2 py-2.5 text-right font-semibold tabular-nums", stockTone(p.stock))}>{p.stock}</td>
                     <td className="px-2 py-2.5">
-                      <StockAdjust id={p.id} onResult={(t) => (setToast(t), router.refresh())} />
+                      <StockAdjust id={p.id} onResult={setToast} />
                     </td>
                     <td className="pr-3">
                       <div className="flex">
@@ -294,10 +288,7 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
           <ProductForm
             product={editing === "new" ? null : editing}
             categories={categories}
-            onDone={() => {
-              setEditing(null);
-              router.refresh();
-            }}
+            onDone={() => setEditing(null)}
           />
         )}
       </Modal>

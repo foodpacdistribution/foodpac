@@ -2,8 +2,9 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
+import { restoreDeliveries } from "@/lib/deliveries";
 import { drivers, optimisationRuns, orders } from "@/lib/db/schema";
-import { getDepots, getPlanView, getSettings } from "@/lib/planning";
+import { getDepots, getPlanView, getSettings, learnTiming } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
 import { PlannerClient } from "./planner-client";
 
@@ -14,14 +15,16 @@ export default async function PlannerPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const db = await getDb();
   const s = await getSettings(db);
+  await restoreDeliveries(db, s.timezone);
   const today = todayIn(s.timezone);
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : today;
 
-  const [view, driverRows, orderRows, depotList] = await Promise.all([
+  const [view, driverRows, orderRows, depotList, timing] = await Promise.all([
     getPlanView(db, date),
     db.select().from(drivers).where(eq(drivers.active, true)).orderBy(asc(drivers.name)),
     db.select().from(orders).where(eq(orders.deliveryDate, date)).orderBy(asc(orders.createdAt), asc(orders.orderNumber)),
     getDepots(db),
+    learnTiming(db, s.timezone),
   ]);
   const [lastRun] = view.plan
     ? await db
@@ -45,6 +48,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: Prom
         maxShiftMin: s.defaultMaxShiftMin,
       }}
       lastSettings={(lastRun?.settings as Record<string, unknown> | null) ?? null}
+      timing={timing}
       drivers={driverRows.map((d) => ({
         id: d.id,
         name: d.name,

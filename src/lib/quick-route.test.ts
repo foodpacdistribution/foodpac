@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAddressList, planSingleRoute, projectRemaining } from "./quick-route";
+import { EXACT_LIMIT, exactOrder, parseAddressList, planSingleRoute, projectRemaining } from "./quick-route";
 
 /** Points on a line: travel time = |a - b| × 60 s, distance = |a - b| × 1000 m. */
 function lineMatrix(xs: number[]) {
@@ -56,11 +56,12 @@ describe("planSingleRoute", () => {
   });
 
   it("falls back to the heuristic solver above the exact limit", () => {
-    const xs = [0, ...Array.from({ length: 12 }, (_, i) => ((i * 7) % 12) + 1)];
-    const plan = planSingleRoute(lineMatrix(xs), { stopCount: 12, endNode: null, startS: 0, serviceS: 0 });
+    const n = EXACT_LIMIT + 3;
+    const xs = [0, ...Array.from({ length: n }, (_, i) => ((i * 7) % n) + 1)];
+    const plan = planSingleRoute(lineMatrix(xs), { stopCount: n, endNode: null, startS: 0, serviceS: 0 });
     expect(plan.exact).toBe(false);
-    expect(new Set(plan.order).size).toBe(12);
-    expect(plan.driveS).toBe(12 * 60);
+    expect(new Set(plan.order).size).toBe(n);
+    expect(plan.driveS).toBe(n * 60);
   });
 });
 
@@ -103,5 +104,44 @@ describe("parseAddressList", () => {
       addresses: ["12 Mains Rd, Sunnybank", "7 Queen St"],
       duplicates: 1,
     });
+  });
+});
+
+describe("exactOrder", () => {
+  /** Seeded random travel times, different in each direction (one-way streets, turns). */
+  function randomMatrix(size: number, seed: number) {
+    let x = seed;
+    const rnd = () => ((x = (x * 1103515245 + 12345) % 2 ** 31), x / 2 ** 31);
+    return Array.from({ length: size }, (_, i) => Array.from({ length: size }, (_, j) => (i === j ? 0 : Math.round(60 + rnd() * 1800))));
+  }
+  const cost = (d: number[][], order: number[], endNode: number | null) => {
+    let t = 0;
+    let at = 0;
+    for (const s of order) (t += d[at][s + 1]), (at = s + 1);
+    return t + (endNode !== null ? d[at][endNode] : 0);
+  };
+  const bruteBest = (d: number[][], n: number, endNode: number | null) => {
+    const perms = (k: number): number[][] => (k === 0 ? [[]] : perms(k - 1).flatMap((p) => Array.from({ length: k }, (_, i) => [...p.slice(0, i), k - 1, ...p.slice(i)])));
+    return Math.min(...perms(n).map((p) => cost(d, p, endNode)));
+  };
+
+  it("finds the true best order, for open routes, round trips and a separate finish", () => {
+    for (let n = 1; n <= 7; n++)
+      for (let seed = 1; seed <= 6; seed++) {
+        const d = randomMatrix(n + 2, seed * 31 + n);
+        for (const endNode of [null, 0, n + 1]) {
+          const order = exactOrder(d, n, endNode);
+          expect([...order].sort((a, b) => a - b)).toEqual(Array.from({ length: n }, (_, i) => i));
+          expect(cost(d, order, endNode)).toBe(bruteBest(d, n, endNode));
+        }
+      }
+  });
+
+  it(`solves ${EXACT_LIMIT} stops quickly`, () => {
+    const d = randomMatrix(EXACT_LIMIT + 2, 7);
+    const t = performance.now();
+    const order = exactOrder(d, EXACT_LIMIT, EXACT_LIMIT + 1);
+    expect(order).toHaveLength(EXACT_LIMIT);
+    expect(performance.now() - t).toBeLessThan(2000);
   });
 });

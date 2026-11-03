@@ -206,7 +206,6 @@ export function OrdersClient(props: {
                   startTransition(async () => {
                     report(await rescheduleOrders([...selected], rescheduleTo));
                     setSelected(new Set());
-                    router.refresh();
                   })
                 }
               >
@@ -227,7 +226,6 @@ export function OrdersClient(props: {
                 startTransition(async () => {
                   report(await deleteOrders([...selected], { includeCompleted }));
                   setSelected(new Set());
-                  router.refresh();
                 });
               }}
             >
@@ -247,7 +245,7 @@ export function OrdersClient(props: {
                   <button
                     className={btn("ghost", "sm")}
                     disabled={pending}
-                    onClick={() => startTransition(async () => (report(await addDemoOrders(date)), router.refresh()))}
+                    onClick={() => startTransition(async () => report(await addDemoOrders(date)))}
                   >
                     <Sparkles className="size-3.5" /> {" "}{tr("Load demo orders")}</button>
                 )}
@@ -308,7 +306,7 @@ export function OrdersClient(props: {
                           )}
                         </div>
                         {o.source !== "manual" && o.source !== "import" && (
-                          <span className="text-[10px] uppercase tracking-wide text-slate-400">{o.source.startsWith("feed:") ? o.source.slice(5) : o.source}</span>
+                          <span className="text-[10px] uppercase tracking-wide text-slate-400">{o.source === "quick_route" ? tr("Quick route") : o.source.startsWith("feed:") ? o.source.slice(5) : o.source}</span>
                         )}
                       </td>
                       <td className="max-w-44 truncate px-3 py-2.5 text-slate-700">{o.customerName || "—"}</td>
@@ -385,13 +383,12 @@ export function OrdersClient(props: {
             onDone={(msg) => {
               setEditing(null);
               setNotice({ tone: "ok", text: msg });
-              router.refresh();
             }}
           />
         )}
       </Modal>
 
-      <Modal open={record !== null} onClose={() => setRecord(null)} title={record ? `Delivery record · ${record.orderNumber}` : ""}>
+      <Modal open={record !== null} onClose={() => setRecord(null)} title={record ? `${tr("Delivery record")} · ${record.orderNumber}` : ""}>
         {record && <DeliveryRecord key={record.id} orderId={record.id} />}
       </Modal>
     </>

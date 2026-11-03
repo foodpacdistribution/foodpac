@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { shiftDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
+import { restoreDeliveries } from "@/lib/deliveries";
 import { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { deliveryStatuses } from "@/lib/portal";
@@ -19,6 +20,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   const view = VIEWS.find((v) => v === sp.view) ?? "open";
   const db = await getDb();
   const s = await getSettings(db);
+  await restoreDeliveries(db, s.timezone);
   const today = todayIn(s.timezone);
   const q = (sp.q ?? "").trim().slice(0, 100);
   const isDate = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined);

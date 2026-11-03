@@ -29,15 +29,17 @@ export default async function DashboardPage() {
     db.select().from(orders).where(eq(orders.deliveryDate, today)),
     getDepots(db),
   ]);
-  const live = await liveFleet(db, view.routes.filter((r) => r.status !== "planned"));
-  const events = await db
-    .select({ e: deliveryEvents, orderNumber: orders.orderNumber, customer: orders.customerName, driver: drivers.name, color: drivers.color })
-    .from(deliveryEvents)
-    .innerJoin(orders, eq(orders.id, deliveryEvents.orderId))
-    .leftJoin(drivers, eq(drivers.id, deliveryEvents.driverId))
-    .where(eq(orders.deliveryDate, today))
-    .orderBy(desc(deliveryEvents.createdAt))
-    .limit(8);
+  const [live, events] = await Promise.all([
+    liveFleet(db, view.routes.filter((r) => r.status !== "planned")),
+    db
+      .select({ e: deliveryEvents, orderNumber: orders.orderNumber, customer: orders.customerName, driver: drivers.name, color: drivers.color })
+      .from(deliveryEvents)
+      .innerJoin(orders, eq(orders.id, deliveryEvents.orderId))
+      .leftJoin(drivers, eq(drivers.id, deliveryEvents.driverId))
+      .where(eq(orders.deliveryDate, today))
+      .orderBy(desc(deliveryEvents.createdAt))
+      .limit(8),
+  ]);
 
   const plan = view.plan;
   const dispatched = plan?.status === "dispatched" || view.routes.some((r) => r.dispatchedAt);

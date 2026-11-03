@@ -340,9 +340,35 @@ async function createDeliveryOrder(db: DB, so: typeof salesOrders.$inferSelect, 
     })
     .onConflictDoNothing()
     .returning({ id: orders.id });
-  if (!row) return null;
-  await db.update(salesOrders).set({ deliveryOrderId: row.id }).where(eq(salesOrders.id, so.id));
-  return row.id;
+  // Already a delivery with this number and date (e.g. left over from before it was unlinked): use it.
+  const id =
+    row?.id ??
+    (await db.select({ id: orders.id }).from(orders).where(and(eq(orders.orderNumber, so.number), eq(orders.deliveryDate, so.deliveryDate))).limit(1))[0]?.id;
+  if (!id) return null;
+  await db.update(salesOrders).set({ deliveryOrderId: id }).where(eq(salesOrders.id, so.id));
+  return id;
+}
+
+/**
+ * Confirmed shop orders for `fromDate` onwards that have lost their delivery (it was deleted,
+ * or creating it failed) get one again, so they show up in Orders, Shipments and the planner.
+ * One that had already been loaded goes back to "Packed": it's no longer on a van.
+ * Returns the new delivery order ids, which still need their address located.
+ */
+export async function restoreMissingDeliveries(db: DB, fromDate: string) {
+  const lost = await db
+    .select({ so: salesOrders, customer: customers })
+    .from(salesOrders)
+    .innerJoin(customers, eq(customers.id, salesOrders.customerId))
+    .where(and(eq(salesOrders.status, "confirmed"), sql`${salesOrders.deliveryOrderId} is null`, gte(salesOrders.deliveryDate, fromDate)));
+  const ids: string[] = [];
+  for (const { so, customer } of lost) {
+    const id = await createDeliveryOrder(db, so, customer);
+    if (!id) continue;
+    ids.push(id);
+    if (so.fulfilment === "loaded") await db.update(salesOrders).set({ fulfilment: "packed" }).where(eq(salesOrders.id, so.id));
+  }
+  return ids;
 }
 
 async function itemCount(db: DB, salesOrderId: string) {

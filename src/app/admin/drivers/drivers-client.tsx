@@ -1,7 +1,6 @@
 "use client";
 
 import { Clock, KeyRound, MapPin, Package, Pencil, Phone, Plus, Truck } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { saveDriver } from "@/app/actions/drivers";
 import { FormError, Modal, SubmitButton } from "@/components/client-ui";
@@ -42,7 +41,6 @@ export function DriversClient({
 }) {
   const tr = useT();
   const [editing, setEditing] = useState<Driver | "new" | null>(null);
-  const router = useRouter();
 
   return (
     <>
@@ -134,7 +132,7 @@ export function DriversClient({
             depots={depots}
             defaults={defaults}
             usedColors={drivers.map((d) => d.color)}
-            onDone={() => (setEditing(null), router.refresh())}
+            onDone={() => setEditing(null)}
           />
         )}
       </Modal>

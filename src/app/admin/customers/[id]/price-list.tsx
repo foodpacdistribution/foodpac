@@ -1,7 +1,6 @@
 "use client";
 
 import { Percent, RotateCcw, Search } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useDeferredValue, useMemo, useState, useTransition } from "react";
 import { setCustomerDiscount, setCustomerPrice } from "@/app/actions/products";
 import { Toast, type ToastMessage } from "@/components/client-ui";
@@ -20,7 +19,6 @@ const toastFor = (r: ActionResult, prefix = ""): ToastMessage => ({
 
 export function PriceList({ customerId, rows }: { customerId: string; rows: Row[] }) {
   const tr = useT();
-  const router = useRouter();
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
@@ -54,7 +52,6 @@ export function PriceList({ customerId, rows }: { customerId: string; rows: Row[
       if (r.ok) {
         setSelected(new Set());
         setPercent("");
-        router.refresh();
       }
     });
 

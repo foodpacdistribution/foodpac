@@ -6,8 +6,9 @@ import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { insertDemoOrders } from "@/lib/db/seed";
-import { depots, orders, routeStops } from "@/lib/db/schema";
+import { depots, orders, routeStops, salesOrders } from "@/lib/db/schema";
 import { geocodeAddress } from "@/lib/geo/geocode";
+import { getT } from "@/lib/i18n/server";
 import { pruneEmptyRoutes } from "@/lib/shipments";
 import { UserError } from "@/lib/planning";
 import { geocodeQuery, type ImportRow, validateImportRow } from "@/lib/orders";
@@ -148,7 +149,17 @@ export async function deleteOrders(ids: string[], opts: { includeCompleted?: boo
     const db = await getDb();
     const rows = await db.select({ id: orders.id, status: orders.status, deliveryDate: orders.deliveryDate }).from(orders).where(inArray(orders.id, ids));
     const completed = (r: { status: string }) => r.status === "delivered" || r.status === "failed";
-    const deletable = rows.filter((r) => opts.includeCompleted || !completed(r));
+    // A live shop order's delivery goes with the shop order (cancel or delete it in Sales orders);
+    // deleting just the delivery would leave a confirmed order nobody delivers.
+    const shop = new Set(
+      (
+        await db
+          .select({ id: salesOrders.deliveryOrderId })
+          .from(salesOrders)
+          .where(and(inArray(salesOrders.deliveryOrderId, ids), ne(salesOrders.status, "cancelled")))
+      ).map((r) => r.id),
+    );
+    const deletable = rows.filter((r) => !shop.has(r.id) && (opts.includeCompleted || !completed(r)));
     if (deletable.length) {
       // Stops, delivery events and proof photos/signatures go with the order (foreign keys cascade).
       await db.delete(orders).where(inArray(orders.id, deletable.map((r) => r.id)));
@@ -157,8 +168,14 @@ export async function deleteOrders(ids: string[], opts: { includeCompleted?: boo
     revalidateAll();
     revalidatePath("/admin/shipments");
     revalidatePath("/driver");
-    const skipped = rows.length - deletable.length;
-    return { message: `Deleted ${deletable.length} order(s)${skipped ? `, kept ${skipped} already delivered or failed` : ""}` };
+    const done = rows.length - deletable.length - shop.size;
+    const t = await getT();
+    const message = [
+      t("Deleted {n} order(s)", { n: deletable.length }),
+      done > 0 && t("kept {n} already delivered or failed", { n: done }),
+      shop.size > 0 && t("kept {n} shop order(s): cancel or delete those in Sales orders", { n: shop.size }),
+    ].filter(Boolean);
+    return { message: message.join(" · ") };
   });
 }
 

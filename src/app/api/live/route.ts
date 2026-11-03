@@ -50,6 +50,15 @@ export async function GET(req: Request) {
         limit 1
       `),
     )[0] ?? { none: true };
+    // Shipments sent for later days add a day tab, so they count as a change too.
+    const [later] = rowsOf(
+      await db.execute(sql`
+        select coalesce(string_agg(p.delivery_date::text || r.dispatched_at::text, ',' order by p.delivery_date), '') as later
+        from routes r join plans p on p.id = r.plan_id
+        where r.driver_id = ${user.driverId} and p.delivery_date > ${today} and r.dispatched_at is not null
+      `),
+    );
+    row = { ...row, later: later?.later ?? "" };
   } else if (user.role === "customer" && user.customerId) {
     row = rowsOf(
       await db.execute(sql`
