@@ -1,16 +1,20 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { attempt } from "@/lib/action";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import { afterLogin, SESSION_COOKIE, sessionCookieOptions, signSession, verifySession } from "@/lib/auth/session";
+import { afterLogin, homeFor, SESSION_COOKIE, sessionCookieOptions, signResetToken, signSession, verifyResetToken, verifySession } from "@/lib/auth/session";
 import { clearAttempts, countAttempt, loginKeys } from "@/lib/auth/throttle";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { emailEnabled } from "@/lib/email";
+import { passwordReset } from "@/lib/notify";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n";
 import { UserError } from "@/lib/planning";
 
@@ -88,4 +92,47 @@ export async function setLocale(locale: string) {
   const me = await getCurrentUser();
   if (me) await (await getDb()).update(users).set({ locale }).where(eq(users.id, me.id));
   revalidatePath("/", "layout");
+}
+
+/** Ties a reset link to the password it replaces, so the link dies once the password changes. */
+const passwordStamp = (hash: string) => createHash("sha256").update(hash).digest("hex").slice(0, 16);
+
+/** "Forgot password": emails a one-hour link. The answer is the same whether or not the account exists. */
+export async function requestPasswordReset(_prev: unknown, form: FormData) {
+  return attempt(async () => {
+    const email = String(form.get("email") ?? "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new UserError("Enter the email you sign in with.");
+    if (!emailEnabled()) throw new UserError("Password reset by email isn't set up yet. Please contact us and we'll reset it for you.");
+    const db = await getDb();
+    const h = await headers();
+    const ip = h.get("x-forwarded-for")?.split(",")[0].trim() || null;
+    const waitS = await countAttempt(db, [{ key: `reset:${email}`, max: 3 }, ...(ip ? [{ key: `reset-ip:${ip}`, max: 10 }] : [])]);
+    if (waitS > 0) throw new UserError("Too many reset requests. Please try again in a few minutes.");
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (user) {
+      const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
+      const link = `${origin}/reset-password?token=${encodeURIComponent(await signResetToken(user.id, passwordStamp(user.passwordHash)))}`;
+      after(() => passwordReset(user.email, user.name, link));
+    }
+    return { message: "sent" };
+  });
+}
+
+/** Sets the new password from a reset link, then signs the person in. */
+export async function resetPassword(_prev: unknown, form: FormData) {
+  return attempt(async () => {
+    const password = String(form.get("password") ?? "");
+    if (password.length < 8) throw new UserError("Choose a password of at least 8 characters.");
+    const claims = await verifyResetToken(String(form.get("token") ?? ""));
+    const db = await getDb();
+    const [user] = claims ? await db.select().from(users).where(eq(users.id, claims.sub)).limit(1) : [];
+    if (!claims || !user || passwordStamp(user.passwordHash) !== claims.stamp) {
+      throw new UserError("This link has expired or has already been used. Ask for a new one.");
+    }
+    await db.update(users).set({ passwordHash: await hashPassword(password) }).where(eq(users.id, user.id));
+    await clearAttempts(db, [`email:${user.email}`, `reset:${user.email}`]);
+    const token = await signSession({ sub: user.id, role: user.role, name: user.name, driverId: user.driverId });
+    (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
+    redirect(homeFor(user.role));
+  });
 }

@@ -2,11 +2,13 @@
 
 import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { hashPassword } from "@/lib/auth/password";
 import { linkOrdersToCustomer } from "@/lib/customers";
 import { getDb } from "@/lib/db";
+import { accountApproved } from "@/lib/notify";
 import { customers, type PaymentTerms, salesOrders, users } from "@/lib/db/schema";
 import { parseDollars } from "@/lib/money";
 import { UserError } from "@/lib/planning";
@@ -37,6 +39,7 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
     const password = get("password");
     if (password && password.length < 8) throw new UserError("Password must be at least 8 characters.");
 
+    const [before] = id ? await db.select({ approved: customers.approved }).from(customers).where(eq(customers.id, id)).limit(1) : [];
     const customerId = await db.transaction(async (tx) => {
       let customerId = id;
       if (id) await tx.update(customers).set(values).where(eq(customers.id, id));
@@ -63,6 +66,8 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
     });
 
     await linkOrdersToCustomer(db, { id: customerId, name, phone: values.phone });
+    // Registration promises an email once the account can order.
+    if (before && !before.approved && values.approved) after(() => accountApproved(customerId));
     revalidatePath("/admin/customers");
     return { message: id ? "Customer updated" : "Customer added" };
   });

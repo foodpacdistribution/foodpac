@@ -26,7 +26,7 @@ export function LoginForm({ next, defaultEmail }: { next?: string; defaultEmail?
       </label>
       <label className="block">
         <span className="mb-1.5 flex items-baseline justify-between text-sm font-medium text-leaf-900/80">
-          {tr("Password")}<Link href="/#contact" className="text-xs font-normal text-leaf-700 hover:underline">
+          {tr("Password")}<Link href="/forgot-password" className="text-xs font-normal text-leaf-700 hover:underline">
             {tr("Forgot password?")}</Link>
         </span>
         <span className="relative block">

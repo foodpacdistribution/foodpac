@@ -1,5 +1,6 @@
 import "server-only";
 import { and, asc, desc, eq, gte, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { after } from "next/server";
 import type { DB } from "./db";
 import {
   cartItems,
@@ -16,6 +17,7 @@ import {
 } from "./db/schema";
 import { shiftDate } from "./dates";
 import { GST_RATE } from "./money";
+import { orderConfirmed } from "./notify";
 import { UserError } from "./planning";
 import { nowSecondsIn, todayIn } from "./time";
 
@@ -390,6 +392,8 @@ export async function markCardPaid(db: DB, salesOrderId: string) {
     .where(and(eq(salesOrders.id, so.id), ne(salesOrders.paymentStatus, "paid")))
     .returning();
   if (updated && !updated.deliveryOrderId) await createDeliveryOrder(db, updated, customer);
+  // Only the call that actually marked it paid sends the emails (webhook and return page can both get here).
+  if (updated) after(() => orderConfirmed(updated.id, { office: true }));
   return updated ?? so;
 }
 

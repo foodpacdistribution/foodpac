@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
+import { orderConfirmed } from "@/lib/notify";
 import { type FulfilmentStatus, orders, products, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { refundOrExpire } from "@/lib/payments";
 import { UserError } from "@/lib/planning";
@@ -34,6 +35,7 @@ export async function confirmSale(id: string) {
     const { db, so } = await load(id);
     if (so.status !== "pending") throw new UserError("Only pending orders can be confirmed.");
     await confirmOrder(db, id);
+    after(() => orderConfirmed(id, { office: false }));
     const [after_] = await db.select({ d: salesOrders.deliveryOrderId }).from(salesOrders).where(eq(salesOrders.id, id));
     if (after_?.d) {
       const deliveryId = after_.d;

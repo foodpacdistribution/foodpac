@@ -2,11 +2,13 @@
 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { headers } from "next/headers";
 import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { countAttempt } from "@/lib/auth/throttle";
 import { getDb } from "@/lib/db";
+import { enquiryReceived } from "@/lib/notify";
 import { type EnquiryStatus, enquiries } from "@/lib/db/schema";
 import { UserError } from "@/lib/planning";
 
@@ -32,14 +34,9 @@ export async function submitEnquiry(_prev: unknown, form: FormData) {
       throw new UserError("You've sent a few messages already. Please try again a little later, or give us a call.");
     }
 
-    await db.insert(enquiries).values({
-      name,
-      email,
-      message,
-      business: get("business") || null,
-      phone: get("phone", 40) || null,
-      suburb: get("suburb", 80) || null,
-    });
+    const enquiry = { name, email, message, business: get("business") || null, phone: get("phone", 40) || null, suburb: get("suburb", 80) || null };
+    await db.insert(enquiries).values(enquiry);
+    after(() => enquiryReceived(enquiry));
     revalidatePath("/admin/enquiries");
     revalidatePath("/admin", "layout");
     return { message: "sent" };

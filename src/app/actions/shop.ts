@@ -11,6 +11,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { SESSION_COOKIE, sessionCookieOptions, signSession } from "@/lib/auth/session";
 import { countAttempt } from "@/lib/auth/throttle";
 import { getDb } from "@/lib/db";
+import { accountRequested, orderConfirmed } from "@/lib/notify";
 import { cartItems, customerAddresses, customers, orders, type PaymentMethod, products, salesOrderItems, salesOrders, users } from "@/lib/db/schema";
 import { getSettings, UserError } from "@/lib/planning";
 import { canSeePrices, cancelOrder, placeOrder } from "@/lib/shop";
@@ -171,6 +172,8 @@ export async function checkout(_prev: unknown, form: FormData) {
       const id = so.deliveryOrderId;
       after(async () => geocodeOrderIds(await getDb(), [id]));
     }
+    // Card orders are confirmed (and emailed) once the payment comes through.
+    if (so.status === "confirmed") after(() => orderConfirmed(so.id, { office: true }));
     revalidateShop();
     revalidatePath("/admin/sales");
 
@@ -238,14 +241,15 @@ export async function registerCustomer(_prev: unknown, form: FormData) {
     const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (taken) throw new UserError("An account with this email already exists. Sign in instead.");
 
-    const user = await db.transaction(async (tx) => {
+    const { user, customer } = await db.transaction(async (tx) => {
       const [c] = await tx
         .insert(customers)
         .values({ name: business, email, phone: str(form, "phone", 40), address: str(form, "address", 300), abn: str(form, "abn", 20), approved: false })
         .returning();
       const [u] = await tx.insert(users).values({ email, name, role: "customer", customerId: c.id, passwordHash: await hashPassword(password) }).returning();
-      return u;
+      return { user: u, customer: c };
     });
+    after(() => accountRequested({ id: customer.id, name: business, contact: name, email, phone: customer.phone, address: customer.address }));
     const token = await signSession({ sub: user.id, role: "customer", name: user.name, driverId: null });
     (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
     revalidatePath("/admin/customers");

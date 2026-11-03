@@ -63,6 +63,24 @@ export async function verifySession(token: string | undefined): Promise<SessionP
   }
 }
 
+/**
+ * A one-hour link to choose a new password. `stamp` comes from the current password hash, so
+ * the link stops working as soon as the password changes (it can't be used twice).
+ */
+export async function signResetToken(userId: string, stamp: string) {
+  return new SignJWT({ purpose: "reset", stamp }).setProtectedHeader({ alg: "HS256" }).setSubject(userId).setIssuedAt().setExpirationTime("1h").sign(secret());
+}
+
+export async function verifyResetToken(token: string): Promise<{ sub: string; stamp: string } | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
+    if (payload.purpose !== "reset" || !payload.sub || typeof payload.stamp !== "string") return null;
+    return { sub: payload.sub, stamp: payload.stamp };
+  } catch {
+    return null;
+  }
+}
+
 export const sessionCookieOptions = {
   httpOnly: true,
   sameSite: "lax" as const,
