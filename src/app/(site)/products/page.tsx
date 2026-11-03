@@ -97,8 +97,20 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         {items.length === 0 ? (
           <div className="mt-8 rounded-3xl border border-dashed border-leaf-950/15 bg-white px-6 py-14 text-center">
             <PackageSearch className="mx-auto size-10 text-leaf-700/60" />
-            <p className="mt-3 font-semibold"><T>{"Nothing found"}</T></p>
-            <p className="mt-1 text-sm text-leaf-900/60"><T>{"Try another word or SKU, or ask us — we can usually source it."}</T></p>
+            {category && !q && !inStock ? (
+              <>
+                <p className="mt-3 font-semibold"><T>{"Products for this range are coming soon"}</T></p>
+                <p className="mt-1 text-sm text-leaf-900/60"><T>{"Tell us what you need and we'll quote it, we can usually source it."}</T></p>
+                <Link href="/#contact" className="mt-4 inline-flex h-10 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white hover:bg-leaf-800">
+                  <T>{"Ask for a quote"}</T>
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 font-semibold"><T>{"Nothing found"}</T></p>
+                <p className="mt-1 text-sm text-leaf-900/60"><T>{"Try another word or SKU, or ask us — we can usually source it."}</T></p>
+              </>
+            )}
           </div>
         ) : (
           <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">

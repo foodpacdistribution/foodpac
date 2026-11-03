@@ -4,7 +4,7 @@ import { JsonLd } from "@/components/json-ld";
 import { getDb } from "@/lib/db";
 import { listCategories } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
-import { categoryHref, categoryInfo, categorySlug, SITE } from "../../content";
+import { CATEGORIES, categoryHref, categoryInfo, categorySlug, SITE } from "../../content";
 import ProductsPage from "../../products/page";
 
 // Each category has its own address, title and description, which is what search engines list
@@ -12,7 +12,10 @@ import ProductsPage from "../../products/page";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ q?: string; sort?: string; stock?: string }> };
 
+/** The standard ranges in the menu always exist (even before they have products), plus any category products use. */
 async function categoryFor(slug: string) {
+  const standard = CATEGORIES.find((c) => categorySlug(c.title) === slug);
+  if (standard) return standard.title;
   const names = (await listCategories(await getDb())).map((c) => c.name);
   return names.find((n) => categorySlug(n) === slug) ?? null;
 }

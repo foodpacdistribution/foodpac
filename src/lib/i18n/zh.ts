@@ -1446,6 +1446,9 @@ export const ZH: Record<string, string> = {
   "Password reset by email isn't set up yet. Please contact us and we'll reset it for you.": "暂未开通邮件重设密码,请联系我们为您重设。",
   "Too many reset requests. Please try again in a few minutes.": "重设请求过多,请几分钟后再试。",
   "This link has expired or has already been used. Ask for a new one.": "此链接已过期或已被使用,请重新申请。",
+  "Products for this range are coming soon": "该类别的商品即将上架",
+  "Tell us what you need and we'll quote it, we can usually source it.": "告诉我们您需要什么,我们会为您报价,通常都能采购到。",
+  "Ask for a quote": "询价",
 };
 
 /** Messages with a variable part. */
