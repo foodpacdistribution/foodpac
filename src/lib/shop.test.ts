@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseDollars } from "./money";
-import { deliveryDates, quote } from "./shop";
+import { deliveryDates, deliveryPromise, quote } from "./shop";
 
 const settings = {
   deliveryFeeCents: 1500,
@@ -39,6 +39,22 @@ describe("deliveryDates", () => {
     expect(deliveryDates(settings, 2, new Date("2026-11-06T00:00:00Z"))).toEqual(["2026-11-09", "2026-11-10"]);
     // Monday 15:00 → after cut-off → Wednesday is first.
     expect(deliveryDates(settings, 1, new Date("2026-11-09T05:00:00Z"))).toEqual(["2026-11-11"]);
+  });
+});
+
+describe("deliveryPromise", () => {
+  it("promises tomorrow before the cut-off on a weekday", () => {
+    // Tuesday 10:00 Brisbane.
+    expect(deliveryPromise(settings, new Date("2026-11-10T00:00:00Z"))).toMatchObject({ beforeCutoff: true, day: "2026-11-11", tomorrow: true });
+  });
+  it("moves on a day after the cut-off, and over the weekend", () => {
+    // Tuesday 15:00 → Thursday.
+    expect(deliveryPromise(settings, new Date("2026-11-10T05:00:00Z"))).toMatchObject({ beforeCutoff: false, day: "2026-11-12", tomorrow: false });
+    // Friday 10:00 → Monday, not "tomorrow".
+    expect(deliveryPromise(settings, new Date("2026-11-06T00:00:00Z"))).toMatchObject({ beforeCutoff: true, day: "2026-11-09", tomorrow: false });
+  });
+  it("has nothing to promise without delivery days", () => {
+    expect(deliveryPromise({ ...settings, deliveryDays: [] })).toBeNull();
   });
 });
 

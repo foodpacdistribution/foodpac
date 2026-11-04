@@ -233,7 +233,7 @@ export function quote(lines: { lineCents: number; gst: boolean }[], s: Settings)
 }
 
 /** The next delivery days a customer can choose: after today's cut-off, only on delivery weekdays. */
-export function deliveryDates(s: Settings, count = 10, now = new Date()) {
+export function deliveryDates(s: Pick<Settings, "timezone" | "orderCutoffMin" | "deliveryDays">, count = 10, now = new Date()) {
   const today = todayIn(s.timezone, now);
   const first = nowSecondsIn(s.timezone, now) < s.orderCutoffMin * 60 ? 1 : 2;
   const out: string[] = [];
@@ -243,6 +243,35 @@ export function deliveryDates(s: Settings, count = 10, now = new Date()) {
     if (s.deliveryDays.includes(iso)) out.push(date);
   }
   return out;
+}
+
+export type DeliveryPromise = {
+  /** Order cut-off, minutes after midnight. */
+  cutoffMin: number;
+  /** Still before today's cut-off (so "order by …" applies). */
+  beforeCutoff: boolean;
+  /** The first delivery day an order placed now can go on (YYYY-MM-DD). */
+  day: string;
+  tomorrow: boolean;
+  deliveryFeeCents: number;
+  freeDeliveryOverCents: number;
+};
+
+/** What the shop can promise about delivery right now ("order by 2pm for delivery tomorrow"). */
+export function deliveryPromise(
+  s: Pick<Settings, "timezone" | "orderCutoffMin" | "deliveryDays" | "deliveryFeeCents" | "freeDeliveryOverCents">,
+  now = new Date(),
+): DeliveryPromise | null {
+  const [day] = deliveryDates(s, 1, now);
+  if (!day) return null;
+  return {
+    cutoffMin: s.orderCutoffMin,
+    beforeCutoff: nowSecondsIn(s.timezone, now) < s.orderCutoffMin * 60,
+    day,
+    tomorrow: day === shiftDate(todayIn(s.timezone, now), 1),
+    deliveryFeeCents: s.deliveryFeeCents,
+    freeDeliveryOverCents: s.freeDeliveryOverCents,
+  };
 }
 
 export function allowedMethods(c: Customer, stripeOn: boolean): PaymentMethod[] {

@@ -1546,6 +1546,12 @@ export const ZH: Record<string, string> = {
   "Built-in posters hidden": "内置海报已隐藏",
   "Start date must be a date.": "开始日期格式不正确。",
   "End date must be a date.": "截止日期格式不正确。",
+  "tomorrow": "明天",
+  "Order by {time} for delivery {day}": "{time} 前下单,{day}送达",
+  "Order now for delivery {day}": "现在下单,{day}送达",
+  "Free delivery on every order": "所有订单免运费",
+  "Free delivery on orders over {amount}": "订单满 {amount} 免运费",
+  "Back to top": "回到顶部",
 };
 
 /** Messages with a variable part. */
