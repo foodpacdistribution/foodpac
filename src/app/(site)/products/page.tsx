@@ -1,4 +1,4 @@
-import { Check, PackageSearch } from "lucide-react";
+import { Check, Download, PackageSearch } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { cx } from "@/components/ui";
@@ -65,6 +65,14 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         <p className={cx("text-sm text-leaf-900/60", category && !q ? "mt-4" : "mt-1")}>
           <T vars={{ n: items.length }}>{items.length === 1 ? "{n} product" : "{n} products"}</T>
           {q && category && ` in ${category}`}
+          {pricesShown && (
+            <>
+              {" · "}
+              <a href="/portal/price-list" className="inline-flex items-center gap-1 font-semibold text-leaf-700 hover:underline">
+                <Download className="size-3.5" /> <T>{"Download my price list"}</T>
+              </a>
+            </>
+          )}
           {!viewer && (
             <>
               {" · "}

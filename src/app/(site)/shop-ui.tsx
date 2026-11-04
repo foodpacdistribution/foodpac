@@ -6,6 +6,7 @@ import { aud } from "@/lib/money";
 import { productImageUrl } from "@/lib/product-image";
 import type { CatalogItem } from "@/lib/shop";
 import { AddToCart } from "./add-to-cart";
+import { FavouriteButton } from "./favourite-button";
 import { categoryInfo } from "./content";
 import { T, Tx } from "@/components/i18n";
 
@@ -90,12 +91,13 @@ export function ProductCard({ p, signedIn, morph, index }: { p: CatalogItem; sig
       style={stagger ? ({ "--i": index } as React.CSSProperties) : undefined}
       className={cx(
         stagger ? "stagger" : "reveal",
-        "group flex flex-col overflow-hidden rounded-2xl border border-leaf-950/10 bg-white transition-[border-color,box-shadow,translate,scale] duration-300 ease-out hover:-translate-y-1 hover:border-leaf-700/30 hover:shadow-[0_16px_32px_-14px_rgb(17_58_39/0.35)] has-[a:active]:scale-[0.985]",
+        "group relative flex flex-col overflow-hidden rounded-2xl border border-leaf-950/10 bg-white transition-[border-color,box-shadow,translate,scale] duration-300 ease-out hover:-translate-y-1 hover:border-leaf-700/30 hover:shadow-[0_16px_32px_-14px_rgb(17_58_39/0.35)] has-[a:active]:scale-[0.985]",
       )}
     >
       <Link href={`/products/${encodeURIComponent(p.sku)}`} className="block overflow-hidden">
         <ProductImage p={p} morph={morph} className="aspect-[4/3] transition-transform duration-500 ease-out group-hover:scale-[1.04]" />
       </Link>
+      <FavouriteButton productId={p.id} sku={p.sku} favourite={p.favourite} signedIn={signedIn} className="absolute top-2.5 right-2.5 z-10" />
       <div className="flex flex-1 flex-col p-3 sm:p-4">
         <p className="text-[10px] font-medium uppercase tracking-wider text-leaf-900/45 sm:text-[11px]">{p.sku}</p>
         <Link href={`/products/${encodeURIComponent(p.sku)}`} className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug hover:text-leaf-700 sm:text-base">

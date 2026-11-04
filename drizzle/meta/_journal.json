@@ -99,6 +99,13 @@
       "when": 1793753471990,
       "tag": "0013_posters",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793754873588,
+      "tag": "0014_favourites",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ import { categoryHref, SITE } from "../../content";
 import { AddToCart } from "../../add-to-cart";
 import { DeliveryPromiseText, FreeDeliveryText } from "../../delivery-promise";
 import { BuyBar } from "./buy-bar";
+import { FavouriteButton } from "../../favourite-button";
 import { Price, ProductCard, ProductImage, StockLabel } from "../../shop-ui";
 import { T, Tx } from "@/components/i18n";
 
@@ -61,7 +62,10 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
         <ProductImage p={p} morph priority sizes="(min-width: 1024px) 560px, 100vw" className="aspect-square rounded-3xl border border-leaf-950/10" />
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-leaf-900/50"><T>{"SKU"}</T>{" "}{p.sku}</p>
-          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">{p.name}</h1>
+          <div className="mt-1 flex items-start justify-between gap-3">
+            <h1 className="font-display text-3xl font-semibold tracking-tight">{p.name}</h1>
+            <FavouriteButton productId={p.id} sku={p.sku} favourite={p.favourite} signedIn={!!viewer} className="shrink-0" />
+          </div>
           <div id="buy-box">
           <div className="mt-4 flex items-end justify-between gap-3 border-y border-leaf-950/10 py-4">
             <Price p={p} signedIn={!!viewer} />

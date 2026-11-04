@@ -542,6 +542,21 @@ export const cartItems = pgTable(
   (t) => [uniqueIndex("cart_items_uq").on(t.customerId, t.productId)],
 );
 
+/** Products a customer keeps on their own list ("My list") to reorder from quickly. */
+export const favourites = pgTable(
+  "favourites",
+  {
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("favourites_uq").on(t.customerId, t.productId)],
+);
+
 export type SalesStatus = "pending" | "confirmed" | "cancelled";
 export type PaymentStatus = "unpaid" | "paid" | "failed" | "refunded";
 export type PaymentMethod = "card" | "bank_transfer" | "invoice";

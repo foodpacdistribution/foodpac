@@ -20,6 +20,7 @@ export function accountLinks(role: keyof typeof ROLE_LABEL): AccountLink[] {
     return [
       { href: "/portal", label: "My account" },
       { href: "/portal/orders", label: "My orders" },
+      { href: "/portal/list", label: "My list" },
       { href: "/portal/deliveries", label: "Track deliveries" },
       { href: "/portal/invoices", label: "Invoices & payments" },
       { href: "/portal/profile", label: "Profile & password" },

@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { Clock, Mail, Phone, ShoppingCart, Truck, UserRound } from "lucide-react";
+import { Clock, Heart, Mail, Phone, ShoppingCart, Truck, UserRound } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { LanguageSwitch } from "@/components/language-switch";
 import Link from "@/components/link";
@@ -72,6 +72,11 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
                 <Link href="/register" className="hidden h-10 items-center rounded-full bg-leaf-700 px-4 font-semibold text-white hover:bg-leaf-800 sm:flex">
                   <T>{"Open an account"}</T></Link>
               </>
+            )}
+            {viewer && (
+              <Link href="/portal/list" className="flex size-10 items-center justify-center rounded-full hover:bg-leaf-950/5" aria-label="My list" title="My list">
+                <Heart className="size-4" />
+              </Link>
             )}
             {viewer && (
               <Link href="/cart" className="relative flex h-10 items-center gap-1.5 rounded-full px-3 hover:bg-leaf-950/5" aria-label={`Cart, ${cartCount} items`}>

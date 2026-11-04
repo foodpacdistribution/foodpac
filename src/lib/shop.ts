@@ -6,6 +6,7 @@ import {
   cartItems,
   customerPrices,
   customers,
+  favourites,
   orders,
   type PaymentMethod,
   products,
@@ -45,6 +46,8 @@ export type CatalogItem = {
   /** null when the viewer can't see prices (signed out or not approved yet). */
   priceCents: number | null;
   listPriceCents: number | null;
+  /** On the signed-in customer's own list ("My list"). */
+  favourite: boolean;
 };
 
 /** Prices are shown only to signed-in, approved, active customers. */
@@ -67,15 +70,35 @@ const catalogColumns = {
   priceCents: products.priceCents,
 };
 
-async function withPrices(db: DB, rows: (Omit<CatalogItem, "listPriceCents" | "priceCents"> & { priceCents: number })[], customer: Customer | null): Promise<CatalogItem[]> {
-  if (!canSeePrices(customer)) return rows.map((r) => ({ ...r, priceCents: null, listPriceCents: null }));
-  const own = rows.length
-    ? await db
-        .select()
-        .from(customerPrices)
-        .where(and(eq(customerPrices.customerId, customer!.id), inArray(customerPrices.productId, rows.map((r) => r.id))))
-    : [];
-  return rows.map((r) => ({ ...r, listPriceCents: r.priceCents, priceCents: own.find((p) => p.productId === r.id)?.priceCents ?? r.priceCents }));
+async function withPrices(
+  db: DB,
+  rows: (Omit<CatalogItem, "listPriceCents" | "priceCents" | "favourite"> & { priceCents: number })[],
+  customer: Customer | null,
+): Promise<CatalogItem[]> {
+  const ids = rows.map((r) => r.id);
+  // Their own prices and their list, looked up side by side.
+  const [own, faves] = await Promise.all([
+    canSeePrices(customer) && ids.length
+      ? db
+          .select()
+          .from(customerPrices)
+          .where(and(eq(customerPrices.customerId, customer!.id), inArray(customerPrices.productId, ids)))
+      : [],
+    customer && ids.length
+      ? db
+          .select({ productId: favourites.productId })
+          .from(favourites)
+          .where(and(eq(favourites.customerId, customer.id), inArray(favourites.productId, ids)))
+      : [],
+  ]);
+  const fave = new Set(faves.map((f) => f.productId));
+  if (!canSeePrices(customer)) return rows.map((r) => ({ ...r, priceCents: null, listPriceCents: null, favourite: fave.has(r.id) }));
+  return rows.map((r) => ({
+    ...r,
+    listPriceCents: r.priceCents,
+    priceCents: own.find((p) => p.productId === r.id)?.priceCents ?? r.priceCents,
+    favourite: fave.has(r.id),
+  }));
 }
 
 export const SORTS = { name: "Name A–Z", "price-asc": "Price: low to high", "price-desc": "Price: high to low", newest: "Newest" } as const;
@@ -171,6 +194,17 @@ export async function listCategories(db: DB) {
 }
 
 /** Products this customer bought before, most recent first. */
+/** The customer's own list, newest first, priced for them. */
+export async function listFavourites(db: DB, customer: Customer) {
+  const items = await db
+    .select(catalogColumns)
+    .from(favourites)
+    .innerJoin(products, eq(products.id, favourites.productId))
+    .where(and(eq(favourites.customerId, customer.id), eq(products.active, true)))
+    .orderBy(desc(favourites.createdAt));
+  return withPrices(db, items, customer);
+}
+
 export async function recentlyBought(db: DB, customer: Customer, limit = 8) {
   const rows = await db
     .select({ productId: salesOrderItems.productId, last: sql<string>`max(${salesOrders.createdAt})` })

@@ -12,7 +12,7 @@ import { SESSION_COOKIE, sessionCookieOptions, signSession } from "@/lib/auth/se
 import { countAttempt } from "@/lib/auth/throttle";
 import { getDb } from "@/lib/db";
 import { accountRequested, orderConfirmed } from "@/lib/notify";
-import { cartItems, customerAddresses, customers, orders, type PaymentMethod, products, salesOrderItems, salesOrders, users } from "@/lib/db/schema";
+import { cartItems, customerAddresses, customers, favourites, orders, type PaymentMethod, products, salesOrderItems, salesOrders, users } from "@/lib/db/schema";
 import { getSettings, UserError } from "@/lib/planning";
 import { canSeePrices, cancelOrder, placeOrder } from "@/lib/shop";
 import { refundOrExpire } from "@/lib/payments";
@@ -64,6 +64,46 @@ export async function setCartQty(productId: string, qty: number) {
     const { customer } = await assertCustomer();
     await addLines(customer.id, [{ productId, qty }], "set");
     revalidateShop();
+  });
+}
+
+/** Adds a product to the customer's own list ("My list"), or takes it off. */
+export async function setFavourite(productId: string, on: boolean) {
+  return attempt(async () => {
+    const { customer } = await assertCustomer();
+    const db = await getDb();
+    if (on) {
+      const [p] = await db.select({ id: products.id }).from(products).where(and(eq(products.id, productId), eq(products.active, true))).limit(1);
+      if (!p) throw new UserError("This product isn't available.");
+      await db.insert(favourites).values({ customerId: customer.id, productId }).onConflictDoNothing();
+    } else {
+      await db.delete(favourites).where(and(eq(favourites.customerId, customer.id), eq(favourites.productId, productId)));
+    }
+    revalidatePath("/portal/list");
+    return { message: on ? "Saved to My list" : "Removed from My list" };
+  });
+}
+
+/** Several products at once (My list), each at least its minimum order. */
+export async function addManyToCart(lines: { productId: string; qty: number }[]) {
+  return attempt(async () => {
+    const { customer } = await assertCustomer();
+    if (!canSeePrices(customer)) throw new UserError("Your account is waiting for approval.");
+    const wanted = lines.filter((l) => Number.isFinite(l.qty) && l.qty > 0).slice(0, 200);
+    if (!wanted.length) throw new UserError("Enter a quantity for at least one product.");
+    const db = await getDb();
+    const found = await db
+      .select({ id: products.id, minQty: products.minQty })
+      .from(products)
+      .where(and(eq(products.active, true), inArray(products.id, wanted.map((l) => l.productId))));
+    const ok = wanted.flatMap((l) => {
+      const p = found.find((f) => f.id === l.productId);
+      return p ? [{ productId: p.id, qty: Math.max(l.qty, p.minQty) }] : [];
+    });
+    if (!ok.length) throw new UserError("None of those products are available any more.");
+    await addLines(customer.id, ok, "add");
+    revalidateShop();
+    return { message: ok.length === 1 ? "1 product added to cart" : `${ok.length} products added to cart`, data: { units: ok.reduce((t, l) => t + l.qty, 0) } };
   });
 }
 

@@ -14,6 +14,9 @@ describe("translate", () => {
     expect(translate(zh, "{n} units over capacity", { n: 3 })).toBe("超出载量 3 件");
     expect(translate(zh, "Welcome back, Alex")).toBe("欢迎回来,Alex");
     expect(translate(zh, "2 new stop(s) added · route re-ordered for the fastest drive")).toBe("新增 2 个站点 · 已重新排出最快路线");
+    expect(translate(zh, "3 products added to cart")).toBe("已将 3 个商品加入购物车");
+    expect(translate(zh, "4 items added to cart")).toBe("已加入购物车:4 件商品");
+    expect(translate(zh, "Cling wrap added to cart")).toBe("已加入购物车:Cling wrap");
   });
 
   it("keeps unknown text in English", () => {
