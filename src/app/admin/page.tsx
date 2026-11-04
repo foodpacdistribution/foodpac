@@ -1,12 +1,13 @@
-import { and, asc, desc, eq, gt, ne, or, sql } from "drizzle-orm";
-import { CheckCircle2, Circle, Clock, Map as MapIcon, Package, PackageCheck, PackageX, Radio, ShoppingBag, Truck, Upload } from "lucide-react";
+import { and, asc, desc, eq, gt, lte, ne, or, sql } from "drizzle-orm";
+import { Boxes, CheckCircle2, Circle, Clock, Map as MapIcon, Package, PackageCheck, PackageX, Radio, ShoppingBag, Truck, Upload } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { Badge, btn, Card, CardHeader, ColorDot, cx, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { customers, deliveryEvents, drivers, orders, salesOrders } from "@/lib/db/schema";
+import { customers, deliveryEvents, drivers, orders, products, salesOrders } from "@/lib/db/schema";
+import { LOW_STOCK } from "@/lib/stock";
 import { restoreDeliveries } from "@/lib/deliveries";
 import { aud } from "@/lib/money";
 import { prettyDate } from "@/lib/dates";
@@ -51,7 +52,7 @@ export default async function DashboardPage() {
       .orderBy(asc(orders.deliveryDate))
       .limit(5),
   ]);
-  const [live, events] = await Promise.all([
+  const [live, events, low] = await Promise.all([
     liveFleet(db, view.routes.filter((r) => r.status !== "planned")),
     db
       .select({ e: deliveryEvents, orderNumber: orders.orderNumber, customer: orders.customerName, driver: drivers.name, color: drivers.color })
@@ -61,6 +62,13 @@ export default async function DashboardPage() {
       .where(eq(orders.deliveryDate, today))
       .orderBy(desc(deliveryEvents.createdAt))
       .limit(8),
+    // Shop products about to run out, emptiest first.
+    db
+      .select({ id: products.id, name: products.name, sku: products.sku, stock: products.stock })
+      .from(products)
+      .where(and(eq(products.active, true), lte(products.stock, LOW_STOCK)))
+      .orderBy(asc(products.stock), asc(products.name))
+      .limit(6),
   ]);
 
   const plan = view.plan;
@@ -321,6 +329,31 @@ export default async function DashboardPage() {
                   ))}
                 </ul>
               )}
+            </Card>
+          )}
+          {low.length > 0 && (
+            <Card>
+              <CardHeader
+                title={<T>{"Running low"}</T>}
+                subtitle={<T vars={{ n: LOW_STOCK }}>{"Products in the shop with {n} or fewer left"}</T>}
+                action={
+                  <Link href="/admin/products" className={btn("ghost", "sm")}>
+                    <T>{"Restock →"}</T>
+                  </Link>
+                }
+              />
+              <ul className="divide-y divide-line">
+                {low.map((p) => (
+                  <li key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <Boxes className="size-4 shrink-0 text-slate-400" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-900">{p.name}</span>
+                      <span className="block text-xs text-slate-500">{p.sku}</span>
+                    </span>
+                    {p.stock <= 0 ? <Badge tone="red"><T>{"Sold out"}</T></Badge> : <Badge tone="amber"><T vars={{ n: p.stock }}>{"{n} left"}</T></Badge>}
+                  </li>
+                ))}
+              </ul>
             </Card>
           )}
           <Card>

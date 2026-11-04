@@ -13,6 +13,7 @@ import { CATEGORIES, categoryHref, categorySlug, POSTERS, SITE } from "./content
 import { HeroCarousel } from "./hero-carousel";
 import { PosterSlide, UploadedPosterSlide } from "./posters";
 import { Contact, Delivery, HowItWorks, Promises } from "./sections";
+import { siteInfo } from "./site-info";
 import { ProductCard, ProductCount } from "./shop-ui";
 import { T, Tx } from "@/components/i18n";
 
@@ -35,13 +36,14 @@ export default async function HomePage() {
   // Posters uploaded in the back office come first; the built-in ones follow unless switched off
   // there (and always show when nothing uploaded is live, so the top of the page is never empty).
   const builtIn = uploaded.length === 0 || settings.builtInPosters;
+  const site = siteInfo(settings);
   const popular = featured.length ? featured : await listCatalog(db, customer, { limit: 8 });
   const total = counts.reduce((t, c) => t + c.n, 0);
 
   // Tells Google who the business is (name, logo, where, when, how to reach it): what it draws on
   // for the business panel beside the results. The address is the depot's unless one is set in content.ts.
   const base = siteUrl();
-  const address = SITE.address || depot?.address;
+  const address = site.address || depot?.address;
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -54,12 +56,12 @@ export default async function HomePage() {
         image: `${base}/opengraph-image.png`,
         description: `${SITE.tagline} Wholesale food packaging, consumables and dry goods for cafés, restaurants and takeaway shops across ${SITE.serviceArea}.`,
         areaServed: { "@type": "AdministrativeArea", name: SITE.serviceArea },
-        openingHours: SITE.openingHours,
+        openingHours: site.openingHours,
         ...(address ? { address: { "@type": "PostalAddress", streetAddress: address, addressRegion: "QLD", addressCountry: "AU" } } : {}),
         ...(depot ? { geo: { "@type": "GeoCoordinates", latitude: depot.lat, longitude: depot.lng } } : {}),
-        ...(SITE.phone ? { telephone: SITE.phone } : {}),
-        ...(SITE.email ? { email: SITE.email } : {}),
-        ...(SITE.abn ? { taxID: SITE.abn } : {}),
+        ...(site.phone ? { telephone: site.phone } : {}),
+        ...(site.email ? { email: site.email } : {}),
+        ...(site.abn ? { taxID: site.abn } : {}),
         ...(SITE.sameAs.length ? { sameAs: SITE.sameAs } : {}),
         hasOfferCatalog: {
           "@type": "OfferCatalog",
@@ -184,8 +186,8 @@ export default async function HomePage() {
       <div className="mt-12">
         <Promises />
         <HowItWorks />
-        <Delivery />
-        <Contact />
+        <Delivery site={site} />
+        <Contact site={site} />
       </div>
     </main>
   );

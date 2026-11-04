@@ -51,6 +51,12 @@ export const settings = pgTable("settings", {
   bankDetails: text("bank_details").notNull().default(""),
   /** Home page: also show the posters written into the website (content.ts) after the uploaded ones. */
   builtInPosters: boolean("built_in_posters").notNull().default(true),
+  /** Business details on the website, invoices and emails. Empty = what site-info.ts says. */
+  contactPhone: text("contact_phone").notNull().default(""),
+  contactEmail: text("contact_email").notNull().default(""),
+  contactAddress: text("contact_address").notNull().default(""),
+  abn: text("abn").notNull().default(""),
+  openingHours: text("opening_hours").notNull().default(""),
 });
 
 export const depots = pgTable("depots", {

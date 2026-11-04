@@ -1,9 +1,8 @@
 "use client";
 
 import { CheckCircle2 } from "lucide-react";
-import { useActionState } from "react";
 import { submitEnquiry } from "@/app/actions/enquiries";
-import { FormError, SubmitButton } from "@/components/client-ui";
+import { FormError, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { cx } from "@/components/ui";
 import { Tx, useT } from "@/components/i18n";
 
@@ -24,7 +23,7 @@ function Label({ text, optional, children, className }: { text: string; optional
 
 export function ContactForm() {
   const tr = useT();
-  const [state, action] = useActionState(submitEnquiry, undefined);
+  const [state, form] = useKeptForm(submitEnquiry);
 
   if (state?.ok) {
     return (
@@ -37,7 +36,7 @@ export function ContactForm() {
   }
 
   return (
-    <form action={action} className="grid gap-4 rounded-[2rem] bg-cream p-6 sm:grid-cols-2 sm:p-8">
+    <KeptForm form={form} className="grid gap-4 rounded-[2rem] bg-cream p-6 sm:grid-cols-2 sm:p-8">
       <Label text={tr("Your name")}>
         <input name="name" required autoComplete="name" className={input} />
       </Label>
@@ -71,6 +70,6 @@ export function ContactForm() {
       )}
       <SubmitButton size="lg" pendingText={tr("Sending…")} className="rounded-full bg-tomato hover:bg-tomato-dark sm:col-span-2">
         {tr("Send message")}</SubmitButton>
-    </form>
+    </KeptForm>
   );
 }

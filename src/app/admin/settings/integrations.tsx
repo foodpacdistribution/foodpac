@@ -1,9 +1,9 @@
 "use client";
 
 import { Check, Copy, KeyRound, Link2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useActionState, useEffect, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useState, useSyncExternalStore, useTransition } from "react";
 import { createKey, deleteFeed, revokeKey, saveFeed, syncFeedNow } from "@/app/actions/settings";
-import { FormError, Modal, SubmitButton } from "@/components/client-ui";
+import { FormError, Modal, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, CardHeader, cx, Field, inputCls } from "@/components/ui";
 import type { FeedResult } from "@/lib/db/schema";
 import { Tx, useT } from "@/components/i18n";
@@ -199,12 +199,12 @@ export function IntegrationsCard({ keys, feeds }: { keys: Key[]; feeds: Feed[] }
 
 function FeedForm({ feed, onDone }: { feed: Feed | null; onDone: () => void }) {
   const tr = useT();
-  const [state, action] = useActionState(saveFeed, undefined);
+  const [state, form] = useKeptForm(saveFeed);
   useEffect(() => {
     if (state?.ok) onDone();
   }, [state, onDone]);
   return (
-    <form action={action} className="space-y-4">
+    <KeptForm form={form} className="space-y-4">
       {feed && <input type="hidden" name="id" value={feed.id} />}
       <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
         <Field label={tr("Name")}>
@@ -249,6 +249,6 @@ function FeedForm({ feed, onDone }: { feed: Feed | null; onDone: () => void }) {
       <div className="flex justify-end border-t border-line pt-4">
         <SubmitButton>{feed ? tr("Save feed") : tr("Add feed")}</SubmitButton>
       </div>
-    </form>
+    </KeptForm>
   );
 }

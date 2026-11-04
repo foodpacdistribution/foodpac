@@ -12,6 +12,7 @@ import { getSettings } from "@/lib/planning";
 import { deliveryPromise } from "@/lib/shop";
 import { cartItems } from "@/lib/db/schema";
 import { CATEGORIES, categoryHref, SITE } from "./content";
+import { siteInfo } from "./site-info";
 import { BackToTop } from "./back-to-top";
 import { CartBadge } from "./cart-badge";
 import { DeliveryPromiseText, FreeDeliveryText } from "./delivery-promise";
@@ -24,6 +25,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
   const db = await getDb();
   const [user, viewer, settings] = await Promise.all([getCurrentUser(), getCurrentCustomer(), getSettings(db)]);
   const promise = deliveryPromise(settings);
+  const site = siteInfo(settings);
   const [{ n: cartCount }] = viewer
     ? await db
         .select({ n: sql<number>`coalesce(sum(${cartItems.qty}), 0)::int` })
@@ -49,7 +51,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             </p>
             <p className="hidden shrink-0 items-center gap-1.5 text-cream/60 sm:flex">
               <Clock className="size-3.5" />
-              <T>{SITE.hours}</T>
+              <T>{site.hours}</T>
             </p>
           </div>
         </div>
@@ -124,19 +126,19 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             </p>
             <ul className="mt-4 space-y-1.5 text-xs">
               <li className="flex items-center gap-2">
-                <Clock className="size-3.5 text-tomato" /> <T>{SITE.hours}</T>
+                <Clock className="size-3.5 text-tomato" /> <T>{site.hours}</T>
               </li>
-              {SITE.phone && (
+              {site.phone && (
                 <li>
-                  <a href={`tel:${SITE.phone.replace(/\s/g, "")}`} className="flex items-center gap-2 hover:text-white">
-                    <Phone className="size-3.5 text-tomato" /> {SITE.phone}
+                  <a href={`tel:${site.phone.replace(/\s/g, "")}`} className="flex items-center gap-2 hover:text-white">
+                    <Phone className="size-3.5 text-tomato" /> {site.phone}
                   </a>
                 </li>
               )}
-              {SITE.email && (
+              {site.email && (
                 <li>
-                  <a href={`mailto:${SITE.email}`} className="flex items-center gap-2 hover:text-white">
-                    <Mail className="size-3.5 text-tomato" /> {SITE.email}
+                  <a href={`mailto:${site.email}`} className="flex items-center gap-2 hover:text-white">
+                    <Mail className="size-3.5 text-tomato" /> {site.email}
                   </a>
                 </li>
               )}

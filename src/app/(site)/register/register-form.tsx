@@ -2,9 +2,9 @@
 
 import Link from "@/components/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect } from "react";
+import { useEffect } from "react";
 import { registerCustomer } from "@/app/actions/shop";
-import { FormError, SubmitButton } from "@/components/client-ui";
+import { FormError, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { cx } from "@/components/ui";
 import { Tx, useT } from "@/components/i18n";
 
@@ -22,13 +22,13 @@ function Label({ text, children, className }: { text: string; children: React.Re
 
 export function RegisterForm() {
   const tr = useT();
-  const [state, action] = useActionState(registerCustomer, undefined);
+  const [state, form] = useKeptForm(registerCustomer);
   const router = useRouter();
   useEffect(() => {
     if (state?.ok) router.push("/portal");
   }, [state, router]);
   return (
-    <form action={action} className="grid gap-4 rounded-3xl border border-leaf-950/10 bg-white p-6 sm:grid-cols-2">
+    <KeptForm form={form} className="grid gap-4 rounded-3xl border border-leaf-950/10 bg-white p-6 sm:grid-cols-2">
       <Label text={tr("Business name")} className="sm:col-span-2">
         <input name="business" required autoComplete="organization" className={input} />
       </Label>
@@ -61,6 +61,6 @@ export function RegisterForm() {
         <Link href="/login" className="font-semibold text-leaf-700 hover:underline">
           {tr("Sign in")}</Link>
       </p>
-    </form>
+    </KeptForm>
   );
 }

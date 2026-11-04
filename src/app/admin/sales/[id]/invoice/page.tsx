@@ -1,3 +1,4 @@
+import { siteInfo } from "@/app/(site)/site-info";
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -24,7 +25,7 @@ export default async function AdminInvoicePage({ params }: { params: Promise<{ i
   const issued = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "long" }).format(so.createdAt);
   return (
     <div className="mx-auto max-w-3xl text-leaf-950">
-      <InvoiceSheet so={so} customer={c} items={items} issued={issued} bankDetails={s.bankDetails} />
+      <InvoiceSheet so={so} customer={c} items={items} issued={issued} bankDetails={s.bankDetails} site={siteInfo(s)} />
     </div>
   );
 }

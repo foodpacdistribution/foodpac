@@ -2,10 +2,47 @@
 
 import { CheckCircle2, TriangleAlert, X } from "lucide-react";
 import { useLinkStatus } from "next/link";
-import { useEffect, useRef } from "react";
+import { createContext, useActionState, useContext, useEffect, useRef, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { useT } from "./i18n";
 import { btn, cx, Spinner, TopProgress } from "./ui";
+
+const KeptPending = createContext(false);
+
+/**
+ * Like useActionState for a form, but a failed save keeps what was typed. (React clears a form
+ * after its action runs, error or not; this submits by hand and clears it only on success.)
+ * Render the form with <KeptForm form={form}>.
+ */
+export function useKeptForm<R>(fn: (prev: R | undefined, form: FormData) => Promise<R>) {
+  const [state, dispatch, actionPending] = useActionState<R | undefined, FormData>(fn, undefined);
+  const [submitting, start] = useTransition();
+  const submitted = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (state && (state as { ok?: boolean }).ok) submitted.current?.reset();
+  }, [state]);
+  const form = {
+    pending: actionPending || submitting,
+    onSubmit: (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      submitted.current = e.currentTarget;
+      const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+      start(() => dispatch(fd));
+    },
+  };
+  return [state, form] as const;
+}
+
+export function KeptForm({
+  form,
+  ...rest
+}: { form: ReturnType<typeof useKeptForm>[1] } & Omit<React.FormHTMLAttributes<HTMLFormElement>, "action" | "onSubmit">) {
+  return (
+    <KeptPending value={form.pending}>
+      <form onSubmit={form.onSubmit} {...rest} />
+    </KeptPending>
+  );
+}
 
 export function SubmitButton({
   children,
@@ -21,7 +58,9 @@ export function SubmitButton({
   size?: Parameters<typeof btn>[1];
   className?: string;
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  const { pending } = useFormStatus();
+  const status = useFormStatus();
+  const kept = useContext(KeptPending);
+  const pending = status.pending || kept;
   const tr = useT();
   return (
     <button type="submit" disabled={pending || rest.disabled} className={btn(variant, size, className)} {...rest}>

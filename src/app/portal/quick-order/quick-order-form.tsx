@@ -1,20 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect } from "react";
+import { useEffect } from "react";
 import { quickOrder } from "@/app/actions/shop";
-import { FormError, SubmitButton } from "@/components/client-ui";
+import { FormError, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { useT } from "@/components/i18n";
 
 export function QuickOrderForm() {
   const tr = useT();
-  const [state, action] = useActionState(quickOrder, undefined);
+  const [state, form] = useKeptForm(quickOrder);
   const router = useRouter();
   useEffect(() => {
     if (state?.ok) router.push("/cart");
   }, [state, router]);
   return (
-    <form action={action} className="mt-5 space-y-3 rounded-3xl border border-leaf-950/10 bg-white p-5">
+    <KeptForm form={form} className="mt-5 space-y-3 rounded-3xl border border-leaf-950/10 bg-white p-5">
       <textarea
         name="lines"
         rows={7}
@@ -25,6 +25,6 @@ export function QuickOrderForm() {
       <FormError message={state && !state.ok ? state.error : null} />
       <SubmitButton pendingText={tr("Adding…")} className="rounded-full bg-leaf-700 hover:bg-leaf-800">
         {tr("Add to cart")}</SubmitButton>
-    </form>
+    </KeptForm>
   );
 }

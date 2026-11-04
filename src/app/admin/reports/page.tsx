@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, lt, lte, ne, sql } from "drizzle-orm";
 import { AlertTriangle, BadgeDollarSign, Clock, Receipt, ShoppingBag, TrendingUp } from "lucide-react";
 import type { Metadata } from "next";
+import { LOW_STOCK } from "@/lib/stock";
 import Link from "@/components/link";
 import { btn, Card, CardHeader, cx, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { T, Tx } from "@/components/i18n";
@@ -16,7 +17,6 @@ import { DailyChart } from "./daily-chart";
 export const metadata: Metadata = { title: "Sales Report" };
 
 const RANGES = [7, 30, 90] as const;
-const LOW_STOCK = 10;
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
   await requireUser(STAFF);

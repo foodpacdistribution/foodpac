@@ -1,7 +1,7 @@
 import { ArrowRight, CalendarClock, MapPin, Pencil, Phone, Receipt, ShoppingBag, Truck, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
-import { SITE } from "@/app/(site)/content";
+import { siteInfo } from "@/app/(site)/site-info";
 import { ProductCard } from "@/app/(site)/shop-ui";
 import { cx } from "@/components/ui";
 import { initials } from "@/lib/account";
@@ -32,6 +32,7 @@ export default async function PortalOverview() {
   const db = await getDb();
   await linkOrdersToCustomer(db, c);
   const s = await getSettings(db);
+  const site = siteInfo(s);
   const today = todayIn(s.timezone);
   const [orders, again] = await Promise.all([listSalesOrders(db, c.id, 60), recentlyBought(db, c, 4)]);
 
@@ -201,10 +202,10 @@ export default async function PortalOverview() {
           </div>
           <div className="rounded-3xl bg-[#f1ebdd] p-5 text-sm">
             <h2 className="font-semibold"><T>{"Need a hand?"}</T></h2>
-            <p className="mt-1 text-leaf-900/70"><T>{"Changes to an order, a product you can't find, or a delivery question — we're here"}</T>{" "}<T>{SITE.hours}</T>.</p>
-            {SITE.phone && (
-              <a href={`tel:${SITE.phone.replace(/\s/g, "")}`} className="mt-3 flex items-center gap-2 font-semibold text-leaf-800">
-                <Phone className="size-4" /> {SITE.phone}
+            <p className="mt-1 text-leaf-900/70"><T>{"Changes to an order, a product you can't find, or a delivery question — we're here"}</T>{" "}<T>{site.hours}</T>.</p>
+            {site.phone && (
+              <a href={`tel:${site.phone.replace(/\s/g, "")}`} className="mt-3 flex items-center gap-2 font-semibold text-leaf-800">
+                <Phone className="size-4" /> {site.phone}
               </a>
             )}
             <Link href="/#contact" className="mt-3 inline-flex h-9 items-center rounded-full bg-white px-4 text-xs font-semibold ring-1 ring-leaf-950/10 hover:ring-leaf-700/30">

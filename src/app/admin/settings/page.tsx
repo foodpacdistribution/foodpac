@@ -9,6 +9,7 @@ import { getSettings } from "@/lib/planning";
 import { IntegrationsCard } from "./integrations";
 import { SettingsClient } from "./settings-client";
 import { ShopSettingsCard } from "./shop-settings";
+import { BusinessDetailsCard } from "./business-details";
 import { stripeEnabled } from "@/lib/stripe";
 import { databaseUrl } from "@/lib/db/url";
 
@@ -40,6 +41,7 @@ export default async function SettingsPage() {
         "scheduled sync": process.env.CRON_SECRET ? "Cron enabled (see vercel.json for the schedule)" : "Set CRON_SECRET to enable scheduled feed sync",
       }}
     >
+      <BusinessDetailsCard contactPhone={s.contactPhone} contactEmail={s.contactEmail} contactAddress={s.contactAddress} abn={s.abn} openingHours={s.openingHours} />
       <ShopSettingsCard
         deliveryFeeCents={s.deliveryFeeCents}
         freeDeliveryOverCents={s.freeDeliveryOverCents}

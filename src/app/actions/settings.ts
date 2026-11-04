@@ -229,3 +229,26 @@ export async function saveShopSettings(_prev: unknown, form: FormData) {
     return { message: "Shop settings saved" };
   });
 }
+
+/** Phone, email, address, ABN and hours shown on the website, invoices and emails. */
+export async function saveBusinessDetails(_prev: unknown, form: FormData) {
+  return attempt(async () => {
+    await assertUser(["admin"]);
+    const db = await getDb();
+    const get = (k: string, max: number) => String(form.get(k) ?? "").trim().slice(0, max);
+    const contactEmail = get("contactEmail", 120);
+    if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) throw new UserError("Enter a valid email address.");
+    const contactPhone = get("contactPhone", 40);
+    if (contactPhone && !/^[+\d][\d\s()-]{5,}$/.test(contactPhone)) throw new UserError("Enter a phone number using digits, spaces and + ( ) - only.");
+    const abn = get("abn", 20);
+    if (abn && abn.replace(/\s/g, "").length !== 11) throw new UserError("An ABN has 11 digits.");
+    if (abn && !/^[\d\s]+$/.test(abn)) throw new UserError("An ABN has 11 digits.");
+    await db
+      .update(settings)
+      .set({ contactPhone, contactEmail, contactAddress: get("contactAddress", 200), abn, openingHours: get("openingHours", 80) })
+      .where(eq(settings.id, 1));
+    // Footer, contact section, invoices: everything that shows these.
+    revalidatePath("/", "layout");
+    return { message: "Business details saved" };
+  });
+}

@@ -1568,6 +1568,15 @@ export const ZH: Record<string, string> = {
   "Enter a quantity for at least one product.": "请至少为一个商品填写数量。",
   "None of those products are available any more.": "这些商品已全部下架。",
   "1 product added to cart": "已将 1 个商品加入购物车",
+  "Opening hours": "营业时间",
+  "Shown in the website footer and contact section, on tax invoices and in emails. Leave a box empty to hide it.": "显示在网站页脚和联系区、税务发票以及邮件中。留空则不显示。",
+  "Printed on tax invoices. Required once you're registered for GST.": "打印在税务发票上。注册 GST 后必须填写。",
+  "An ABN has 11 digits.": "ABN 为 11 位数字。",
+  "Enter a phone number using digits, spaces and + ( ) - only.": "电话号码只能包含数字、空格和 + ( ) -。",
+  "Replace photo": "更换照片",
+  "Choose photo": "选择照片",
+  "Square photos on a white background look best in the shop. Large photos are shrunk automatically.": "白底方形照片在商城里效果最好。大照片会自动压缩。",
+  "Restock →": "去补货 →",
 };
 
 /** Messages with a variable part. */
@@ -1602,6 +1611,7 @@ export const ZH_PATTERNS: [RegExp, string][] = [
   [new RegExp("^(\\d+) failed$"), "$1 个失败"],
   [new RegExp("^All \\((\\d+)\\)$"), "全部 ($1)"],
   [new RegExp("^Low stock \\((\\d+)\\)$"), "库存不足 ($1)"],
+  [new RegExp("^Hidden \\((\\d+)\\)$"), "已隐藏 ($1)"],
   [new RegExp("^Delivery addresses \\((\\d+)\\)$"), "送货地址 ($1)"],
   [new RegExp("^To deliver \u00b7 (.+)$"), "待送 · $1"],
   [new RegExp("^On the road \u00b7 (.+)$"), "在途 · $1"],

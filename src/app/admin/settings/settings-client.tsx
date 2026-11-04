@@ -1,9 +1,9 @@
 "use client";
 
 import { Building2, Camera, MapPin, Pencil, Plug, Plus, Trash2, UserPlus, Users } from "lucide-react";
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { createStaffUser, deleteUser, saveDepot, saveSettings } from "@/app/actions/settings";
-import { FormError, Modal, SubmitButton } from "@/components/client-ui";
+import { FormError, KeptForm, Modal, SubmitButton, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, CardHeader, cx, Field, inputCls, PageHeader } from "@/components/ui";
 import type { settings as settingsTable } from "@/lib/db/schema";
 import { minutesToInput } from "@/lib/time";
@@ -46,15 +46,10 @@ export function SettingsClient({
   children?: React.ReactNode;
 }) {
   const tr = useT();
-  const [state, action] = useActionState(saveSettings, undefined);
-  const [userState, userAction] = useActionState(createStaffUser, undefined);
+  const [state, form] = useKeptForm(saveSettings);
+  const [userState, userForm] = useKeptForm(createStaffUser);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const userForm = useRef<HTMLFormElement>(null);
-
-  useEffect(() => {
-    if (userState?.ok) userForm.current?.reset();
-  }, [userState]);
 
   return (
     <>
@@ -62,7 +57,7 @@ export function SettingsClient({
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
         <div className="min-w-0 space-y-4">
         <DepotsCard depots={depots} />
-        <form action={action}>
+        <KeptForm form={form}>
           <Card>
             <CardHeader title={<span className="flex items-center gap-2"><Building2 className="size-4 text-slate-400" /> {" "}{tr("Company & planning")}</span>} />
             <div className="space-y-4 p-4">
@@ -122,7 +117,7 @@ export function SettingsClient({
               </div>
             </div>
           </Card>
-        </form>
+        </KeptForm>
         {children}
         </div>
 
@@ -157,7 +152,7 @@ export function SettingsClient({
                 </li>
               ))}
             </ul>
-            <form ref={userForm} action={userAction} className="space-y-3 border-t border-line p-4">
+            <KeptForm form={userForm} className="space-y-3 border-t border-line p-4">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
                 <UserPlus className="size-3.5" /> {" "}{tr("Add staff login")}</p>
               <div className="grid grid-cols-2 gap-2">
@@ -173,7 +168,7 @@ export function SettingsClient({
               {userState?.ok && <p className="text-xs text-emerald-700">{userState.message}</p>}
               <SubmitButton size="sm" variant="secondary">
                 {tr("Create login")}</SubmitButton>
-            </form>
+            </KeptForm>
           </Card>
 
           <Card>
@@ -242,12 +237,12 @@ function DepotsCard({ depots }: { depots: Depot[] }) {
 
 function DepotForm({ depot, onDone }: { depot: Depot | null; onDone: () => void }) {
   const tr = useT();
-  const [state, action] = useActionState(saveDepot, undefined);
+  const [state, form] = useKeptForm(saveDepot);
   useEffect(() => {
     if (state?.ok) onDone();
   }, [state, onDone]);
   return (
-    <form action={action} className="space-y-4">
+    <KeptForm form={form} className="space-y-4">
       {depot && <input type="hidden" name="id" value={depot.id} />}
       <Field label={tr("Name")}>
         <input name="name" required defaultValue={depot?.name} placeholder={tr("Northside warehouse")} className={inputCls} />
@@ -261,6 +256,6 @@ function DepotForm({ depot, onDone }: { depot: Depot | null; onDone: () => void 
       <div className="flex justify-end border-t border-line pt-4">
         <SubmitButton pendingText={tr("Locating…")}>{depot ? tr("Save depot") : tr("Add depot")}</SubmitButton>
       </div>
-    </form>
+    </KeptForm>
   );
 }

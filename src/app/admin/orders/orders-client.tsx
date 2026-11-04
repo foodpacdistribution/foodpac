@@ -3,9 +3,9 @@
 import { AlertTriangle, FileImage, MapPinCheck, Package, Pencil, Pin, Plus, Search, Send, ShieldAlert, ShieldCheck, Sparkles, Trash2, Upload, Zap } from "lucide-react";
 import Link from "@/components/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { addDemoOrders, deleteOrders, geocodeOrders, rescheduleOrders, saveOrder } from "@/app/actions/orders";
-import { FormError, Modal, SubmitButton } from "@/components/client-ui";
+import { FormError, Modal, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { DateNav } from "@/components/date-nav";
 import { shiftDate } from "@/lib/dates";
 import { Badge, btn, Card, ColorDot, cx, EmptyState, Field, GEOCODE_STATUS, inputCls, ORDER_STATUS, PageHeader, Spinner } from "@/components/ui";
@@ -502,13 +502,13 @@ function OrderForm({
   onDone: (msg: string) => void;
 }) {
   const tr = useT();
-  const [state, action] = useActionState(saveOrder, undefined);
+  const [state, form] = useKeptForm(saveOrder);
   useEffect(() => {
     if (state?.ok) onDone(state.message ?? "Saved");
   }, [state, onDone]);
 
   return (
-    <form action={action} className="space-y-4">
+    <KeptForm form={form} className="space-y-4">
       {order && <input type="hidden" name="id" value={order.id} />}
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label={tr("Order number")} hint={order ? undefined : "Leave blank to generate"}>
@@ -591,6 +591,6 @@ function OrderForm({
       <div className="flex justify-end gap-2 border-t border-line pt-4">
         <SubmitButton pendingText={tr("Saving & locating…")}>{order ? tr("Save changes") : tr("Add order")}</SubmitButton>
       </div>
-    </form>
+    </KeptForm>
   );
 }

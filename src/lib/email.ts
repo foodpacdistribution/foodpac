@@ -1,5 +1,5 @@
 import "server-only";
-import { SITE } from "@/app/(site)/site-info";
+import { SITE, type SiteInfo } from "@/app/(site)/site-info";
 import { siteUrl } from "./site-url";
 
 // Email through Resend (https://resend.com). Set RESEND_API_KEY to turn it on; without it
@@ -56,13 +56,14 @@ const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial
  * company's details. Tables and inline styles only, since that's what every mail client renders.
  * `preview` is the line inboxes show next to the subject.
  */
-export function layout(opts: { preview?: string; heading: string; body: string; button?: { label: string; url: string }; footer?: string }) {
+export function layout(opts: { preview?: string; heading: string; body: string; button?: { label: string; url: string }; footer?: string; site?: SiteInfo }) {
   const base = siteUrl();
+  const site = opts.site ?? SITE;
   const button = opts.button
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 4px"><tr><td style="border-radius:999px;background:${C.orange}">
 <a href="${esc(opts.button.url)}" style="display:inline-block;padding:13px 26px;font-family:${FONT};font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:999px">${esc(opts.button.label)} &rarr;</a></td></tr></table>`
     : "";
-  const contact = [SITE.phone && esc(SITE.phone), SITE.email && `<a href="mailto:${esc(SITE.email)}" style="color:${C.muted}">${esc(SITE.email)}</a>`]
+  const contact = [site.phone && esc(site.phone), site.email && `<a href="mailto:${esc(site.email)}" style="color:${C.muted}">${esc(site.email)}</a>`]
     .filter(Boolean)
     .join(" &nbsp;·&nbsp; ");
   return `<!doctype html>
@@ -85,8 +86,8 @@ ${opts.body}${button}
 ${opts.footer ? `<p style="margin:26px 0 0;font-size:13px;color:${C.muted}">${opts.footer}</p>` : ""}
 </td></tr>
 <tr><td style="background:${C.green};border-radius:0 0 18px 18px;padding:22px 32px;font-family:${FONT};font-size:12px;line-height:1.7;color:#c9d8ce">
-<strong style="color:#ffffff;font-size:13px">${esc(SITE.name)}</strong><br>
-${esc(SITE.tagline)} Serving ${esc(SITE.serviceArea)} &nbsp;·&nbsp; ${esc(SITE.hours)}<br>
+<strong style="color:#ffffff;font-size:13px">${esc(site.name)}</strong><br>
+${esc(site.tagline)} Serving ${esc(site.serviceArea)} &nbsp;·&nbsp; ${esc(site.hours)}<br>
 ${contact ? `${contact}<br>` : ""}<a href="${esc(base)}" style="color:#ffffff;text-decoration:underline">${esc(base.replace(/^https?:\/\//, ""))}</a>
 </td></tr>
 </table></td></tr></table></body></html>`;

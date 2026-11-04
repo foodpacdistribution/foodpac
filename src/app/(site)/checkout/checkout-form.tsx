@@ -1,9 +1,9 @@
 "use client";
 
 import { Building2, CalendarDays, CreditCard, Landmark, Receipt } from "lucide-react";
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import { checkout } from "@/app/actions/shop";
-import { FormError, SubmitButton } from "@/components/client-ui";
+import { FormError, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { cx } from "@/components/ui";
 import { prettyDate } from "@/lib/dates";
 import type { PaymentMethod, PaymentTerms } from "@/lib/db/schema";
@@ -30,7 +30,7 @@ export function CheckoutForm(props: {
   defaults: { recipient: string; phone: string; address: string };
 }) {
   const tr = useT();
-  const [state, action] = useActionState(checkout, undefined);
+  const [state, form] = useKeptForm(checkout);
   const [addr, setAddr] = useState<Address | null>(props.addresses[0] ?? null);
   const [method, setMethod] = useState<PaymentMethod>(props.methods[0]);
   const fill = addr ?? { recipient: props.defaults.recipient, phone: props.defaults.phone, address: props.defaults.address, instructions: "" };
@@ -39,7 +39,7 @@ export function CheckoutForm(props: {
   const overCredit = method === "invoice" && props.creditLeftCents !== null && props.quote.totalCents > props.creditLeftCents;
 
   return (
-    <form action={action} className="mt-5 grid gap-6 lg:grid-cols-[1fr_360px]">
+    <KeptForm form={form} className="mt-5 grid gap-6 lg:grid-cols-[1fr_360px]">
       <input type="hidden" name="idempotencyKey" value={props.idempotencyKey} />
       <div className="space-y-4">
         <Step n={1} title={tr("Delivery address")} icon={Building2}>
@@ -172,7 +172,7 @@ export function CheckoutForm(props: {
         </SubmitButton>
         <p className="mt-2 text-center text-[11px] text-leaf-900/50">{tr("Prices, stock and totals are checked again when you place the order.")}</p>
       </aside>
-    </form>
+    </KeptForm>
   );
 }
 

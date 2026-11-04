@@ -1,8 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
 import { saveShopSettings } from "@/app/actions/settings";
-import { FormError, SubmitButton } from "@/components/client-ui";
+import { FormError, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { Card, CardHeader, cx, Field, inputCls } from "@/components/ui";
 import { minutesToInput } from "@/lib/time";
 import { useT } from "@/components/i18n";
@@ -19,12 +18,12 @@ export function ShopSettingsCard(p: {
   stripe: boolean;
 }) {
   const tr = useT();
-  const [state, action] = useActionState(saveShopSettings, undefined);
+  const [state, form] = useKeptForm(saveShopSettings);
   const d = (c: number) => (c / 100).toFixed(2);
   return (
     <Card>
       <CardHeader title={tr("Online shop")} subtitle={`Card payments: ${p.stripe ? "on (Stripe)" : "off — set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET to accept cards"}`} />
-      <form action={action} className="grid gap-4 p-4 sm:grid-cols-2">
+      <KeptForm form={form} className="grid gap-4 p-4 sm:grid-cols-2">
         <Field label={tr("Delivery fee ex GST ($)")}>
           <input name="deliveryFee" inputMode="decimal" defaultValue={d(p.deliveryFeeCents)} className={inputCls} />
         </Field>
@@ -56,7 +55,7 @@ export function ShopSettingsCard(p: {
           {state?.ok && <p className="text-sm text-emerald-700">{state.message}</p>}
         </div>
         <SubmitButton className="sm:col-span-2 sm:w-fit">{tr("Save shop settings")}</SubmitButton>
-      </form>
+      </KeptForm>
     </Card>
   );
 }

@@ -1,14 +1,14 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ExternalLink, Eye, EyeOff, GalleryHorizontal, ImageUp, Pencil, Plus, Smartphone, Trash2 } from "lucide-react";
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { ArrowDown, ArrowUp, ExternalLink, Eye, EyeOff, GalleryHorizontal, Pencil, Plus, Smartphone, Trash2 } from "lucide-react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { deletePoster, movePoster, savePoster, setBuiltInPosters, setPosterActive } from "@/app/actions/posters";
 import { FormError, Modal, Toast, type ToastMessage } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader, Spinner } from "@/components/ui";
 import { useT } from "@/components/i18n";
 import type { ActionResult } from "@/lib/action";
 import { posterImageUrl } from "@/lib/poster-image";
-import { resizeImage } from "@/lib/resize-image";
+import { ImageInput } from "@/components/image-input";
 
 type Poster = {
   id: string;
@@ -177,52 +177,6 @@ export function PostersClient({ posters, builtIn, today }: { posters: Poster[]; 
 }
 
 /** A file input that shrinks the chosen picture in the browser and shows it. */
-function ImageInput({
-  name,
-  maxSide,
-  required,
-  onPreview,
-}: {
-  name: string;
-  maxSide: number;
-  required?: boolean;
-  onPreview: (url: string | null) => void;
-}) {
-  const tr = useT();
-  const ref = useRef<HTMLInputElement>(null);
-  const [working, setWorking] = useState(false);
-  return (
-    <div className="flex items-center gap-2">
-      <label className={btn("secondary", "md", "cursor-pointer")}>
-        {working ? <Spinner className="size-3.5" /> : <ImageUp className="size-4" />}
-        {tr("Choose picture")}
-        <input
-          ref={ref}
-          name={name}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          required={required}
-          className="sr-only"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            if (!file) return onPreview(null);
-            setWorking(true);
-            const small = await resizeImage(file, maxSide);
-            // Swap the shrunk file into the input, so the form uploads that one.
-            if (small !== file && ref.current) {
-              const dt = new DataTransfer();
-              dt.items.add(small);
-              ref.current.files = dt.files;
-            }
-            setWorking(false);
-            onPreview(URL.createObjectURL(small));
-          }}
-        />
-      </label>
-    </div>
-  );
-}
-
 function PosterForm({ poster: p, onDone }: { poster: Poster | null; onDone: () => void }) {
   const tr = useT();
   const [state, action, saving] = useActionState(savePoster, undefined);

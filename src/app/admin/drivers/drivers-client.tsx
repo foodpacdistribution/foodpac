@@ -1,9 +1,9 @@
 "use client";
 
 import { Clock, KeyRound, MapPin, Package, Pencil, Phone, Plus, Truck } from "lucide-react";
-import { useActionState, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { saveDriver } from "@/app/actions/drivers";
-import { FormError, Modal, SubmitButton } from "@/components/client-ui";
+import { FormError, Modal, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import { formatClock, formatMinutesClock, minutesToInput } from "@/lib/time";
 import { useT } from "@/components/i18n";
@@ -154,14 +154,14 @@ function DriverForm({
   onDone: () => void;
 }) {
   const tr = useT();
-  const [state, action] = useActionState(saveDriver, undefined);
+  const [state, form] = useKeptForm(saveDriver);
   const [color, setColor] = useState(driver?.color ?? COLORS.find((c) => !usedColors.includes(c)) ?? COLORS[0]);
   useEffect(() => {
     if (state?.ok) onDone();
   }, [state, onDone]);
 
   return (
-    <form action={action} className="space-y-4">
+    <KeptForm form={form} className="space-y-4">
       {driver && <input type="hidden" name="id" value={driver.id} />}
       <input type="hidden" name="color" value={color} />
       <div className="grid gap-3 sm:grid-cols-2">
@@ -235,6 +235,6 @@ function DriverForm({
       <div className="flex justify-end border-t border-line pt-4">
         <SubmitButton>{driver ? tr("Save driver") : tr("Add driver")}</SubmitButton>
       </div>
-    </form>
+    </KeptForm>
   );
 }

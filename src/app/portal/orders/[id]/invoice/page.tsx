@@ -1,3 +1,4 @@
+import { siteInfo } from "@/app/(site)/site-info";
 import { and, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -27,5 +28,5 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   ]);
   const issued = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "long" }).format(so.createdAt);
 
-  return <InvoiceSheet so={so} customer={c} items={items} issued={issued} bankDetails={s.bankDetails} />;
+  return <InvoiceSheet so={so} customer={c} items={items} issued={issued} bankDetails={s.bankDetails} site={siteInfo(s)} />;
 }

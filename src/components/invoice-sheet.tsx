@@ -1,4 +1,4 @@
-import { SITE } from "@/app/(site)/content";
+import type { SiteInfo } from "@/app/(site)/site-info";
 import { prettyDate } from "@/lib/dates";
 import type { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { aud, PAYMENT_METHOD_LABEL, PAYMENT_STATUS } from "@/lib/money";
@@ -13,12 +13,14 @@ export function InvoiceSheet({
   items,
   issued,
   bankDetails,
+  site,
 }: {
   so: typeof salesOrders.$inferSelect;
   customer: typeof customers.$inferSelect;
   items: (typeof salesOrderItems.$inferSelect)[];
   issued: string;
   bankDetails: string;
+  site: SiteInfo;
 }) {
   return (
     <div>
@@ -30,10 +32,11 @@ export function InvoiceSheet({
           <div className="flex items-center gap-3">
             <Logo className="h-14" />
             <div className="border-l border-leaf-950/10 pl-3">
-              <p className="font-display text-lg font-semibold">{SITE.name}</p>
-              {SITE.abn && <p className="text-xs text-leaf-900/60"><T>{"ABN"}</T>{" "}{SITE.abn}</p>}
-              {SITE.address && <p className="text-xs text-leaf-900/60">{SITE.address}</p>}
-              {SITE.email && <p className="text-xs text-leaf-900/60">{SITE.email}</p>}
+              <p className="font-display text-lg font-semibold">{site.name}</p>
+              {site.abn && <p className="text-xs text-leaf-900/60"><T>{"ABN"}</T>{" "}{site.abn}</p>}
+              {site.address && <p className="text-xs text-leaf-900/60">{site.address}</p>}
+              {site.email && <p className="text-xs text-leaf-900/60">{site.email}</p>}
+              {site.phone && <p className="text-xs text-leaf-900/60">{site.phone}</p>}
             </div>
           </div>
           <div className="text-right">

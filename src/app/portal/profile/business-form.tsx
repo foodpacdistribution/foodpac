@@ -1,17 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
 import { updateMyBusiness } from "@/app/actions/shop";
-import { SubmitButton } from "@/components/client-ui";
+import { SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { ProfileLabel, profileInput, Saved } from "@/components/profile-forms";
 import { useT } from "@/components/i18n";
 import { AddressInput } from "@/components/address-input";
 
 export function BusinessForm(c: { name: string; phone: string | null; email: string | null; address: string | null; abn: string | null }) {
   const tr = useT();
-  const [state, action] = useActionState(updateMyBusiness, undefined);
+  const [state, form] = useKeptForm(updateMyBusiness);
   return (
-    <form action={action} className="grid gap-4 sm:grid-cols-2">
+    <KeptForm form={form} className="grid gap-4 sm:grid-cols-2">
       <ProfileLabel text={tr("Business name")} hint={tr("Contact us to change your registered business name.")}>
         <input value={c.name} disabled className={profileInput} />
       </ProfileLabel>
@@ -32,6 +31,6 @@ export function BusinessForm(c: { name: string; phone: string | null; email: str
           {tr("Save business details")}</SubmitButton>
         <Saved state={state} />
       </div>
-    </form>
+    </KeptForm>
   );
 }

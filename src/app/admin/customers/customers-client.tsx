@@ -2,9 +2,9 @@
 
 import { Building2, KeyRound, Mail, MapPin, Package, Pencil, Phone, Plus, Search, Tags } from "lucide-react";
 import Link from "@/components/link";
-import { useActionState, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { deleteCustomer, removeCustomerLogin, saveCustomer } from "@/app/actions/customers";
-import { FormError, Modal, SubmitButton } from "@/components/client-ui";
+import { FormError, Modal, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import type { PaymentTerms } from "@/lib/db/schema";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
@@ -180,7 +180,7 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
 
 function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null; onDone: () => void; isAdmin: boolean }) {
   const tr = useT();
-  const [state, action] = useActionState(saveCustomer, undefined);
+  const [state, form] = useKeptForm(saveCustomer);
   const [removing, startRemove] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   useEffect(() => {
@@ -188,7 +188,7 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
   }, [state, onDone]);
 
   return (
-    <form action={action} className="space-y-4">
+    <KeptForm form={form} className="space-y-4">
       {customer && <input type="hidden" name="id" value={customer.id} />}
       <Field label={tr("Business name")} hint={tr("Orders with this exact customer name are linked to this customer.")}>
         <input name="name" required defaultValue={customer?.name} className={inputCls} />
@@ -278,6 +278,6 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
         >
           {tr("Delete customer")}</button>
       )}
-    </form>
+    </KeptForm>
   );
 }

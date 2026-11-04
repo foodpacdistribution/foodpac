@@ -3,7 +3,7 @@
 import { CheckCircle2 } from "lucide-react";
 import { useActionState } from "react";
 import { changePassword, updateMyName } from "@/app/actions/auth";
-import { FormError, SubmitButton } from "./client-ui";
+import { FormError, KeptForm, SubmitButton, useKeptForm } from "./client-ui";
 import { cx } from "./ui";
 import { Tx, useT } from "@/components/i18n";
 
@@ -42,9 +42,9 @@ export function ProfileCard({ title, description, children }: { title: React.Rea
 
 export function NameForm({ name, email }: { name: string; email: string }) {
   const tr = useT();
-  const [state, action] = useActionState(updateMyName, undefined);
+  const [state, form] = useKeptForm(updateMyName);
   return (
-    <form action={action} className="grid gap-4 sm:grid-cols-2">
+    <KeptForm form={form} className="grid gap-4 sm:grid-cols-2">
       <ProfileLabel text={tr("Your name")}>
         <input name="name" required defaultValue={name} autoComplete="name" className={profileInput} />
       </ProfileLabel>
@@ -56,7 +56,7 @@ export function NameForm({ name, email }: { name: string; email: string }) {
           {tr("Save")}</SubmitButton>
         <Saved state={state} />
       </div>
-    </form>
+    </KeptForm>
   );
 }
 

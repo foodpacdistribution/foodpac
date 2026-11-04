@@ -6,6 +6,7 @@ import { prettyDate } from "./dates";
 import { esc, itemTable, layout, mailto, note, officeEmail, rows, sendEmail } from "./email";
 import { aud, PAYMENT_METHOD_LABEL } from "./money";
 import { getSettings } from "./planning";
+import { siteInfo } from "@/app/(site)/site-info";
 import { siteUrl } from "./site-url";
 import { formatMinutesClock } from "./time";
 
@@ -13,6 +14,9 @@ import { formatMinutesClock } from "./time";
 // All are called after the response (next/server `after`), so they never slow a page down.
 
 /** The address a customer's emails go to: the business email, else their portal login. */
+/** The business details set in the back office, for email footers. */
+const business = async () => siteInfo(await getSettings(await getDb()));
+
 async function customerEmail(db: DB, customerId: string) {
   const [c] = await db.select({ email: customers.email }).from(customers).where(eq(customers.id, customerId)).limit(1);
   if (c?.email) return c.email;
@@ -71,6 +75,7 @@ export async function orderConfirmed(salesOrderId: string, opts: { office: boole
       to,
       subject: `Order ${so.number} confirmed – delivery ${shortDate}`,
       html: layout({
+        site: siteInfo(s),
         preview: `${so.number} · delivery ${shortDate} · ${aud(so.totalCents)}`,
         heading: "Thanks, your order is confirmed",
         body: `<p style="margin:0">We've got your order and it's booked in for delivery. We'll let you know when it's on its way.</p>${summary}${lines}${
@@ -87,6 +92,7 @@ export async function orderConfirmed(salesOrderId: string, opts: { office: boole
       to: office,
       subject: `New order ${so.number} · ${customer} · ${aud(so.totalCents)}`,
       html: layout({
+        site: siteInfo(s),
         preview: `${so.number} · ${customer} · delivery ${shortDate} · ${aud(so.totalCents)}`,
         heading: `New order from ${customer}`,
         body: `${summary}${lines}`,
@@ -108,6 +114,7 @@ export async function enquiryReceived(e: { name: string; email: string; message:
     replyTo: e.email,
     subject: `Website enquiry from ${e.name}${e.business ? ` (${e.business})` : ""}`,
     html: layout({
+        site: await business(),
       preview: e.message.slice(0, 120),
       heading: "New website enquiry",
       body: `${rows([
@@ -134,6 +141,7 @@ export async function accountRequested(c: { id: string; name: string; contact: s
     replyTo: c.email,
     subject: `New trade account to approve: ${c.name}`,
     html: layout({
+        site: await business(),
       preview: `${c.name} · ${c.contact} · ${c.email}`,
       heading: "A new business wants to order",
       body: `${rows([
@@ -160,6 +168,7 @@ export async function accountApproved(customerId: string) {
     to,
     subject: "Your Foodpac trade account is ready",
     html: layout({
+        site: await business(),
       preview: "Your prices and online ordering are now open.",
       heading: `Welcome aboard, ${c.name}`,
       body: `<p style="margin:0">Your trade account is approved. Sign in to see your prices, order online and choose your delivery day.</p>`,
@@ -175,6 +184,7 @@ export async function passwordReset(to: string, name: string, link: string) {
     to,
     subject: "Reset your Foodpac password",
     html: layout({
+        site: await business(),
       preview: "Choose a new password. The link works once, for the next hour.",
       heading: `Hi ${name.split(" ")[0]}, reset your password`,
       body: `<p style="margin:0">Someone (hopefully you) asked to reset the password for this email. The link works once, for the next hour.</p>`,

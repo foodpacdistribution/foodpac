@@ -2,9 +2,9 @@
 
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import Link from "@/components/link";
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import { login } from "@/app/actions/auth";
-import { FormError, SubmitButton } from "@/components/client-ui";
+import { FormError, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { useT } from "@/components/i18n";
 
 const input =
@@ -12,10 +12,10 @@ const input =
 
 export function LoginForm({ next, defaultEmail }: { next?: string; defaultEmail?: string }) {
   const tr = useT();
-  const [state, action] = useActionState(login, undefined);
+  const [state, form] = useKeptForm(login);
   const [show, setShow] = useState(false);
   return (
-    <form action={action} className="mt-8 space-y-4">
+    <KeptForm form={form} className="mt-8 space-y-4">
       {next && <input type="hidden" name="next" value={next} />}
       <label className="block">
         <span className="mb-1.5 block text-sm font-medium text-leaf-900/80">{tr("Email")}</span>
@@ -45,6 +45,6 @@ export function LoginForm({ next, defaultEmail }: { next?: string; defaultEmail?
       <FormError message={state?.error} />
       <SubmitButton size="lg" pendingText={tr("Signing in…")} className="w-full rounded-xl bg-leaf-700 hover:bg-leaf-800">
         {tr("Sign in")}</SubmitButton>
-    </form>
+    </KeptForm>
   );
 }

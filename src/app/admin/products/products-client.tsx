@@ -2,13 +2,15 @@
 
 import { Download, Eye, EyeOff, FileUp, ImageIcon, PackagePlus, Pencil, Percent, Plus, Search, Star, Tag, Trash2 } from "lucide-react";
 import Link from "@/components/link";
-import { useActionState, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { adjustStock, bulkProducts, deleteProduct, type ProductBulkOp, saveProduct } from "@/app/actions/products";
-import { FormError, Modal, SubmitButton, Toast, type ToastMessage } from "@/components/client-ui";
+import { FormError, Modal, SubmitButton, Toast, type ToastMessage, KeptForm, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import { aud } from "@/lib/money";
+import { LOW_STOCK } from "@/lib/stock";
 import { TEMPLATE_HEADERS, toCsv } from "@/lib/product-import";
 import { useT } from "@/components/i18n";
+import { ImageInput } from "@/components/image-input";
 
 type Product = {
   id: string;
@@ -26,9 +28,10 @@ type Product = {
   featured: boolean;
   active: boolean;
   hasImage: boolean;
+  /** Versioned, so a new photo shows straight away. */
+  imageUrl: string | null;
 };
 
-const LOW_STOCK = 10;
 
 type ActionResult = { ok: boolean; message?: string; error?: string };
 const toastFor = (r: ActionResult): ToastMessage => ({ id: Date.now(), text: r.ok ? (r.message ?? "Updated") : (r.error ?? "Something went wrong"), tone: r.ok ? "ok" : "warn" });
@@ -47,12 +50,13 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
     const s = deferredQ.trim().toLowerCase();
     return products.filter(
       (p) =>
-        (filter === "all" || (filter === "low" ? p.active && p.stock < LOW_STOCK : !p.active)) &&
+        (filter === "all" || (filter === "low" ? p.active && p.stock <= LOW_STOCK : !p.active)) &&
         (!category || p.category === category) &&
         (!s || p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s) || p.barcode?.includes(s)),
     );
   }, [products, deferredQ, filter, category]);
-  const low = products.filter((p) => p.active && p.stock < LOW_STOCK).length;
+  const low = products.filter((p) => p.active && p.stock <= LOW_STOCK).length;
+  const hidden = products.filter((p) => !p.active).length;
   const usedCategories = useMemo(() => [...new Set(products.map((p) => p.category))].sort(), [products]);
   // Only rows still on screen count as selected, so a filter change can't act on hidden rows.
   const ids = shown.filter((p) => selected.has(p.id)).map((p) => p.id);
@@ -96,7 +100,7 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
           <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-slate-400" />
           <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search name, SKU, barcode")} className={cx(inputCls, "pl-9")} />
         </div>
-        <select value={category} onChange={(e) => setCategory(e.target.value)} className={cx(inputCls, "w-auto")} aria-label={tr("Category")}>
+        <select value={category} onChange={(e) => setCategory(e.target.value)} className={cx(inputCls, "sm:w-56")} aria-label={tr("Category")}>
           <option value="">{tr("All categories")}</option>
           {usedCategories.map((c) => (
             <option key={c} value={c}>
@@ -107,7 +111,7 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
         <div className="flex gap-1">
           {(["all", "low", "inactive"] as const).map((f) => (
             <button key={f} onClick={() => setFilter(f)} className={cx(btn(filter === f ? "primary" : "ghost", "sm"))}>
-              {f === "all" ? tr(`All (${products.length})`) : f === "low" ? tr(`Low stock (${low})`) : tr("Hidden")}
+              {f === "all" ? tr(`All (${products.length})`) : f === "low" ? tr(`Low stock (${low})`) : tr(`Hidden (${hidden})`)}
             </button>
           ))}
         </div>
@@ -297,13 +301,13 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
   );
 }
 
-const stockTone = (stock: number) => (stock <= 0 ? "text-red-600" : stock < LOW_STOCK ? "text-amber-700" : "text-slate-900");
+const stockTone = (stock: number) => (stock <= 0 ? "text-red-600" : stock <= LOW_STOCK ? "text-amber-700" : "text-slate-900");
 
 function Thumb({ p }: { p: Product }) {
   return (
     <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-100 text-slate-400">
       {/* eslint-disable-next-line @next/next/no-img-element -- our own API */}
-      {p.hasImage ? <img src={`/api/products/${p.id}/image`} alt="" loading="lazy" decoding="async" className="size-full object-cover" /> : <ImageIcon className="size-4" />}
+      {p.imageUrl ? <img src={p.imageUrl} alt="" loading="lazy" decoding="async" className="size-full object-cover" /> : <ImageIcon className="size-4" />}
     </span>
   );
 }
@@ -346,12 +350,14 @@ function StockAdjust({ id, onResult }: { id: string; onResult: (t: ToastMessage)
 
 function ProductForm({ product: p, categories, onDone }: { product: Product | null; categories: string[]; onDone: () => void }) {
   const tr = useT();
-  const [state, action] = useActionState(saveProduct, undefined);
+  const [state, form] = useKeptForm(saveProduct);
+  const [photo, setPhoto] = useState<string | null>(p?.imageUrl ?? null);
+  const [removing, setRemoving] = useState(false);
   useEffect(() => {
     if (state?.ok) onDone();
   }, [state, onDone]);
   return (
-    <form action={action} className="grid gap-4 sm:grid-cols-2">
+    <KeptForm form={form} className="grid gap-4 sm:grid-cols-2">
       {p && <input type="hidden" name="id" value={p.id} />}
       <Field label={tr("Product name")} className="sm:col-span-2">
         <input name="name" required defaultValue={p?.name} className={inputCls} />
@@ -388,9 +394,21 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
       <Field label={tr("Description")} className="sm:col-span-2">
         <textarea name="description" rows={3} defaultValue={p?.description} className={cx(inputCls, "h-auto py-2")} />
       </Field>
-      <Field label={tr("Photo (JPEG, PNG or WebP, max 4 MB)")} className="sm:col-span-2">
-        <input name="image" type="file" accept="image/jpeg,image/png,image/webp" className="text-sm" />
-      </Field>
+      <div className="flex items-center gap-4 sm:col-span-2">
+        <span className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-line bg-slate-50 text-slate-300">
+          {photo && !removing ? (
+            // eslint-disable-next-line @next/next/no-img-element -- local preview or our own API
+            <img src={photo} alt="" className="size-full object-contain" />
+          ) : (
+            <ImageIcon className="size-6" />
+          )}
+        </span>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-slate-600">{tr("Photo")}</p>
+          <ImageInput name="image" maxSide={1600} label={p?.hasImage ? "Replace photo" : "Choose photo"} onPreview={(u) => setPhoto(u ?? p?.imageUrl ?? null)} />
+          <p className="text-[11px] text-slate-400">{tr("Square photos on a white background look best in the shop. Large photos are shrunk automatically.")}</p>
+        </div>
+      </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm sm:col-span-2">
         <label className="flex items-center gap-2">
           <input type="checkbox" name="gst" defaultChecked={p?.gst ?? true} /> {" "}{tr("GST applies")}</label>
@@ -400,13 +418,13 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
           <input type="checkbox" name="active" defaultChecked={p?.active ?? true} /> {" "}{tr("Show in shop")}</label>
         {p?.hasImage && (
           <label className="flex items-center gap-2">
-            <input type="checkbox" name="removeImage" /> {" "}{tr("Remove photo")}</label>
+            <input type="checkbox" name="removeImage" onChange={(e) => setRemoving(e.target.checked)} /> {" "}{tr("Remove photo")}</label>
         )}
       </div>
       <div className="sm:col-span-2">
         <FormError message={state && !state.ok ? state.error : null} />
       </div>
       <SubmitButton className="sm:col-span-2">{p ? tr("Save product") : tr("Add product")}</SubmitButton>
-    </form>
+    </KeptForm>
   );
 }

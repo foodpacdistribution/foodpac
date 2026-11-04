@@ -1,6 +1,7 @@
 import { CheckCircle2, Clock, Mail, MapPin, Phone } from "lucide-react";
 import { ContactForm } from "./contact-form";
-import { PROMISES, SITE, STEPS } from "./content";
+import { PROMISES, STEPS } from "./content";
+import type { SiteInfo } from "./site-info";
 import { T } from "@/components/i18n";
 
 export function Eyebrow({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -45,25 +46,25 @@ export function HowItWorks() {
   );
 }
 
-export function Delivery() {
+export function Delivery({ site }: { site: SiteInfo }) {
   return (
     <section id="delivery" className="scroll-mt-16">
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:py-24">
         <div>
           <Eyebrow><T>{"Delivery"}</T></Eyebrow>
-          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-4xl"><T>{"Regular runs across"}</T>{" "}<T>{SITE.serviceArea}</T>.</h2>
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-4xl"><T>{"Regular runs across"}</T>{" "}<T>{site.serviceArea}</T>.</h2>
           <p className="mt-4 text-leaf-900/70">
             <T>{"Our drivers run planned routes every weekday morning. Tell us when your kitchen can take a delivery and we'll build it into the run. If anything changes on the day, we re-plan and let you know."}</T></p>
           <dl className="mt-8 grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-leaf-950/10 bg-white p-5">
               <dt className="flex items-center gap-2 text-sm font-semibold">
                 <MapPin className="size-4 text-leaf-700" /> {" "}<T>{"Service area"}</T></dt>
-              <dd className="mt-1 text-sm text-leaf-900/70"><T>{SITE.serviceArea}</T><T>{". Further out? Ask about scheduled runs."}</T></dd>
+              <dd className="mt-1 text-sm text-leaf-900/70"><T>{site.serviceArea}</T><T>{". Further out? Ask about scheduled runs."}</T></dd>
             </div>
             <div className="rounded-2xl border border-leaf-950/10 bg-white p-5">
               <dt className="flex items-center gap-2 text-sm font-semibold">
                 <Clock className="size-4 text-leaf-700" /> {" "}<T>{"Delivery days"}</T></dt>
-              <dd className="mt-1 text-sm text-leaf-900/70"><T>{SITE.hours}</T><T>{". Early drops before service on request."}</T></dd>
+              <dd className="mt-1 text-sm text-leaf-900/70"><T>{site.hours}</T><T>{". Early drops before service on request."}</T></dd>
             </div>
           </dl>
         </div>
@@ -89,12 +90,12 @@ export function Delivery() {
   );
 }
 
-export function Contact() {
+export function Contact({ site }: { site: SiteInfo }) {
   const details = [
-    SITE.phone && { icon: Phone, label: SITE.phone, href: `tel:${SITE.phone.replace(/\s/g, "")}` },
-    SITE.email && { icon: Mail, label: SITE.email, href: `mailto:${SITE.email}` },
-    SITE.address && { icon: MapPin, label: SITE.address },
-    { icon: Clock, label: SITE.hours },
+    site.phone && { icon: Phone, label: site.phone, href: `tel:${site.phone.replace(/\s/g, "")}` },
+    site.email && { icon: Mail, label: site.email, href: `mailto:${site.email}` },
+    site.address && { icon: MapPin, label: site.address },
+    { icon: Clock, label: site.hours },
   ].filter(Boolean) as { icon: typeof Phone; label: string; href?: string }[];
 
   return (
