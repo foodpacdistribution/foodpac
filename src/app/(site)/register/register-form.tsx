@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 import { registerCustomer } from "@/app/actions/shop";

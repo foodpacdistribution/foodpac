@@ -1,7 +1,7 @@
 "use client";
 
 import { BadgeCheck, ClipboardList, Download, Search, ShoppingBag, Trash2, X } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useState, useTransition } from "react";
 import { deleteSales, markManyPaid, setFulfilment } from "@/app/actions/sales";
 import { Toast, type ToastMessage } from "@/components/client-ui";

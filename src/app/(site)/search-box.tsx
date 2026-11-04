@@ -3,35 +3,58 @@
 import { ArrowRight, Search } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { cx, Spinner } from "@/components/ui";
 import { productImageUrl } from "@/lib/product-image";
+import { matchProducts, type SearchEntry } from "@/lib/search-match";
 import { useT } from "@/components/i18n";
 
 type Hit = { id: string; sku: string; name: string; category: string; packSize: string; hasImage: boolean; updatedAt: string };
+type Catalog = { products: SearchEntry[]; complete: boolean };
 
-/** Shop search with suggestions as you type (debounced, cancels stale requests, keyboard friendly). */
+// The catalogue's searchable fields, fetched once (from the CDN) and shared by every search box,
+// so suggestions are worked out in the browser as you type. A failed download is retried next focus.
+let catalogLoad: Promise<Catalog | null> | undefined;
+function loadCatalog() {
+  catalogLoad ??= fetch("/api/search/catalog")
+    .then((r) => (r.ok ? (r.json() as Promise<Catalog>) : null))
+    .catch(() => null)
+    .then((c) => {
+      if (!c) catalogLoad = undefined;
+      return c;
+    });
+  return catalogLoad;
+}
+
+/** Shop search with suggestions as you type (instant from the catalogue, else debounced server search; keyboard friendly). */
 export function SearchBox({ className, size = "md", autoFocus }: { className?: string; size?: "md" | "lg"; autoFocus?: boolean }) {
   const tr = useT();
   const router = useRouter();
   const listId = useId();
   const [q, setQ] = useState("");
-  const [hits, setHits] = useState<Hit[]>([]);
+  const [serverHits, setServerHits] = useState<Hit[]>([]);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [loading, setLoading] = useState(false);
   const box = useRef<HTMLFormElement>(null);
+  const prepare = () => void loadCatalog().then((c) => c && setCatalog(c));
+
+  const term = q.trim();
+  // Matches in the browser; when there are none the server also looks in descriptions.
+  const localHits = useMemo(() => (catalog?.complete && term.length >= 2 ? matchProducts(catalog.products, term) : []), [catalog, term]);
+  const local = localHits.length > 0;
+  const hits: Hit[] = local ? localHits : serverHits;
 
   useEffect(() => {
-    const term = q.trim();
-    if (term.length < 2) return;
+    if (term.length < 2 || local) return;
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       setLoading(true);
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`, { signal: ctrl.signal });
         const data = (await res.json()) as { results: Hit[] };
-        setHits(data.results);
+        setServerHits(data.results);
         setActive(-1);
       } catch {
         // Aborted by a newer keystroke, or offline: keep the last suggestions.
@@ -43,7 +66,7 @@ export function SearchBox({ className, size = "md", autoFocus }: { className?: s
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [q]);
+  }, [term, local]);
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +79,7 @@ export function SearchBox({ className, size = "md", autoFocus }: { className?: s
     setOpen(false);
     router.push(href);
   };
-  const showList = open && q.trim().length >= 2;
+  const showList = open && term.length >= 2;
   const lg = size === "lg";
 
   return (
@@ -85,9 +108,14 @@ export function SearchBox({ className, size = "md", autoFocus }: { className?: s
         onChange={(e) => {
           setQ(e.target.value);
           setOpen(true);
-          if (e.target.value.trim().length < 2) setHits([]);
+          setActive(-1);
+          if (e.target.value.trim().length < 2) setServerHits([]);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true);
+          prepare();
+        }}
+        onPointerEnter={prepare}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown") {
             e.preventDefault();
@@ -106,7 +134,7 @@ export function SearchBox({ className, size = "md", autoFocus }: { className?: s
           lg ? "h-13 pr-32 pl-12 text-base focus:ring-4 focus:ring-tomato/30" : "h-10 border border-leaf-950/15 pr-9 pl-10 text-sm focus:border-leaf-600 focus:ring-2 focus:ring-leaf-600/20",
         )}
       />
-      {loading && !lg && <Spinner className="absolute right-3.5 size-3.5 text-leaf-900/40" />}
+      {loading && !local && !lg && <Spinner className="absolute right-3.5 size-3.5 text-leaf-900/40" />}
       {lg && <button className="absolute right-1.5 h-10 rounded-full bg-tomato px-5 text-sm font-semibold text-white transition-colors hover:bg-tomato-dark active:scale-[0.97]">{tr("Search")}</button>}
 
       {showList && (

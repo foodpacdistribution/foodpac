@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, EyeOff } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useActionState, useState } from "react";
 import { resetPassword } from "@/app/actions/auth";
 import { FormError, SubmitButton } from "@/components/client-ui";

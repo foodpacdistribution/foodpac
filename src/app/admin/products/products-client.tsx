@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, Eye, EyeOff, FileUp, ImageIcon, PackagePlus, Pencil, Percent, Plus, Search, Star, Tag, Trash2 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useActionState, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { adjustStock, bulkProducts, deleteProduct, type ProductBulkOp, saveProduct } from "@/app/actions/products";
 import { FormError, Modal, SubmitButton, Toast, type ToastMessage } from "@/components/client-ui";

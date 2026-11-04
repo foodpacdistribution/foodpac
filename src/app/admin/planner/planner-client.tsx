@@ -19,7 +19,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useMemo, useState, useTransition } from "react";
 import { useHoldLiveRefresh } from "@/components/live-refresh";
 import { deleteDayPlan, dispatch, optimise, saveManualEdit } from "@/app/actions/planner";

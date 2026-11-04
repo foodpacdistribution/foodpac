@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, ArrowLeft, CheckCircle2, Download, FileSpreadsheet, Upload } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import Papa from "papaparse";
 import { useMemo, useState, useTransition } from "react";
 import { importProducts, type ProductImportResult } from "@/app/actions/products";

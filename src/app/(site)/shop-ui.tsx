@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/link";
 import { ViewTransition } from "react";
 import { cx } from "@/components/ui";
 import { aud } from "@/lib/money";

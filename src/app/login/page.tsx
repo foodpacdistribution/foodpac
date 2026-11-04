@@ -1,6 +1,6 @@
 import { ArrowLeft, Building2, ShieldCheck, Truck } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { Suspense } from "react";
 import { Logo } from "@/components/brand";
 import { LanguageSwitch } from "@/components/language-switch";

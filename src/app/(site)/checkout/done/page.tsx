@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { CheckCircle2, Clock, XCircle } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { redirect } from "next/navigation";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";

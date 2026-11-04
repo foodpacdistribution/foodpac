@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, ChevronDown, Clock, History, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { logout } from "@/app/actions/auth";
 import { markDelivered, markFailed, startRoute } from "@/app/actions/driver";

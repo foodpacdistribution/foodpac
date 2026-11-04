@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { ChevronRight, Clock, PackageSearch } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { requireUser } from "@/lib/auth/dal";
 import { linkOrdersToCustomer } from "@/lib/customers";
 import { prettyDate } from "@/lib/dates";

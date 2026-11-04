@@ -1,6 +1,6 @@
 import { and, count, eq, gte, ne, or } from "drizzle-orm";
 import { ExternalLink, LogOut } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { logout } from "@/app/actions/auth";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { Logo } from "@/components/brand";

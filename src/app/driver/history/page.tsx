@@ -1,6 +1,6 @@
 import { AlertTriangle, Camera, CheckCircle2, MapPin, PenLine } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { cx } from "@/components/ui";
 import { requireUser } from "@/lib/auth/dal";
 import { prettyDate, shiftDate } from "@/lib/dates";

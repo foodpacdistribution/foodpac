@@ -1,6 +1,6 @@
 import { ArrowRight, CalendarClock, MapPin, Pencil, Phone, Receipt, ShoppingBag, Truck, Zap } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { SITE } from "@/app/(site)/content";
 import { ProductCard } from "@/app/(site)/shop-ui";
 import { cx } from "@/components/ui";

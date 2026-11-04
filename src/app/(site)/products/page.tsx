@@ -1,6 +1,6 @@
 import { Check, PackageSearch } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { cx } from "@/components/ui";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";

@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { prettyDate } from "@/lib/dates";
 import { aud } from "@/lib/money";
 import { OrderPill, PaymentPill } from "../badges";

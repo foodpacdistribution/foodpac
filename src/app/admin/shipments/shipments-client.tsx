@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, MapPinOff, PackageCheck, Printer, Send, Trash2, Truck, Undo2, X } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useMemo, useState, useTransition } from "react";
 import { createShipment, deleteShipment, recallShipment, removeFromShipment, sendShipment } from "@/app/actions/shipments";
 import { Toast, type ToastMessage } from "@/components/client-ui";

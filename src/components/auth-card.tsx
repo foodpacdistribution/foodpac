@@ -1,5 +1,5 @@
 import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { Logo } from "./brand";
 import { T } from "./i18n";
 import { LanguageSwitch } from "./language-switch";

@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardPaste, FileSpreadsheet, Map as MapIcon, Upload } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import Papa from "papaparse";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { geocodeOrders, importOrders } from "@/app/actions/orders";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/link";
 import { useSearchParams } from "next/navigation";
 import { LoginForm } from "./login-form";
 import { useT } from "@/components/i18n";

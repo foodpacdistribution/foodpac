@@ -1,7 +1,7 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { notFound } from "next/navigation";
 import { SITE } from "@/app/(site)/content";
 import { Logo } from "@/components/brand";

@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { ShoppingCart, UserRound } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { LanguageSwitch } from "@/components/language-switch";
-import Link from "next/link";
+import Link from "@/components/link";
 import { ViewTransition } from "react";
 import { Logo } from "@/components/brand";
 import { getCurrentCustomer, getCurrentUser } from "@/lib/auth/dal";

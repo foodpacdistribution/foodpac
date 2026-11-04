@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { AuthCard } from "@/components/auth-card";
 import { T } from "@/components/i18n";
 import { ResetForm } from "./reset-form";

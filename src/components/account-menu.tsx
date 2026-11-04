@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, LogOut, RefreshCw } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useEffect, useRef, useState } from "react";
 import { logout } from "@/app/actions/auth";
 import { type AccountLink, initials, ROLE_LABEL } from "@/lib/account";

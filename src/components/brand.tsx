@@ -15,8 +15,10 @@ export function Logo({ className, badge, priority }: { className?: string; badge
     <Image
       src="/brand/foodpac-logo.png"
       alt="Foodpac Distribution"
-      width={712}
-      height={255}
+      // Intrinsic size near the largest it's shown (h-14), so the srcset serves ~256 px / 384 px
+      // wide files instead of 750 / 1920. It's preloaded on every shop page.
+      width={179}
+      height={64}
       priority={priority}
       className={cx("w-auto shrink-0 select-none", badge ? "h-full" : className)}
     />

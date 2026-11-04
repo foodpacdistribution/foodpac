@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart3, Boxes, Building2, Inbox, LayoutDashboard, Map, Package, PackageCheck, Radio, Settings, ShoppingBag, TrendingUp, Truck, Zap } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { usePathname } from "next/navigation";
 import { LinkPending } from "@/components/client-ui";
 import { cx } from "@/components/ui";

@@ -1,6 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { redirect } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
 import { accountLinks, initials } from "@/lib/account";

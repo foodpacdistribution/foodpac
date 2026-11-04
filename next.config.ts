@@ -18,7 +18,10 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "8mb" },
     // Revisiting a page within 30 s (tabs, back/forward) shows it instantly. Saves and live
     // updates call revalidatePath / router.refresh, which clear this cache, so data stays current.
-    staleTimes: { dynamic: 30, static: 300 },
+    // `static` also bounds pages loaded ahead on hover (below): at most a minute old when opened.
+    staleTimes: { dynamic: 30, static: 60 },
+    // Pointing at or touching a link loads the whole page ahead (see components/link.tsx).
+    dynamicOnHover: true,
   },
   turbopack: {
     rules: {

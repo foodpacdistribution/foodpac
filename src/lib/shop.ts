@@ -119,6 +119,29 @@ export async function getProductBySku(db: DB, customer: Customer | null, sku: st
   return row ? (await withPrices(db, [row], customer))[0] : null;
 }
 
+/** Most products the search box matches in the browser; above this it asks the server per search. */
+export const SEARCH_INDEX_LIMIT = 3000;
+
+/** Every active product's searchable fields (no prices), for instant suggestions in the browser. */
+export async function searchIndex(db: DB) {
+  const rows = await db
+    .select({
+      id: products.id,
+      sku: products.sku,
+      name: products.name,
+      category: products.category,
+      packSize: products.packSize,
+      barcode: products.barcode,
+      hasImage: sql<boolean>`${products.image} is not null`,
+      updatedAt: products.updatedAt,
+    })
+    .from(products)
+    .where(eq(products.active, true))
+    .orderBy(asc(products.category), asc(products.name))
+    .limit(SEARCH_INDEX_LIMIT + 1);
+  return { products: rows.slice(0, SEARCH_INDEX_LIMIT), complete: rows.length <= SEARCH_INDEX_LIMIT };
+}
+
 export async function listCategories(db: DB) {
   return db
     .select({ name: products.category, n: sql<number>`count(*)::int` })

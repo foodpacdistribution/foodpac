@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gt, ne, or, sql } from "drizzle-orm";
 import { CheckCircle2, Circle, Clock, Map as MapIcon, Package, PackageCheck, PackageX, Radio, ShoppingBag, Truck, Upload } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { Badge, btn, Card, CardHeader, ColorDot, cx, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { requireUser, STAFF } from "@/lib/auth/dal";

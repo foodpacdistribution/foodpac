@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { ArrowLeft, FileText, MapPin, Truck } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";

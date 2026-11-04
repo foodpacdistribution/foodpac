@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, FileImage, MapPinCheck, Package, Pencil, Pin, Plus, Search, Send, ShieldAlert, ShieldCheck, Sparkles, Trash2, Upload, Zap } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { addDemoOrders, deleteOrders, geocodeOrders, rescheduleOrders, saveOrder } from "@/app/actions/orders";

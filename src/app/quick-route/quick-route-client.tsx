@@ -17,7 +17,7 @@ import {
   Warehouse,
   Zap,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { describeLocation, locateAddress, planQuickRoute, recordQuickStop, type QuickEnd, type QuickRouteRequest, type QuickRouteResult } from "@/app/actions/quick-route";
 import { OutcomeForm } from "@/app/driver/outcome-form";

@@ -1,6 +1,6 @@
 import { and, desc, eq, ne } from "drizzle-orm";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";

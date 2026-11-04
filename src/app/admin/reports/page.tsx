@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, lt, lte, ne, sql } from "drizzle-orm";
 import { AlertTriangle, BadgeDollarSign, Clock, Receipt, ShoppingBag, TrendingUp } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { btn, Card, CardHeader, cx, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { T, Tx } from "@/components/i18n";
 import { requireUser, STAFF } from "@/lib/auth/dal";

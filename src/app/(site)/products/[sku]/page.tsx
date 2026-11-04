@@ -1,6 +1,6 @@
 import { ArrowLeft, Barcode, Box, Layers, Truck } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/json-ld";
 import { getCurrentCustomer } from "@/lib/auth/dal";

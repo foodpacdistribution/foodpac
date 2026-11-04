@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { Clock, ShoppingCart, Store } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { ViewTransition } from "react";
 import { AccountMenu } from "@/components/account-menu";
 import { LiveRefresh } from "@/components/live-refresh";

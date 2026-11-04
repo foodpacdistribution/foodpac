@@ -1,7 +1,7 @@
 "use client";
 
 import { Building2, KeyRound, Mail, MapPin, Package, Pencil, Phone, Plus, Search, Tags } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useActionState, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { deleteCustomer, removeCustomerLogin, saveCustomer } from "@/app/actions/customers";
 import { FormError, Modal, SubmitButton } from "@/components/client-ui";

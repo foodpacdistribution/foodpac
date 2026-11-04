@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { ArrowLeft, ClipboardList, FileText, Truck } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/link";
 import { notFound } from "next/navigation";
 import { Badge, btn, Card, CardHeader } from "@/components/ui";
 import { requireUser, STAFF } from "@/lib/auth/dal";

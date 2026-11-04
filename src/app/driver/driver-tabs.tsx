@@ -1,7 +1,7 @@
 "use client";
 
 import { History, Route, UserRound, Zap } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { usePathname } from "next/navigation";
 import { useT } from "@/components/i18n";
 import { cx } from "@/components/ui";
