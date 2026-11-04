@@ -3,8 +3,10 @@ import Image from "next/image";
 import Link from "@/components/link";
 import { cx } from "@/components/ui";
 import { T } from "@/components/i18n";
+import { posterImageUrl } from "@/lib/poster-image";
+import type { PosterRow } from "@/lib/posters";
 import { CATEGORIES, categoryHref, categoryInfo, type Poster } from "./content";
-import { ProductImage } from "./shop-ui";
+import { ProductCount, ProductImage } from "./shop-ui";
 
 type Photo = { id: string; sku: string; name: string; category: string; updatedAt: Date; hasImage: boolean };
 
@@ -69,7 +71,7 @@ export function PosterSlide({
         {!poster.image && <Watermark className="absolute -right-10 -bottom-16 size-72 text-white/[0.04] lg:hidden" strokeWidth={1} />}
       </div>
 
-      <div className="relative mx-auto grid min-h-[400px] max-w-6xl items-center gap-10 px-4 pt-12 pb-20 sm:px-6 lg:min-h-[460px] lg:grid-cols-[1.15fr_1fr] lg:pt-14 lg:pb-24">
+      <div className="relative mx-auto grid h-full min-h-[400px] max-w-6xl items-center gap-10 px-4 pt-12 pb-20 sm:px-6 lg:min-h-[460px] lg:grid-cols-[1.15fr_1fr] lg:pt-14 lg:pb-24">
         <div className="hero-copy">
           <p className={cx("text-xs font-semibold tracking-[0.18em] uppercase", tone.accent)}>
             <T>{poster.eyebrow}</T>
@@ -130,7 +132,7 @@ function CategoryTiles({ counts }: { counts: { name: string; n: number }[] }) {
             <T>{title}</T>
           </p>
           <p className="text-xs text-cream/55">
-            <T vars={{ n: counts.find((c) => c.name === title)?.n ?? 0 }}>{"{n} products"}</T>
+            <ProductCount n={counts.find((c) => c.name === title)?.n ?? 0} />
           </p>
         </Link>
       ))}
@@ -283,5 +285,104 @@ function RangeGrid() {
         </Link>
       ))}
     </div>
+  );
+}
+
+const FOCUS = { left: "object-left", center: "object-center", right: "object-right" } as const;
+
+/**
+ * A poster uploaded in the back office. With a headline, its words sit over the picture (with a
+ * dark fade for legibility); without one, the picture is the poster and the whole of it is the link.
+ * A picture-only poster is shown whole over a blurred copy of itself, so words designed into it are
+ * never cut off; on phones its upright phone picture is used instead when there is one.
+ */
+export function UploadedPosterSlide({ poster: p, first }: { poster: PosterRow; first: boolean }) {
+  const Heading = first ? "h1" : "h2";
+  const external = /^https?:\/\//.test(p.href);
+  const wordsOver = !!p.headline;
+  const desktop = posterImageUrl(p);
+  const alt = wordsOver ? "" : p.name;
+  // A designed poster (words in the picture) is never cropped: it's shown whole, any gap filled by a blurred copy.
+  const whole = !wordsOver;
+
+  const pictures = (
+    <div className="hero-bg absolute inset-0">
+      {whole && (
+        <Image src={desktop} alt="" aria-hidden fill sizes="50vw" className={cx("scale-110 object-cover opacity-60 blur-2xl", p.hasMobileImage && "max-md:hidden")} />
+      )}
+      <Image
+        src={desktop}
+        alt={alt}
+        fill
+        priority={first}
+        sizes="100vw"
+        className={cx(whole ? "object-contain" : "object-cover", FOCUS[p.focus], p.hasMobileImage && "max-md:hidden")}
+      />
+      {p.hasMobileImage && <Image src={posterImageUrl(p, "mobile")} alt={alt} fill priority={first} sizes="100vw" className="object-cover md:hidden" />}
+    </div>
+  );
+  const box = cx(
+    "relative block h-full w-full overflow-hidden bg-leaf-950 lg:aspect-[3/1] lg:min-h-[460px]",
+    p.hasMobileImage ? "aspect-[4/5] md:aspect-auto md:min-h-[400px]" : "min-h-[300px] md:min-h-[400px]",
+  );
+
+  if (!wordsOver) {
+    const inner = (
+      <>
+        {pictures}
+        {first && <h1 className="sr-only">{p.name}</h1>}
+      </>
+    );
+    if (!p.href) return <div className={box}>{inner}</div>;
+    return external ? (
+      <a href={p.href} rel="noopener" className={box}>
+        {inner}
+      </a>
+    ) : (
+      <Link href={p.href} className={box}>
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <div className={box}>
+      {pictures}
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/0 md:bg-gradient-to-r md:from-black/80 md:via-black/40" />
+      <div className="relative mx-auto flex h-full max-w-6xl items-end px-4 pt-12 pb-20 sm:px-6 md:items-center lg:pt-14 lg:pb-24">
+        <div className="hero-copy max-w-xl">
+          {p.eyebrow && <p className="text-xs font-semibold tracking-[0.18em] text-tomato uppercase">{p.eyebrow}</p>}
+          <Heading className="mt-3 font-display text-3xl leading-[1.05] font-semibold tracking-tight text-balance text-white sm:text-5xl">{p.headline}</Heading>
+          {p.text && <p className="mt-4 max-w-lg text-cream/80">{p.text}</p>}
+          {p.href && (
+            <div className="mt-7">
+              <PosterButton href={p.href} external={external}>
+                {p.buttonLabel || <T>{"Shop now"}</T>}
+              </PosterButton>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PosterButton({ href, external, children }: { href: string; external: boolean; children: React.ReactNode }) {
+  const cls =
+    "group/cta inline-flex h-12 items-center gap-2 rounded-full bg-tomato px-6 text-sm font-semibold text-white shadow-lg shadow-black/20 transition-[background-color,scale] hover:bg-tomato-dark active:scale-[0.97]";
+  const inner = (
+    <>
+      {children}
+      <ArrowRight className="size-4 transition-transform group-hover/cta:translate-x-0.5" />
+    </>
+  );
+  return external ? (
+    <a href={href} rel="noopener" className={cls}>
+      {inner}
+    </a>
+  ) : (
+    <Link href={href} className={cls}>
+      {inner}
+    </Link>
   );
 }

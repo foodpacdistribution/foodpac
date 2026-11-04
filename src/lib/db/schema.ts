@@ -49,6 +49,8 @@ export const settings = pgTable("settings", {
   deliveryDays: jsonb("delivery_days").$type<number[]>().notNull().default([1, 2, 3, 4, 5]),
   /** Shown to customers who choose bank transfer. */
   bankDetails: text("bank_details").notNull().default(""),
+  /** Home page: also show the posters written into the website (content.ts) after the uploaded ones. */
+  builtInPosters: boolean("built_in_posters").notNull().default(true),
 });
 
 export const depots = pgTable("depots", {
@@ -465,6 +467,38 @@ export const products = pgTable(
   },
   (t) => [index("products_category_idx").on(t.category)],
 );
+
+/**
+ * Home page posters uploaded in the back office, shown in `sortOrder` before the built-in ones.
+ * With a headline the words are laid over the picture; without one the picture is the whole
+ * poster (words designed into it) and the poster itself is the link.
+ */
+export const posters = pgTable("posters", {
+  id: id(),
+  /** Its name in the back office, on the tab under the carousel, and the picture's alt text. */
+  name: text("name").notNull(),
+  eyebrow: text("eyebrow").notNull().default(""),
+  headline: text("headline").notNull().default(""),
+  text: text("text").notNull().default(""),
+  buttonLabel: text("button_label").notNull().default(""),
+  /** A page on the site ("/categories/cups-and-lids") or a full https:// address. */
+  href: text("href").notNull().default(""),
+  /** Which part of the picture stays in view when a screen crops it: left, center or right. */
+  focus: text("focus").$type<"left" | "center" | "right">().notNull().default("center"),
+  image: bytea("image").notNull(),
+  imageMime: text("image_mime").notNull(),
+  /** Optional upright version for phones. */
+  mobileImage: bytea("mobile_image"),
+  mobileImageMime: text("mobile_image_mime"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  /** Optional first and last day it shows (in the business's time zone), for promotions. */
+  startsOn: date("starts_on", { mode: "string" }),
+  endsOn: date("ends_on", { mode: "string" }),
+  createdAt: createdAt(),
+  /** Bumped on every edit; part of the picture URLs so they can be cached for good. */
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** Customer-specific price for one product, in cents ex GST. */
 export const customerPrices = pgTable(

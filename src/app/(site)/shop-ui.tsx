@@ -118,3 +118,9 @@ export function ProductCard({ p, signedIn, morph, index }: { p: CatalogItem; sig
     </div>
   );
 }
+
+/** "1 product", "12 products", or "Coming soon" for a range with nothing in it yet. */
+export function ProductCount({ n }: { n: number }) {
+  if (n <= 0) return <T>{"Coming soon"}</T>;
+  return <T vars={{ n }}>{n === 1 ? "{n} product" : "{n} products"}</T>;
+}

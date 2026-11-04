@@ -4,10 +4,11 @@ const nextConfig: NextConfig = {
   // Embedded Postgres (WASM) for local dev must not be bundled.
   serverExternalPackages: ["@electric-sql/pglite"],
   images: {
-    // Only our own logo files and product photos are optimised (no query strings).
+    // Only our own logo files, product photos and home page posters are optimised (no query strings).
     localPatterns: [
       { pathname: "/brand/**", search: "" },
       { pathname: "/api/products/**", search: "" },
+      { pathname: "/api/posters/**", search: "" },
     ],
     formats: ["image/avif", "image/webp"],
     // Product photo URLs change whenever the photo does, so optimised copies can be kept long.

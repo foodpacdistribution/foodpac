@@ -4,15 +4,16 @@ import Link from "@/components/link";
 import { JsonLd } from "@/components/json-ld";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { getDepots } from "@/lib/planning";
+import { getDepots, getSettings } from "@/lib/planning";
+import { livePosters } from "@/lib/posters";
 import { listCatalog, listCategories, posterPhotos, recentlyBought } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
 import { ViewTransition } from "react";
 import { CATEGORIES, categoryHref, categorySlug, POSTERS, SITE } from "./content";
 import { HeroCarousel } from "./hero-carousel";
-import { PosterSlide } from "./posters";
+import { PosterSlide, UploadedPosterSlide } from "./posters";
 import { Contact, Delivery, HowItWorks, Promises } from "./sections";
-import { ProductCard } from "./shop-ui";
+import { ProductCard, ProductCount } from "./shop-ui";
 import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
@@ -21,14 +22,19 @@ export default async function HomePage() {
   const viewer = await getCurrentCustomer();
   const customer = viewer?.customer ?? null;
   const db = await getDb();
-  const [featured, counts, recent, [depot], photos] = await Promise.all([
+  const [featured, counts, recent, [depot], photos, settings, uploaded] = await Promise.all([
     listCatalog(db, customer, { featured: true, limit: 8 }),
     listCategories(db),
     customer ? recentlyBought(db, customer, 4) : Promise.resolve([]),
     getDepots(db),
     // Product photos for the posters that show some.
     Promise.all(POSTERS.map((p) => (p.art === "products" && !p.image ? posterPhotos(db, p.categories ?? []) : Promise.resolve([])))),
+    getSettings(db),
+    livePosters(db),
   ]);
+  // Posters uploaded in the back office come first; the built-in ones follow unless switched off
+  // there (and always show when nothing uploaded is live, so the top of the page is never empty).
+  const builtIn = uploaded.length === 0 || settings.builtInPosters;
   const popular = featured.length ? featured : await listCatalog(db, customer, { limit: 8 });
   const total = counts.reduce((t, c) => t + c.n, 0);
 
@@ -76,18 +82,25 @@ export default async function HomePage() {
     <main>
       <JsonLd data={jsonLd} />
       <HeroCarousel
-        slides={POSTERS.map((poster, i) => ({
-          id: poster.id,
-          tab: poster.tab,
-          content: <PosterSlide poster={poster} first={i === 0} signedIn={!!viewer} counts={counts} photos={photos[i]} />,
-        }))}
+        slides={[
+          ...uploaded.map((poster, i) => ({
+            id: poster.id,
+            tab: poster.name,
+            content: <UploadedPosterSlide poster={poster} first={i === 0} />,
+          })),
+          ...(builtIn ? POSTERS : []).map((poster, i) => ({
+            id: poster.id,
+            tab: poster.tab,
+            content: <PosterSlide poster={poster} first={uploaded.length === 0 && i === 0} signedIn={!!viewer} counts={counts} photos={photos[i]} />,
+          })),
+        ]}
       />
 
       {/* What every customer gets, right under the posters. */}
       <section className="border-b border-leaf-950/10 bg-white">
         <ul className="mx-auto grid max-w-6xl grid-cols-2 gap-x-4 gap-y-5 px-4 py-6 sm:px-6 lg:grid-cols-4">
           {[
-            { icon: PackageCheck, title: <T vars={{ n: total }}>{"{n} products"}</T>, text: <T vars={{ n: CATEGORIES.length }}>{"Across {n} ranges"}</T> },
+            { icon: PackageCheck, title: total > 0 ? <ProductCount n={total} /> : <T>{"Order online"}</T>, text: <T vars={{ n: CATEGORIES.length }}>{"Across {n} ranges"}</T> },
             { icon: Truck, title: <T>{"Weekday delivery runs"}</T>, text: <T>{SITE.serviceArea}</T> },
             { icon: Camera, title: <T>{"Proof on every drop"}</T>, text: <T>{"Photo and signature at the door"}</T> },
             { icon: ReceiptText, title: <T>{"Your trade prices"}</T>, text: <T>{"One account, one invoice"}</T> },
@@ -139,7 +152,7 @@ export default async function HomePage() {
               </ViewTransition>
               <span className="relative mt-4 text-sm leading-tight font-semibold"><T>{title}</T></span>
               <span className="relative mt-1 text-xs text-leaf-900/50">
-                <T vars={{ n: counts.find((c) => c.name === title)?.n ?? 0 }}>{"{n} products"}</T>
+                <ProductCount n={counts.find((c) => c.name === title)?.n ?? 0} />
               </span>
               <span className="relative mt-2 hidden text-xs leading-relaxed text-leaf-900/60 sm:line-clamp-3"><T>{text}</T></span>
             </Link>

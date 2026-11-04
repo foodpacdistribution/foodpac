@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Boxes, Building2, Inbox, LayoutDashboard, Map, Package, PackageCheck, Radio, Settings, ShoppingBag, TrendingUp, Truck, Zap } from "lucide-react";
+import { BarChart3, Boxes, Building2, GalleryHorizontal, Inbox, LayoutDashboard, Map, Package, PackageCheck, Radio, Settings, ShoppingBag, TrendingUp, Truck, Zap } from "lucide-react";
 import Link from "@/components/link";
 import { usePathname } from "next/navigation";
 import { LinkPending } from "@/components/client-ui";
@@ -41,7 +41,13 @@ const SECTIONS = [
       { href: "/admin/history", label: "Delivery History", icon: BarChart3 },
     ],
   },
-  { title: "Website", items: [{ href: "/admin/enquiries", label: "Enquiries", icon: Inbox }] },
+  {
+    title: "Website",
+    items: [
+      { href: "/admin/posters", label: "Home Page Posters", icon: GalleryHorizontal },
+      { href: "/admin/enquiries", label: "Enquiries", icon: Inbox },
+    ],
+  },
   { title: "System", items: [{ href: "/admin/settings", label: "Settings", icon: Settings, adminOnly: true }] },
 ];
 
