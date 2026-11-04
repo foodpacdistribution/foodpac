@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { after } from "next/server";
 import type { DB } from "./db";
 import {
@@ -140,6 +140,25 @@ export async function searchIndex(db: DB) {
     .orderBy(asc(products.category), asc(products.name))
     .limit(SEARCH_INDEX_LIMIT + 1);
   return { products: rows.slice(0, SEARCH_INDEX_LIMIT), complete: rows.length <= SEARCH_INDEX_LIMIT };
+}
+
+/** Up to `limit` product photos for a home page poster, taken in turn from each category (no prices). */
+export async function posterPhotos(db: DB, categories: string[], limit = 3) {
+  if (!categories.length) return [];
+  const rows = await db
+    .select({ id: products.id, sku: products.sku, name: products.name, category: products.category, updatedAt: products.updatedAt })
+    .from(products)
+    .where(and(eq(products.active, true), isNotNull(products.image), inArray(products.category, categories)))
+    .orderBy(desc(products.featured), desc(products.updatedAt))
+    .limit(limit * categories.length * 2);
+  const picked: (typeof rows)[number][] = [];
+  for (let round = 0; picked.length < limit && round < limit; round++) {
+    for (const c of categories) {
+      const next = rows.filter((r) => r.category === c)[round];
+      if (next && picked.length < limit) picked.push(next);
+    }
+  }
+  return picked.map((r) => ({ ...r, hasImage: true }));
 }
 
 export async function listCategories(db: DB) {

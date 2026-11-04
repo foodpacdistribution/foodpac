@@ -5,7 +5,9 @@ import { cx } from "@/components/ui";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { canSeePrices, listCatalog, listCategories, type Sort, SORTS } from "@/lib/shop";
-import { categoryHref, SITE } from "../content";
+import { ViewTransition } from "react";
+import { categoryHref, categoryInfo, categorySlug, SITE } from "../content";
+import { CategorySidebar } from "../category-nav";
 import { ProductCard } from "../shop-ui";
 import { T } from "@/components/i18n";
 
@@ -45,16 +47,22 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[220px_1fr]">
       <aside className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-leaf-900/50"><T>{"Categories"}</T></p>
-        <nav className="mt-3 flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
-          <CatLink href="/products" active={!category} label={<T>{"All products"}</T>} n={total} />
-          {categories.map((c) => (
-            <CatLink key={c.name} href={categoryHref(c.name)} active={category === c.name} label={c.name} n={c.n} />
-          ))}
+        <nav aria-label="Categories">
+          <CategorySidebar
+            items={[
+              { href: "/products", label: "All products", n: total },
+              ...categories.map((c) => ({ href: categoryHref(c.name), label: c.name, n: c.n, icon: true })),
+            ]}
+          />
         </nav>
       </aside>
       <section className="min-w-0">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">{q ? `Results for “${q}”` : (category ?? <T>{"All products"}</T>)}</h1>
-        <p className="mt-1 text-sm text-leaf-900/60">
+        {category && !q ? (
+          <CategoryBanner name={category} />
+        ) : (
+          <h1 className="font-display text-2xl font-semibold tracking-tight">{q ? `Results for “${q}”` : <T>{"All products"}</T>}</h1>
+        )}
+        <p className={cx("text-sm text-leaf-900/60", category && !q ? "mt-4" : "mt-1")}>
           <T vars={{ n: items.length }}>{items.length === 1 ? "{n} product" : "{n} products"}</T>
           {q && category && ` in ${category}`}
           {!viewer && (
@@ -114,8 +122,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           </div>
         ) : (
           <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
-            {items.map((p) => (
-              <ProductCard key={p.id} p={p} signedIn={!!viewer} morph />
+            {items.map((p, i) => (
+              <ProductCard key={p.id} p={p} signedIn={!!viewer} morph index={i} />
             ))}
           </div>
         )}
@@ -124,17 +132,25 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-function CatLink({ href, active, label, n }: { href: string; active: boolean; label: React.ReactNode; n: number }) {
+/** The chosen category's heading: its icon (which glides in from the home page tile) and blurb. */
+function CategoryBanner({ name }: { name: string }) {
+  const { icon: Icon, text } = categoryInfo(name);
   return (
-    <Link
-      href={href}
-      className={cx(
-        "flex shrink-0 items-center justify-between gap-3 rounded-full px-3.5 py-2 text-sm lg:rounded-xl",
-        active ? "bg-leaf-700 font-semibold text-white" : "text-leaf-900/75 hover:bg-leaf-950/5",
-      )}
-    >
-      {typeof label === "string" ? <T>{label}</T> : label}
-      <span className={cx("text-xs tabular-nums", active ? "text-white/70" : "text-leaf-900/40")}>{n}</span>
-    </Link>
+    <div className="relative overflow-hidden rounded-3xl bg-leaf-900 px-5 py-6 text-cream sm:px-7 sm:py-7">
+      <div aria-hidden className="absolute inset-0 bg-[radial-gradient(50%_90%_at_95%_10%,rgb(37_138_86/0.5),transparent_70%),radial-gradient(35%_80%_at_0%_100%,rgb(224_98_12/0.18),transparent_70%)]" />
+      <Icon aria-hidden className="absolute -right-6 -bottom-10 size-44 text-white/[0.05]" strokeWidth={1} />
+      <div className="relative flex items-center gap-4 sm:gap-5">
+        <ViewTransition name={`category-${categorySlug(name)}`} share="morph" default="none">
+          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-white/10 text-tomato ring-1 ring-white/15">
+            <Icon className="size-6" />
+          </span>
+        </ViewTransition>
+        <div className="min-w-0 animate-rise">
+          <p className="text-[11px] font-semibold tracking-[0.18em] text-tomato uppercase"><T>{"Category"}</T></p>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-white sm:text-3xl"><T>{name}</T></h1>
+          {text && <p className="mt-1 max-w-xl text-sm text-cream/70"><T>{text}</T></p>}
+        </div>
+      </div>
+    </div>
   );
 }

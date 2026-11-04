@@ -10,7 +10,8 @@ const AppLink = NextLink as unknown as ComponentType<Props & { unstable_dynamicO
  * link or a finger touches it (needs experimental.dynamicOnHover). Every page is rendered next to
  * the database in Dublin, a long round trip from Australia, so the head start hides most of it.
  * Links in view still prefetch just the loading skeleton, so nothing extra runs until there's intent.
+ * Clicks are tagged "nav" so the shop's page transition can tell them from other updates.
  */
 export default function Link(props: Props) {
-  return <AppLink unstable_dynamicOnHover {...props} />;
+  return <AppLink unstable_dynamicOnHover transitionTypes={["nav"]} {...props} />;
 }

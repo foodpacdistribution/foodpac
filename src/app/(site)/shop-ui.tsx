@@ -82,9 +82,17 @@ export function Price({ p, signedIn }: { p: Pick<CatalogItem, "priceCents" | "li
   );
 }
 
-export function ProductCard({ p, signedIn, morph }: { p: CatalogItem; signedIn: boolean; morph?: boolean }) {
+/** `index` (its place in a grid): the first dozen arrive one after another; the rest rise in as they scroll into view. */
+export function ProductCard({ p, signedIn, morph, index }: { p: CatalogItem; signedIn: boolean; morph?: boolean; index?: number }) {
+  const stagger = index !== undefined && index < 12;
   return (
-    <div className="reveal group flex flex-col overflow-hidden rounded-2xl border border-leaf-950/10 bg-white transition-[border-color,box-shadow,translate] duration-300 ease-out hover:-translate-y-0.5 hover:border-leaf-700/30 hover:shadow-[0_12px_28px_-12px_rgb(17_58_39/0.25)]">
+    <div
+      style={stagger ? ({ "--i": index } as React.CSSProperties) : undefined}
+      className={cx(
+        stagger ? "stagger" : "reveal",
+        "group flex flex-col overflow-hidden rounded-2xl border border-leaf-950/10 bg-white transition-[border-color,box-shadow,translate,scale] duration-300 ease-out hover:-translate-y-1 hover:border-leaf-700/30 hover:shadow-[0_16px_32px_-14px_rgb(17_58_39/0.35)] has-[a:active]:scale-[0.985]",
+      )}
+    >
       <Link href={`/products/${encodeURIComponent(p.sku)}`} className="block overflow-hidden">
         <ProductImage p={p} morph={morph} className="aspect-[4/3] transition-transform duration-500 ease-out group-hover:scale-[1.04]" />
       </Link>

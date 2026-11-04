@@ -3,7 +3,7 @@ import { ShoppingCart, UserRound } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { LanguageSwitch } from "@/components/language-switch";
 import Link from "@/components/link";
-import { ViewTransition } from "react";
+import { Suspense, ViewTransition } from "react";
 import { Logo } from "@/components/brand";
 import { getCurrentCustomer, getCurrentUser } from "@/lib/auth/dal";
 import { accountLinks } from "@/lib/account";
@@ -11,6 +11,8 @@ import { getDb } from "@/lib/db";
 import { cartItems } from "@/lib/db/schema";
 import { CATEGORIES, categoryHref, SITE } from "./content";
 import { CartBadge } from "./cart-badge";
+import { CategoryNav } from "./category-nav";
+import { NavProgress } from "./nav-progress";
 import { SearchBox } from "./search-box";
 import { T } from "@/components/i18n";
 
@@ -57,27 +59,25 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         <div className="mx-auto max-w-6xl px-4 pb-3 md:hidden">
           <SearchBox className="flex" />
         </div>
-        <nav className="border-t border-leaf-950/5">
-          <div className="mx-auto flex max-w-6xl gap-5 overflow-x-auto px-4 py-2.5 text-sm whitespace-nowrap text-leaf-900/75 sm:px-6">
-            <Link href="/products" className="font-semibold text-leaf-950 hover:text-leaf-700">
-              <T>{"All products"}</T></Link>
-            {CATEGORIES.map((c) => (
-              <Link key={c.title} href={categoryHref(c.title)} className="hover:text-leaf-700">
-                <T>{c.title}</T>
-              </Link>
-            ))}
-            {viewer && (
-              <Link href="/portal/quick-order" className="hover:text-leaf-700">
-                <T>{"Quick order"}</T></Link>
-            )}
-            <Link href="/#contact" className="hover:text-leaf-700">
-              <T>{"Contact"}</T></Link>
-          </div>
+        <nav className="border-t border-leaf-950/5" aria-label="Categories">
+          <CategoryNav
+            items={[
+              { href: "/products", label: "All products" },
+              ...CATEGORIES.map((c) => ({ href: categoryHref(c.title), label: c.title })),
+              ...(viewer ? [{ href: "/portal/quick-order", label: "Quick order" }] : []),
+              { href: "/#contact", label: "Contact" },
+            ]}
+          />
         </nav>
       </header>
 
-      {/* Crossfades page content on navigation; the header and footer stay put. */}
-      <ViewTransition>
+      <Suspense>
+        <NavProgress />
+      </Suspense>
+
+      {/* On a link click the new page rises in as the old one fades (other updates just crossfade);
+          the header and footer stay put. Links carry the "nav" type (components/link.tsx). */}
+      <ViewTransition update={{ nav: "page-nav", default: "auto" }}>
         <div className="flex-1">{children}</div>
       </ViewTransition>
 

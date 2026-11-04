@@ -183,6 +183,102 @@ dialog::backdrop {
   }
 }
 
+/* Shop page change after a link click: the old page fades quickly, the new one rises in. */
+::view-transition-group(.page-nav) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+::view-transition-old(.page-nav) {
+  animation: 120ms ease-in both vt-fade-out;
+}
+::view-transition-new(.page-nav) {
+  animation: 300ms cubic-bezier(0.2, 0.8, 0.2, 1) 60ms both vt-rise-in;
+}
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* Home page posters: the active one's words rise in one after another, its art slides in from
+   the side it came from, and the background drifts in slowly. */
+.hero-slide[data-active] .hero-copy > * {
+  animation: rise 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.hero-slide[data-active] .hero-copy > :nth-child(2) {
+  animation-delay: 70ms;
+}
+.hero-slide[data-active] .hero-copy > :nth-child(3) {
+  animation-delay: 140ms;
+}
+.hero-slide[data-active] .hero-copy > :nth-child(4) {
+  animation-delay: 210ms;
+}
+.hero-slide[data-active] .hero-art {
+  animation: hero-art-in 800ms cubic-bezier(0.2, 0.8, 0.2, 1) 80ms both;
+}
+.hero-carousel[data-dir="prev"] .hero-slide[data-active] .hero-art {
+  --from: -40px;
+}
+.hero-bg {
+  transition: scale 1s ease-out;
+}
+.hero-slide[data-active] .hero-bg {
+  scale: 1.05;
+  transition: scale 9s linear;
+}
+.hero-progress {
+  animation-name: fill-x;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+.route-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.hero-slide[data-active] .route-draw {
+  animation: draw 2.4s cubic-bezier(0.4, 0, 0.2, 1) 400ms forwards;
+}
+.float {
+  animation: float 6s ease-in-out infinite;
+}
+@keyframes hero-art-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--from, 40px)) scale(0.97);
+  }
+}
+@keyframes fill-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes float {
+  50% {
+    translate: 0 -6px;
+  }
+}
+
+/* Product grids: on a category or search change, the first cards arrive one after another. */
+.stagger {
+  animation: reveal 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
 /* Respect the OS "reduce motion" setting: no movement, things just appear. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -199,8 +295,16 @@ dialog::backdrop {
     animation: none !important;
   }
   .reveal,
-  .site-header {
+  .site-header,
+  .stagger,
+  .float {
     animation: none !important;
+  }
+  .hero-slide .hero-bg {
+    scale: none !important;
+  }
+  .route-draw {
+    stroke-dashoffset: 0;
   }
   /* The toast's keyframes end hidden; show it statically and let its timer remove it. */
   .animate-toast {
