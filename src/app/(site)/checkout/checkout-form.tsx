@@ -167,7 +167,7 @@ export function CheckoutForm(props: {
         <div className="mt-4">
           <FormError message={state && !state.ok ? state.error : null} />
         </div>
-        <SubmitButton size="lg" disabled={overCredit} pendingText={tr("Placing order…")} className="mt-3 w-full rounded-full bg-tomato hover:bg-tomato-dark">
+        <SubmitButton size="lg" disabled={overCredit} pendingText={tr("Placing order…")} className="mt-3 w-full rounded-md bg-tomato hover:bg-tomato-dark">
           {method === "card" ? tr("Continue to payment") : tr("Place order")}
         </SubmitButton>
         <p className="mt-2 text-center text-[11px] text-leaf-900/50">{tr("Prices, stock and totals are checked again when you place the order.")}</p>
@@ -176,7 +176,7 @@ export function CheckoutForm(props: {
   );
 }
 
-const chip = (on: boolean) => cx("rounded-full border px-3.5 py-1.5 text-sm", on ? "border-leaf-700 bg-leaf-50 font-semibold" : "border-leaf-950/15 bg-white");
+const chip = (on: boolean) => cx("rounded-md border px-3.5 py-1.5 text-sm", on ? "border-leaf-700 bg-leaf-50 font-semibold" : "border-leaf-950/15 bg-white");
 
 function Step({ n, title, icon: Icon, children }: { n: number; title: string; icon: typeof Building2; children: React.ReactNode }) {
   return (

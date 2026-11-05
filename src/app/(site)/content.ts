@@ -25,13 +25,6 @@ export const STEPS = [
   { title: "Delivered with proof", text: "Our driver delivers to your door, and every drop is recorded with a photo and signature." },
 ];
 
-export const PROMISES = [
-  { title: "Delivery windows that fit", text: "Tell us when you can receive stock, before service or after the lunch rush, and we plan around it." },
-  { title: "Optimised daily runs", text: "Routes are planned on real road times each morning, so our drivers arrive when we say they will." },
-  { title: "Proof on every drop", text: "Photo and signature at the door, so there's never a question about where an order went." },
-  { title: "One account, one invoice", text: "Packaging, consumables and dry goods from one supplier, on one delivery." },
-];
-
 type PosterLink = { label: string; href: string };
 
 /**
@@ -63,8 +56,8 @@ export const POSTERS: Poster[] = [
     tab: "Order online",
     tone: "leaf",
     eyebrow: "Wholesale · South East Queensland",
-    title: "Order your kitchen & packaging supplies online.",
-    text: "Your prices, carton quantities and delivery windows, all in one place. Track the van on the day and see the signed proof of delivery when it lands.",
+    title: "Packaging and kitchen supplies for food businesses.",
+    text: "Order by the carton at your account prices. Our drivers deliver on weekday mornings, and you can follow the van on the day.",
     cta: { label: "Shop all products", href: "/products" },
     secondary: { guest: { label: "Open a trade account", href: "/register" }, customer: { label: "Quick order", href: "/portal/quick-order" } },
     art: "categories",

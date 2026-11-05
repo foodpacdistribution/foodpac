@@ -123,19 +123,19 @@ export function HeroCarousel({ slides, interval = 7000 }: { slides: CarouselSlid
                   onClick={() => go(i)}
                   className="group/tab flex min-w-0 flex-1 cursor-pointer flex-col gap-2 py-2 text-left sm:max-w-44"
                 >
-                  <span className="relative block h-[3px] w-full overflow-hidden rounded-full bg-white/20 transition-colors group-hover/tab:bg-white/35">
+                  <span className="relative block h-0.5 w-full overflow-hidden bg-white/20 transition-colors group-hover/tab:bg-white/35">
                     {i === index &&
                       (autoplay ? (
                         <span
                           key={turn}
-                          className="hero-progress absolute inset-0 origin-left rounded-full bg-tomato"
+                          className="hero-progress absolute inset-0 origin-left bg-white"
                           style={{ animationDuration: `${interval}ms`, animationPlayState: holding ? "paused" : "running" }}
                           onAnimationEnd={next}
                         />
                       ) : (
-                        <span className="absolute inset-0 rounded-full bg-tomato" />
+                        <span className="absolute inset-0 bg-white" />
                       ))}
-                    {i < index && <span className="absolute inset-0 rounded-full bg-white/45" />}
+                    
                   </span>
                   <span
                     className={cx(
@@ -143,7 +143,6 @@ export function HeroCarousel({ slides, interval = 7000 }: { slides: CarouselSlid
                       i === index ? "text-white" : "text-white/50 group-hover/tab:text-white/80",
                     )}
                   >
-                    <span className="mr-1.5 tabular-nums text-white/40">{String(i + 1).padStart(2, "0")}</span>
                     {tr(s.tab)}
                   </span>
                 </button>
@@ -177,7 +176,7 @@ function CtrlButton({ label, onClick, className, children }: { label: string; on
       title={label}
       onClick={onClick}
       className={cx(
-        "grid size-9 cursor-pointer place-items-center rounded-full bg-white/10 text-white ring-1 ring-white/15 backdrop-blur transition-[background-color,scale] hover:bg-white/20 active:scale-90",
+        "grid size-9 cursor-pointer place-items-center rounded-md text-white/80 ring-1 ring-white/20 transition-colors hover:bg-white/10 hover:text-white",
         className,
       )}
     >

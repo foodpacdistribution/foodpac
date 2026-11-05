@@ -12,7 +12,7 @@ export function CartQty({ productId, qty, minQty }: { productId: string; qty: nu
   const set = (n: number) => start(async () => void (await setCartQty(productId, n)));
   return (
     <div className="flex items-center gap-2">
-      <div className={cx("flex h-9 items-center rounded-full border border-leaf-950/15 bg-white", pending && "opacity-60")}>
+      <div className={cx("flex h-9 items-center rounded-md border border-leaf-950/15 bg-white", pending && "opacity-60")}>
         <button type="button" aria-label={tr("Less")} disabled={pending || qty <= minQty} onClick={() => set(qty - 1)} className="grid size-9 place-items-center disabled:opacity-30">
           <Minus className="size-3.5" />
         </button>
@@ -21,7 +21,7 @@ export function CartQty({ productId, qty, minQty }: { productId: string; qty: nu
           <Plus className="size-3.5" />
         </button>
       </div>
-      <button type="button" aria-label={tr("Remove")} disabled={pending} onClick={() => set(0)} className="grid size-9 place-items-center rounded-full text-leaf-900/40 hover:bg-red-50 hover:text-red-600">
+      <button type="button" aria-label={tr("Remove")} disabled={pending} onClick={() => set(0)} className="grid size-9 place-items-center rounded-md text-leaf-900/40 hover:bg-red-50 hover:text-red-600">
         <Trash2 className="size-4" />
       </button>
     </div>

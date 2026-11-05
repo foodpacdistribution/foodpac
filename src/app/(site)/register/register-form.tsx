@@ -54,7 +54,7 @@ export function RegisterForm() {
       <div className="sm:col-span-2">
         <FormError message={state && !state.ok ? state.error : null} />
       </div>
-      <SubmitButton size="lg" pendingText={tr("Creating account…")} className="rounded-full bg-leaf-700 hover:bg-leaf-800 sm:col-span-2">
+      <SubmitButton size="lg" pendingText={tr("Creating account…")} className="rounded-md bg-leaf-700 hover:bg-leaf-800 sm:col-span-2">
         {tr("Create account")}</SubmitButton>
       <p className="text-center text-sm text-leaf-900/60 sm:col-span-2">
         {tr("Already have an account?")}{" "}

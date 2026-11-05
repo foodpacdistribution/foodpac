@@ -5,7 +5,6 @@ import { useLayoutEffect, useRef, useState } from "react";
 import Link from "@/components/link";
 import { cx } from "@/components/ui";
 import { T } from "@/components/i18n";
-import { categoryInfo } from "./content";
 
 type Item = { href: string; label: string; n?: number; icon?: boolean };
 
@@ -85,7 +84,7 @@ export function CategoryNav({ items }: { items: Item[] }) {
             onClick={onClick(it.href)}
             data-active={on || undefined}
             aria-current={on ? "page" : undefined}
-            className={cx("relative transition-colors hover:text-leaf-700", (on || it.href === "/products") && "font-semibold text-leaf-950")}
+            className={cx("relative transition-colors hover:text-leaf-700", on && "font-semibold text-leaf-950", it.href === "/products" && "font-medium text-leaf-950")}
           >
             <T>{it.label}</T>
           </Link>
@@ -94,7 +93,7 @@ export function CategoryNav({ items }: { items: Item[] }) {
       <span
         ref={mark}
         aria-hidden
-        className="pointer-events-none absolute bottom-0 left-0 h-[2px] rounded-full bg-tomato opacity-0 transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+        className="pointer-events-none absolute bottom-0 left-0 h-[2px] bg-leaf-950 opacity-0 transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
       />
     </div>
   );
@@ -109,11 +108,10 @@ export function CategorySidebar({ items }: { items: Item[] }) {
       <span
         ref={mark}
         aria-hidden
-        className="pointer-events-none absolute top-0 left-0 rounded-full bg-leaf-700 opacity-0 shadow-[0_6px_16px_-8px_rgb(17_58_39/0.6)] transition-[transform,width,height,opacity] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] lg:rounded-xl"
+        className="pointer-events-none absolute top-0 left-0 rounded-md bg-leaf-950 opacity-0 transition-[transform,width,height,opacity] duration-200 ease-out"
       />
       {items.map((it) => {
         const on = it.href === active;
-        const Icon = it.icon ? categoryInfo(it.label).icon : null;
         return (
           <Link
             key={it.href}
@@ -122,12 +120,11 @@ export function CategorySidebar({ items }: { items: Item[] }) {
             data-active={on || undefined}
             aria-current={on ? "page" : undefined}
             className={cx(
-              "group relative flex shrink-0 items-center gap-2.5 rounded-full px-3.5 py-2 text-sm transition-[color,background-color,scale] duration-200 active:scale-[0.97] lg:rounded-xl",
+              "group relative flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-[color,background-color] duration-150 max-lg:ring-1 max-lg:ring-leaf-950/15",
               // Until the pill is in place (before the page is interactive) the link paints its own.
-              on ? "font-semibold text-white bg-leaf-700 group-data-ready/nav:bg-transparent" : "text-leaf-900/75 hover:bg-leaf-950/5",
+              on ? "font-semibold text-white bg-leaf-950 group-data-ready/nav:bg-transparent" : "text-leaf-900/80 hover:bg-leaf-950/5",
             )}
           >
-            {Icon && <Icon className={cx("size-4 shrink-0 transition-transform duration-300 group-hover:scale-110", on ? "text-white/85" : "text-leaf-700/70")} />}
             <span className="flex-1">
               <T>{it.label}</T>
             </span>

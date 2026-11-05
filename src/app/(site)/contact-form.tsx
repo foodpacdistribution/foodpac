@@ -7,7 +7,7 @@ import { cx } from "@/components/ui";
 import { Tx, useT } from "@/components/i18n";
 
 const input =
-  "h-11 w-full rounded-xl border border-leaf-950/15 bg-white px-3.5 text-sm text-leaf-950 placeholder:text-leaf-900/40 focus:border-leaf-600 focus:outline-none focus:ring-2 focus:ring-leaf-600/20";
+  "h-11 w-full rounded-md border border-leaf-950/20 bg-white px-3.5 text-sm text-leaf-950 placeholder:text-leaf-900/40 focus:border-leaf-600 focus:outline-none focus:ring-2 focus:ring-leaf-600/20";
 
 function Label({ text, optional, children, className }: { text: string; optional?: boolean; children: React.ReactNode; className?: string }) {
   const tr = useT();
@@ -27,7 +27,7 @@ export function ContactForm() {
 
   if (state?.ok) {
     return (
-      <div className="flex animate-pop flex-col items-center justify-center rounded-[2rem] bg-cream p-10 text-center">
+      <div className="flex animate-pop flex-col items-center justify-center rounded-lg bg-white p-10 ring-1 ring-leaf-950/10 text-center">
         <CheckCircle2 className="size-12 animate-check text-leaf-600" />
         <h3 className="mt-4 font-display text-2xl font-semibold">{tr("Thanks, we've got your message.")}</h3>
         <p className="mt-2 max-w-sm text-leaf-900/70">{tr("Someone from our team will be in touch within one business day.")}</p>
@@ -36,7 +36,7 @@ export function ContactForm() {
   }
 
   return (
-    <KeptForm form={form} className="grid gap-4 rounded-[2rem] bg-cream p-6 sm:grid-cols-2 sm:p-8">
+    <KeptForm form={form} className="grid gap-4 rounded-lg bg-white p-6 ring-1 ring-leaf-950/10 sm:grid-cols-2 sm:p-8">
       <Label text={tr("Your name")}>
         <input name="name" required autoComplete="name" className={input} />
       </Label>
@@ -68,7 +68,7 @@ export function ContactForm() {
           <FormError message={state.error} />
         </div>
       )}
-      <SubmitButton size="lg" pendingText={tr("Sending…")} className="rounded-full bg-tomato hover:bg-tomato-dark sm:col-span-2">
+      <SubmitButton size="lg" pendingText={tr("Sending…")} className="rounded-md bg-leaf-800 hover:bg-leaf-900 sm:col-span-2">
         {tr("Send message")}</SubmitButton>
     </KeptForm>
   );

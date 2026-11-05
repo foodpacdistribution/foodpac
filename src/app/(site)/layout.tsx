@@ -35,7 +35,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
 
   return (
     // A column the height of the window: on short pages the content grows and the footer sits at the bottom.
-    <div className="flex min-h-dvh flex-col bg-cream text-leaf-950">
+    <div className="shop flex min-h-dvh flex-col bg-cream text-leaf-950">
       {/* The delivery promise, on every shop page (scrolls away with the page). */}
       {promise && (
         <div className="bg-leaf-950 text-[12px] text-cream/85 sm:text-xs">
@@ -56,12 +56,11 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           </div>
         </div>
       )}
-      <header className="site-header sticky top-0 z-40 border-b border-leaf-950/10 bg-cream/95 backdrop-blur">
+      <header className="site-header sticky top-0 z-40 border-b border-leaf-950/15 bg-cream">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Foodpac Distribution home">
             <Logo className="h-9 sm:h-11" priority />
-            <span className="hidden border-l border-leaf-950/15 pl-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-leaf-800 lg:block"><T>{"Distribution"}</T></span>
-          </Link>
+                      </Link>
           <SearchBox className="hidden flex-1 md:flex" />
           <nav className="ml-auto flex items-center gap-1 text-sm font-medium">
             {user ? (
@@ -69,19 +68,19 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             ) : (
               <>
                 <LanguageSwitch className="mr-1 hidden sm:inline-flex" />
-                <Link href="/login" className="flex h-10 items-center gap-1.5 rounded-full px-3 hover:bg-leaf-950/5">
+                <Link href="/login" className="flex h-10 items-center gap-1.5 rounded-md px-3 hover:bg-leaf-950/5">
                   <UserRound className="size-4" /> {" "}<T>{"Sign in"}</T></Link>
-                <Link href="/register" className="hidden h-10 items-center rounded-full bg-leaf-700 px-4 font-semibold text-white hover:bg-leaf-800 sm:flex">
+                <Link href="/register" className="hidden h-10 items-center rounded-md bg-leaf-800 px-4 font-semibold text-white hover:bg-leaf-900 sm:flex">
                   <T>{"Open an account"}</T></Link>
               </>
             )}
             {viewer && (
-              <Link href="/portal/list" className="flex size-10 items-center justify-center rounded-full hover:bg-leaf-950/5" aria-label="My list" title="My list">
+              <Link href="/portal/list" className="flex size-10 items-center justify-center rounded-md hover:bg-leaf-950/5" aria-label="My list" title="My list">
                 <Heart className="size-4" />
               </Link>
             )}
             {viewer && (
-              <Link href="/cart" className="relative flex h-10 items-center gap-1.5 rounded-full px-3 hover:bg-leaf-950/5" aria-label={`Cart, ${cartCount} items`}>
+              <Link href="/cart" className="relative flex h-10 items-center gap-1.5 rounded-md px-3 hover:bg-leaf-950/5" aria-label={`Cart, ${cartCount} items`}>
                 <ShoppingCart className="size-4" />
                 <span className="hidden sm:inline"><T>{"Cart"}</T></span>
                 <CartBadge count={cartCount} />
@@ -92,7 +91,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         <div className="mx-auto max-w-6xl px-4 pb-3 md:hidden">
           <SearchBox className="flex" />
         </div>
-        <nav className="border-t border-leaf-950/5" aria-label="Categories">
+        <nav className="border-t border-leaf-950/10" aria-label="Categories">
           <CategoryNav
             items={[
               { href: "/products", label: "All products" },
@@ -119,33 +118,32 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <footer className="bg-leaf-950 text-leaf-100/70">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div className="leading-tight">
-            <Logo badge className="h-12" />
-            <p className="mt-3 font-display font-semibold text-white">{SITE.name}</p>
-            <p className="mt-1 text-xs">
+            <Logo badge className="h-11" />
+            <p className="mt-4 max-w-xs text-sm">
               <T>{SITE.tagline}</T> <T>{"Serving"}</T> <T>{SITE.serviceArea}</T>.
             </p>
-            <ul className="mt-4 space-y-1.5 text-xs">
+            <ul className="mt-4 space-y-1.5 text-sm">
               <li className="flex items-center gap-2">
-                <Clock className="size-3.5 text-tomato" /> <T>{site.hours}</T>
+                <Clock className="size-3.5 text-leaf-100/50" /> <T>{site.hours}</T>
               </li>
               {site.phone && (
                 <li>
                   <a href={`tel:${site.phone.replace(/\s/g, "")}`} className="flex items-center gap-2 hover:text-white">
-                    <Phone className="size-3.5 text-tomato" /> {site.phone}
+                    <Phone className="size-3.5 text-leaf-100/50" /> {site.phone}
                   </a>
                 </li>
               )}
               {site.email && (
                 <li>
                   <a href={`mailto:${site.email}`} className="flex items-center gap-2 hover:text-white">
-                    <Mail className="size-3.5 text-tomato" /> {site.email}
+                    <Mail className="size-3.5 text-leaf-100/50" /> {site.email}
                   </a>
                 </li>
               )}
             </ul>
           </div>
           <div className="space-y-2 text-sm">
-            <p className="font-semibold text-white"><T>{"Categories"}</T></p>
+            <p className="pb-1 text-xs font-semibold text-white"><T>{"Categories"}</T></p>
             {CATEGORIES.map((c) => (
               <Link key={c.title} href={categoryHref(c.title)} className="block hover:text-white">
                 <T>{c.title}</T>
@@ -153,7 +151,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             ))}
           </div>
           <div className="space-y-2 text-sm">
-            <p className="font-semibold text-white"><T>{"Shop"}</T></p>
+            <p className="pb-1 text-xs font-semibold text-white"><T>{"Shop"}</T></p>
             <Link href="/products" className="block hover:text-white">
               <T>{"All products"}</T></Link>
             <Link href="/#how-it-works" className="block hover:text-white">
@@ -164,7 +162,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
               <T>{"Contact us"}</T></Link>
           </div>
           <div className="space-y-2 text-sm">
-            <p className="font-semibold text-white"><T>{"Account"}</T></p>
+            <p className="pb-1 text-xs font-semibold text-white"><T>{"Account"}</T></p>
             {!viewer && (
               <Link href="/register" className="block hover:text-white">
                 <T>{"Open an account"}</T></Link>

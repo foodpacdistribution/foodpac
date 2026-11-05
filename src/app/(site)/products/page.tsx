@@ -5,8 +5,7 @@ import { cx } from "@/components/ui";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { canSeePrices, listCatalog, listCategories, type Sort, SORTS } from "@/lib/shop";
-import { ViewTransition } from "react";
-import { categoryHref, categoryInfo, categorySlug, SITE } from "../content";
+import { categoryHref, categoryInfo, SITE } from "../content";
 import { CategorySidebar } from "../category-nav";
 import { ProductCard } from "../shop-ui";
 import { T } from "@/components/i18n";
@@ -46,7 +45,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   return (
     <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[220px_1fr]">
       <aside className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-leaf-900/50"><T>{"Categories"}</T></p>
+        <p className="text-sm font-semibold"><T>{"Categories"}</T></p>
         <nav aria-label="Categories">
           <CategorySidebar
             items={[
@@ -60,7 +59,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         {category && !q ? (
           <CategoryBanner name={category} />
         ) : (
-          <h1 className="font-display text-2xl font-semibold tracking-tight">{q ? `Results for “${q}”` : <T>{"All products"}</T>}</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight">{q ? `Results for “${q}”` : <T>{"All products"}</T>}</h1>
         )}
         <p className={cx("text-sm text-leaf-900/60", category && !q ? "mt-4" : "mt-1")}>
           <T vars={{ n: items.length }}>{items.length === 1 ? "{n} product" : "{n} products"}</T>
@@ -90,8 +89,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 href={qs({ sort: k === "name" && !sort ? undefined : k })}
                 scroll={false}
                 className={cx(
-                  "rounded-full px-3 py-1.5 transition-colors",
-                  (sort ?? "name") === k ? "bg-leaf-950 font-medium text-white" : "bg-white text-leaf-900/75 ring-1 ring-leaf-950/10 hover:ring-leaf-700/30",
+                  "rounded-md px-3 py-1.5 transition-colors",
+                  (sort ?? "name") === k ? "bg-leaf-950 font-medium text-white" : "bg-white text-leaf-900/75 ring-1 ring-leaf-950/15 hover:ring-leaf-950/35",
                 )}
               >
                 <T>{SORTS[k]}</T>
@@ -101,23 +100,23 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             href={qs({ stock: inStock ? undefined : "1" })}
             scroll={false}
             className={cx(
-              "ml-auto flex items-center gap-2 rounded-full px-3 py-1.5 transition-colors",
-              inStock ? "bg-leaf-700 font-medium text-white" : "bg-white text-leaf-900/75 ring-1 ring-leaf-950/10 hover:ring-leaf-700/30",
+              "ml-auto flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors",
+              inStock ? "bg-leaf-950 font-medium text-white" : "bg-white text-leaf-900/75 ring-1 ring-leaf-950/15 hover:ring-leaf-950/35",
             )}
           >
-            <span className={cx("grid size-4 place-items-center rounded-full border", inStock ? "border-white bg-white text-leaf-700" : "border-leaf-900/30")}>
+            <span className={cx("grid size-4 place-items-center rounded-sm border", inStock ? "border-white bg-white text-leaf-950" : "border-leaf-900/35")}>
               {inStock && <Check className="size-3" strokeWidth={3} />}
             </span>
             <T>{"In stock only"}</T></Link>
         </div>
         {items.length === 0 ? (
-          <div className="mt-8 rounded-3xl border border-dashed border-leaf-950/15 bg-white px-6 py-14 text-center">
-            <PackageSearch className="mx-auto size-10 text-leaf-700/60" />
+          <div className="mt-8 rounded-lg border border-leaf-950/15 bg-white px-6 py-14 text-center">
+            <PackageSearch className="mx-auto size-8 text-leaf-900/35" strokeWidth={1.5} />
             {category && !q && !inStock ? (
               <>
                 <p className="mt-3 font-semibold"><T>{"Products for this range are coming soon"}</T></p>
                 <p className="mt-1 text-sm text-leaf-900/60"><T>{"Tell us what you need and we'll quote it, we can usually source it."}</T></p>
-                <Link href="/#contact" className="mt-4 inline-flex h-10 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white hover:bg-leaf-800">
+                <Link href="/#contact" className="mt-4 inline-flex h-10 items-center rounded-md bg-leaf-800 px-5 text-sm font-semibold text-white hover:bg-leaf-900">
                   <T>{"Ask for a quote"}</T>
                 </Link>
               </>
@@ -130,8 +129,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           </div>
         ) : (
           <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
-            {items.map((p, i) => (
-              <ProductCard key={p.id} p={p} signedIn={!!viewer} morph index={i} />
+            {items.map((p) => (
+              <ProductCard key={p.id} p={p} signedIn={!!viewer} morph />
             ))}
           </div>
         )}
@@ -140,25 +139,25 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-/** The chosen category's heading: its icon (which glides in from the home page tile) and blurb. */
+/** The chosen category's heading and blurb. */
 function CategoryBanner({ name }: { name: string }) {
-  const { icon: Icon, text } = categoryInfo(name);
+  const { text } = categoryInfo(name);
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-leaf-900 px-5 py-6 text-cream sm:px-7 sm:py-7">
-      <div aria-hidden className="absolute inset-0 bg-[radial-gradient(50%_90%_at_95%_10%,rgb(37_138_86/0.5),transparent_70%),radial-gradient(35%_80%_at_0%_100%,rgb(224_98_12/0.18),transparent_70%)]" />
-      <Icon aria-hidden className="absolute -right-6 -bottom-10 size-44 text-white/[0.05]" strokeWidth={1} />
-      <div className="relative flex items-center gap-4 sm:gap-5">
-        <ViewTransition name={`category-${categorySlug(name)}`} share="morph" default="none">
-          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-white/10 text-tomato ring-1 ring-white/15">
-            <Icon className="size-6" />
-          </span>
-        </ViewTransition>
-        <div className="min-w-0 animate-rise">
-          <p className="text-[11px] font-semibold tracking-[0.18em] text-tomato uppercase"><T>{"Category"}</T></p>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-white sm:text-3xl"><T>{name}</T></h1>
-          {text && <p className="mt-1 max-w-xl text-sm text-cream/70"><T>{text}</T></p>}
-        </div>
-      </div>
+    <div className="border-b border-leaf-950/15 pb-4">
+      <p className="text-sm text-leaf-900/55">
+        <Link href="/products" className="hover:underline">
+          <T>{"All products"}</T>
+        </Link>{" "}
+        / <T>{name}</T>
+      </p>
+      <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
+        <T>{name}</T>
+      </h1>
+      {text && (
+        <p className="mt-1.5 max-w-xl text-leaf-900/70">
+          <T>{text}</T>
+        </p>
+      )}
     </div>
   );
 }

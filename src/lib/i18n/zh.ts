@@ -1577,6 +1577,21 @@ export const ZH: Record<string, string> = {
   "Choose photo": "选择照片",
   "Square photos on a white background look best in the shop. Large photos are shrunk automatically.": "白底方形照片在商城里效果最好。大照片会自动压缩。",
   "Restock →": "去补货 →",
+  // Shop front redesign (Nov 2026).
+  "Shop by range": "按品类选购",
+  "How ordering works": "订货流程",
+  "Our own drivers do the runs every weekday morning. Tell us when your kitchen can take a delivery and we'll fit you into the run.": "每个工作日上午由我们自己的司机配送。告诉我们您的厨房什么时候方便收货,我们会把您排进当天的路线。",
+  "Area": "配送范围",
+  "Days": "配送日",
+  "On the day": "送达当天",
+  "The driver takes a photo and a signature at the door, and you can see both in your account.": "司机会在门口拍照并请您签收,照片和签名都可以在您的账户里查看。",
+  "Open an account or ask for a price list": "开通账户或索取价目表",
+  "Tell us a bit about your business and what you go through in a week. We reply within one business day.": "简单介绍一下您的商家和每周的用量,我们会在一个工作日内回复。",
+  "Packaging and kitchen supplies for food businesses.": "为餐饮商家供应包装与厨房用品。",
+  "Order by the carton at your account prices. Our drivers deliver on weekday mornings, and you can follow the van on the day.": "按整箱订货,享受您账户的专属价格。工作日上午由我们的司机送货,当天可随时查看货车位置。",
+  "Delivery docket": "送货单",
+  "1 drop": "一次送达",
+  "One invoice": "一张发票",
 };
 
 /** Messages with a variable part. */

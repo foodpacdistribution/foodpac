@@ -42,12 +42,12 @@ export function FavouriteButton({
 
   const look =
     variant === "icon"
-      ? "grid size-9 place-items-center rounded-full bg-white/90 shadow-sm ring-1 ring-leaf-950/10 backdrop-blur hover:bg-white"
-      : "inline-flex h-11 items-center gap-2 rounded-full border border-leaf-950/15 bg-white px-4 text-sm font-semibold hover:border-leaf-700/40";
+      ? "grid size-8 place-items-center rounded-md bg-white/90 ring-1 ring-leaf-950/10 hover:bg-white"
+      : "inline-flex h-11 items-center gap-2 rounded-md border border-leaf-950/20 bg-white px-4 text-sm font-semibold hover:border-leaf-950/40";
   const heart = (
     <Heart
       key={pop}
-      className={cx("size-[18px] transition-colors", on ? "fill-tomato text-tomato" : "text-leaf-900/60", pop > 0 && on && "animate-bump")}
+      className={cx("size-4 transition-colors", on ? "fill-tomato text-tomato" : "text-leaf-900/60", pop > 0 && on && "animate-bump")}
       strokeWidth={2}
     />
   );

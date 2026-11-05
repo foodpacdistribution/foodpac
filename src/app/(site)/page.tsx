@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowUpRight, Camera, PackageCheck, ReceiptText, Truck, Zap } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { JsonLd } from "@/components/json-ld";
@@ -8,11 +8,10 @@ import { getDepots, getSettings } from "@/lib/planning";
 import { livePosters } from "@/lib/posters";
 import { listCatalog, listCategories, posterPhotos, recentlyBought } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
-import { ViewTransition } from "react";
-import { CATEGORIES, categoryHref, categorySlug, POSTERS, SITE } from "./content";
+import { CATEGORIES, categoryHref, POSTERS, SITE } from "./content";
 import { HeroCarousel } from "./hero-carousel";
 import { PosterSlide, UploadedPosterSlide } from "./posters";
-import { Contact, Delivery, HowItWorks, Promises } from "./sections";
+import { Contact, HowItWorks } from "./sections";
 import { siteInfo } from "./site-info";
 import { ProductCard, ProductCount } from "./shop-ui";
 import { T, Tx } from "@/components/i18n";
@@ -98,23 +97,18 @@ export default async function HomePage() {
         ]}
       />
 
-      {/* What every customer gets, right under the posters. */}
+      {/* The plain facts, right under the posters. */}
       <section className="border-b border-leaf-950/10 bg-white">
-        <ul className="mx-auto grid max-w-6xl grid-cols-2 gap-x-4 gap-y-5 px-4 py-6 sm:px-6 lg:grid-cols-4">
+        <ul className="mx-auto grid max-w-6xl grid-cols-2 px-4 sm:px-6 lg:grid-cols-4">
           {[
-            { icon: PackageCheck, title: total > 0 ? <ProductCount n={total} /> : <T>{"Order online"}</T>, text: <T vars={{ n: CATEGORIES.length }}>{"Across {n} ranges"}</T> },
-            { icon: Truck, title: <T>{"Weekday delivery runs"}</T>, text: <T>{SITE.serviceArea}</T> },
-            { icon: Camera, title: <T>{"Proof on every drop"}</T>, text: <T>{"Photo and signature at the door"}</T> },
-            { icon: ReceiptText, title: <T>{"Your trade prices"}</T>, text: <T>{"One account, one invoice"}</T> },
-          ].map(({ icon: Icon, title, text }, i) => (
-            <li key={i} className="flex items-center gap-3">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-leaf-50 text-leaf-700">
-                <Icon className="size-5" />
-              </span>
-              <span className="min-w-0 leading-tight">
-                <span className="block text-sm font-semibold">{title}</span>
-                <span className="block text-xs text-leaf-900/55">{text}</span>
-              </span>
+            { title: total > 0 ? <ProductCount n={total} /> : <T>{"Order online"}</T>, text: <T vars={{ n: CATEGORIES.length }}>{"Across {n} ranges"}</T> },
+            { title: <T>{"Weekday delivery runs"}</T>, text: <T>{SITE.serviceArea}</T> },
+            { title: <T>{"Proof on every drop"}</T>, text: <T>{"Photo and signature at the door"}</T> },
+            { title: <T>{"Your trade prices"}</T>, text: <T>{"One account, one invoice"}</T> },
+          ].map(({ title, text }, i) => (
+            <li key={i} className="border-leaf-950/10 py-4 leading-tight max-lg:odd:pr-4 max-lg:even:border-l max-lg:even:pl-4 max-lg:[&:nth-child(n+3)]:border-t lg:border-l lg:px-5 lg:first:border-l-0 lg:first:pl-0">
+              <span className="block text-sm font-semibold">{title}</span>
+              <span className="mt-0.5 block text-xs text-leaf-900/55">{text}</span>
             </li>
           ))}
         </ul>
@@ -129,34 +123,22 @@ export default async function HomePage() {
       )}
 
       <section className="mx-auto max-w-6xl px-4 pt-12 sm:px-6">
-        <div className="flex items-end justify-between">
-          <h2 className="font-display text-2xl font-semibold tracking-tight"><T>{"Shop by category"}</T></h2>
-          <Link href="/products" className="text-sm font-semibold text-leaf-700 hover:underline">
-            <T>{"See all"}</T>
-          </Link>
-        </div>
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
-          {CATEGORIES.map(({ icon: Icon, title, text }, i) => (
-            <Link
-              key={title}
-              href={categoryHref(title)}
-              style={{ "--i": i } as React.CSSProperties}
-              className="stagger group relative flex flex-col overflow-hidden rounded-2xl border border-leaf-950/10 bg-white p-4 transition-[border-color,box-shadow,translate,scale] duration-300 ease-out hover:-translate-y-1 hover:border-leaf-700/30 hover:shadow-[0_16px_32px_-16px_rgb(17_58_39/0.35)] active:scale-[0.97] sm:p-5"
-            >
-              {/* Colour wipes up from the bottom on hover. */}
-              <span aria-hidden className="absolute inset-0 origin-bottom scale-y-0 bg-gradient-to-t from-leaf-50 to-cream/40 transition-transform duration-500 ease-out group-hover:scale-y-100" />
-              <ArrowUpRight aria-hidden className="absolute top-4 right-4 size-4 -translate-x-1 translate-y-1 text-leaf-700 opacity-0 transition-[opacity,translate] duration-300 group-hover:translate-0 group-hover:opacity-100" />
-              {/* Glides into the category page's banner (same name there). */}
-              <ViewTransition name={`category-${categorySlug(title)}`} share="morph" default="none">
-                <span className="relative grid size-12 place-items-center rounded-2xl bg-leaf-50 text-leaf-700 transition-[background-color,color,rotate,scale] duration-300 group-hover:scale-110 group-hover:-rotate-6 group-hover:bg-leaf-700 group-hover:text-white">
-                  <Icon className="size-5" />
+        <SectionHead title={<T>{"Shop by range"}</T>} link={{ href: "/products", label: "All products" }} />
+        {/* A ruled index of the ranges, like the contents page of a printed catalogue. */}
+        <div className="mt-5 grid border-t border-l border-leaf-950/15 bg-white sm:grid-cols-2 lg:grid-cols-3">
+          {CATEGORIES.map(({ title, text }) => (
+            <Link key={title} href={categoryHref(title)} className="group flex flex-col border-r border-b border-leaf-950/15 p-5 transition-colors hover:bg-leaf-50">
+              <span className="flex items-baseline justify-between gap-3">
+                <span className="font-display text-lg font-semibold tracking-tight group-hover:underline group-hover:underline-offset-4">
+                  <T>{title}</T>
                 </span>
-              </ViewTransition>
-              <span className="relative mt-4 text-sm leading-tight font-semibold"><T>{title}</T></span>
-              <span className="relative mt-1 text-xs text-leaf-900/50">
-                <ProductCount n={counts.find((c) => c.name === title)?.n ?? 0} />
+                <span className="shrink-0 text-xs text-leaf-900/50 tabular-nums">
+                  <ProductCount n={counts.find((c) => c.name === title)?.n ?? 0} />
+                </span>
               </span>
-              <span className="relative mt-2 hidden text-xs leading-relaxed text-leaf-900/60 sm:line-clamp-3"><T>{text}</T></span>
+              <span className="mt-1.5 text-sm leading-relaxed text-leaf-900/65">
+                <T>{text}</T>
+              </span>
             </Link>
           ))}
         </div>
@@ -170,38 +152,39 @@ export default async function HomePage() {
 
       {viewer && (
         <section className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">
-          <Link href="/portal/quick-order" className="flex items-center gap-4 rounded-3xl bg-leaf-50 p-5 ring-1 ring-leaf-700/15 hover:bg-leaf-100">
-            <span className="grid size-11 place-items-center rounded-2xl bg-leaf-700 text-white">
-              <Zap className="size-5" />
-            </span>
+          <Link href="/portal/quick-order" className="group flex items-center gap-4 rounded-lg border border-leaf-950/15 bg-white p-5 hover:border-leaf-950/30">
             <span className="flex-1">
               <span className="block font-semibold"><T>{"Quick order by SKU"}</T></span>
               <span className="block text-sm text-leaf-900/65"><T>{"Paste your usual list of codes and quantities and check out in a minute."}</T></span>
             </span>
-            <ArrowRight className="size-5 text-leaf-700" />
+            <ArrowRight className="size-5 text-leaf-900/50 transition-transform group-hover:translate-x-0.5" />
           </Link>
         </section>
       )}
 
-      <div className="mt-12">
-        <Promises />
-        <HowItWorks />
-        <Delivery site={site} />
+      <div className="mt-14">
+        <HowItWorks site={site} />
         <Contact site={site} />
       </div>
     </main>
   );
 }
 
+function SectionHead({ title, link }: { title: React.ReactNode; link: { href: string; label: string } }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-leaf-950/15 pb-3">
+      <h2 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">{<Tx>{title}</Tx>}</h2>
+      <Link href={link.href} className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-leaf-800 hover:underline hover:underline-offset-2">
+        <T>{link.label}</T> <ArrowRight className="size-3.5" />
+      </Link>
+    </div>
+  );
+}
+
 function Shelf({ title, link, children }: { title: React.ReactNode; link: { href: string; label: string }; children: React.ReactNode }) {
   return (
     <section className="mx-auto max-w-6xl px-4 pt-12 sm:px-6">
-      <div className="flex items-end justify-between">
-        <h2 className="font-display text-2xl font-semibold tracking-tight">{<Tx>{title}</Tx>}</h2>
-        <Link href={link.href} className="text-sm font-semibold text-leaf-700 hover:underline">
-          <T>{link.label}</T>
-        </Link>
-      </div>
+      <SectionHead title={title} link={link} />
       <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">{children}</div>
     </section>
   );

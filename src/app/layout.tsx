@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Inter } from "next/font/google";
+import { Archivo, Inter } from "next/font/google";
 import { I18nProvider } from "@/components/i18n";
 import { getLocale } from "@/lib/i18n/server";
 import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage" });
+// Headlines: a plain, sturdy grotesque that reads like carton print rather than a startup landing page.
+const archivo = Archivo({ subsets: ["latin"], variable: "--font-archivo" });
 
 const description =
   "Wholesale food packaging, takeaway containers, cups, cleaning supplies and dry goods for cafés, restaurants and takeaway shops across Brisbane and South East Queensland. Order online at your trade prices and track every delivery.";
@@ -29,7 +30,7 @@ export const viewport: Viewport = { themeColor: "#ffffff", width: "device-width"
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = await getLocale();
   return (
-    <html lang={locale === "zh" ? "zh-CN" : "en"} className={`${inter.variable} ${bricolage.variable}`}>
+    <html lang={locale === "zh" ? "zh-CN" : "en"} className={`${inter.variable} ${archivo.variable}`}>
       <body className="min-h-dvh font-sans antialiased">
         <I18nProvider locale={locale}>{children}</I18nProvider>
       </body>

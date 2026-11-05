@@ -29,9 +29,9 @@ export default async function CartPage() {
           <ShoppingCart className="mx-auto size-10 text-leaf-700/60" />
           <p className="mt-3 font-semibold"><T>{"Your cart is empty"}</T></p>
           <div className="mt-4 flex justify-center gap-2">
-            <Link href="/products" className="inline-flex h-10 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white">
+            <Link href="/products" className="inline-flex h-10 items-center rounded-md bg-leaf-700 px-5 text-sm font-semibold text-white">
               <T>{"Browse products"}</T></Link>
-            <Link href="/portal/quick-order" className="inline-flex h-10 items-center rounded-full border border-leaf-950/15 bg-white px-5 text-sm font-semibold">
+            <Link href="/portal/quick-order" className="inline-flex h-10 items-center rounded-md border border-leaf-950/15 bg-white px-5 text-sm font-semibold">
               <T>{"Quick order"}</T></Link>
           </div>
         </div>
@@ -75,11 +75,11 @@ export default async function CartPage() {
             </dl>
             {q.belowMinimum && <p className="mt-3 text-xs text-red-700"><T>{"The minimum order is"}</T>{" "}{aud(s.minOrderCents)} {" "}<T>{"before GST."}</T></p>}
             {blocked ? (
-              <span className="mt-4 flex h-12 w-full items-center justify-center rounded-full bg-leaf-950/10 text-sm font-semibold text-leaf-900/50">
+              <span className="mt-4 flex h-12 w-full items-center justify-center rounded-md bg-leaf-950/10 text-sm font-semibold text-leaf-900/50">
                 {canSeePrices(viewer.customer) ? <T>{"Fix the items above to continue"}</T> : <T>{"Waiting for account approval"}</T>}
               </span>
             ) : (
-              <Link href="/checkout" className="mt-4 flex h-12 w-full items-center justify-center rounded-full bg-tomato text-base font-semibold text-white hover:bg-tomato-dark">
+              <Link href="/checkout" className="mt-4 flex h-12 w-full items-center justify-center rounded-md bg-tomato text-base font-semibold text-white hover:bg-tomato-dark">
                 <T>{"Checkout"}</T></Link>
             )}
             <p className="mt-3 text-center text-xs text-leaf-900/50"><T>{"Stock is reserved when you place the order."}</T></p>

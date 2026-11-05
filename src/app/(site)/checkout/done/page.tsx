@@ -54,9 +54,9 @@ export default async function DonePage({ searchParams }: { searchParams: Promise
               : <T>{"This order was cancelled and the stock released."}</T>}
       </p>
       <div className="mt-8 flex justify-center gap-2">
-        <Link href={`/portal/orders/${so.id}`} className="inline-flex h-11 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white">
+        <Link href={`/portal/orders/${so.id}`} className="inline-flex h-11 items-center rounded-md bg-leaf-700 px-5 text-sm font-semibold text-white">
           <T>{"View order"}</T></Link>
-        <Link href="/products" className="inline-flex h-11 items-center rounded-full border border-leaf-950/15 bg-white px-5 text-sm font-semibold">
+        <Link href="/products" className="inline-flex h-11 items-center rounded-md border border-leaf-950/15 bg-white px-5 text-sm font-semibold">
           <T>{"Keep shopping"}</T></Link>
       </div>
     </main>

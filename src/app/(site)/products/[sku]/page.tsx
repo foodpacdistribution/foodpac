@@ -1,4 +1,4 @@
-import { ArrowLeft, Barcode, Box, Layers, Tag, Truck } from "lucide-react";
+import { ArrowLeft, Truck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { notFound } from "next/navigation";
@@ -59,11 +59,11 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
         <ArrowLeft className="size-4" /> <T>{p.category}</T>
       </Link>
       <div className="mt-4 grid gap-8 lg:grid-cols-2">
-        <ProductImage p={p} morph priority sizes="(min-width: 1024px) 560px, 100vw" className="aspect-square rounded-3xl border border-leaf-950/10" />
+        <ProductImage p={p} morph priority sizes="(min-width: 1024px) 560px, 100vw" className="aspect-square rounded-lg border border-leaf-950/12" />
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-leaf-900/50"><T>{"SKU"}</T>{" "}{p.sku}</p>
+          <p className="font-mono text-xs text-leaf-900/50"><T>{"SKU"}</T>{" "}{p.sku}</p>
           <div className="mt-1 flex items-start justify-between gap-3">
-            <h1 className="font-display text-3xl font-semibold tracking-tight">{p.name}</h1>
+            <h1 className="font-display text-3xl font-bold tracking-tight text-balance">{p.name}</h1>
             <FavouriteButton productId={p.id} sku={p.sku} favourite={p.favourite} signedIn={!!viewer} className="shrink-0" />
           </div>
           <div id="buy-box">
@@ -79,18 +79,16 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
           )}
           {!viewer && (
             <div className="mt-5 flex flex-wrap gap-2">
-              <Link href={`/login?next=${encodeURIComponent(`/products/${p.sku}`)}`} className="inline-flex h-11 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white hover:bg-leaf-800">
+              <Link href={`/login?next=${encodeURIComponent(`/products/${p.sku}`)}`} className="inline-flex h-11 items-center rounded-md bg-leaf-800 px-5 text-sm font-semibold text-white hover:bg-leaf-900">
                 <T>{"Sign in to order"}</T></Link>
-              <Link href="/register" className="inline-flex h-11 items-center rounded-full border border-leaf-950/15 bg-white px-5 text-sm font-semibold">
+              <Link href="/register" className="inline-flex h-11 items-center rounded-md border border-leaf-950/20 bg-white px-5 text-sm font-semibold hover:border-leaf-950/40">
                 <T>{"Open an account"}</T></Link>
             </div>
           )}
           </div>
           {promise && (
-            <div className="mt-5 flex items-start gap-3 rounded-2xl bg-leaf-50 p-4 ring-1 ring-leaf-700/15">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-leaf-700 text-white">
-                <Truck className="size-5" />
-              </span>
+            <div className="mt-5 flex items-start gap-3 border-l-2 border-leaf-700 py-1 pl-4">
+              <Truck className="mt-0.5 size-4 shrink-0 text-leaf-700" />
               <div className="text-sm leading-snug">
                 <p className="font-semibold text-leaf-950">
                   <DeliveryPromiseText promise={promise} />
@@ -103,11 +101,11 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
               </div>
             </div>
           )}
-          <dl className="mt-6 grid grid-cols-2 gap-3 text-sm">
-            <Spec icon={Box} label={<T>{"Pack size"}</T>} value={p.packSize || "—"} />
-            <Spec icon={Layers} label={<T>{"Sold by"}</T>} value={<><T>{p.unit}</T>{p.minQty > 1 ? <> <Tx>{`· min ${p.minQty}`}</Tx></> : ""}</>} />
-            <Spec icon={Barcode} label={<T>{"GST"}</T>} value={<T>{p.gst ? "GST applies" : "GST free"}</T>} />
-            <Spec icon={Tag} label={<T>{"Category"}</T>} value={<Link href={categoryHref(p.category)} className="hover:text-leaf-700 hover:underline"><T>{p.category}</T></Link>} />
+          <dl className="mt-6 divide-y divide-leaf-950/10 border-y border-leaf-950/10 text-sm">
+            <Spec label={<T>{"Pack size"}</T>} value={p.packSize || "—"} />
+            <Spec label={<T>{"Sold by"}</T>} value={<><T>{p.unit}</T>{p.minQty > 1 ? <> <Tx>{`· min ${p.minQty}`}</Tx></> : ""}</>} />
+            <Spec label={<T>{"GST"}</T>} value={<T>{p.gst ? "GST applies" : "GST free"}</T>} />
+            <Spec label={<T>{"Category"}</T>} value={<Link href={categoryHref(p.category)} className="hover:text-leaf-700 hover:underline"><T>{p.category}</T></Link>} />
           </dl>
           {p.description && <p className="mt-6 leading-relaxed whitespace-pre-line text-leaf-900/80">{<Tx>{p.description}</Tx>}</p>}
         </div>
@@ -129,7 +127,7 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
               <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} />
             </div>
           ) : !viewer ? (
-            <Link href={`/login?next=${encodeURIComponent(`/products/${p.sku}`)}`} className="inline-flex h-10 shrink-0 items-center rounded-full bg-leaf-700 px-4 text-sm font-semibold text-white">
+            <Link href={`/login?next=${encodeURIComponent(`/products/${p.sku}`)}`} className="inline-flex h-10 shrink-0 items-center rounded-md bg-leaf-800 px-4 text-sm font-semibold text-white">
               <T>{"Sign in to order"}</T>
             </Link>
           ) : null}
@@ -137,8 +135,8 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
       </BuyBar>
       {related.length > 0 && (
         <section className="mt-14">
-          <h2 className="font-display text-xl font-semibold tracking-tight"><T>{"More in"}</T>{" "}{p.category}</h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <h2 className="border-b border-leaf-950/15 pb-3 font-display text-xl font-semibold tracking-tight"><T>{"More in"}</T>{" "}{p.category}</h2>
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {related.map((r) => (
               <ProductCard key={r.id} p={r} signedIn={!!viewer} />
             ))}
@@ -149,13 +147,11 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
   );
 }
 
-function Spec({ icon: Icon, label, value }: { icon: typeof Box; label: React.ReactNode; value: React.ReactNode }) {
+function Spec({ label, value }: { label: React.ReactNode; value: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-leaf-950/10 bg-white p-3">
-      <dt className="flex items-center gap-1.5 text-xs text-leaf-900/55">
-        <Icon className="size-3.5" /> {<Tx>{label}</Tx>}
-      </dt>
-      <dd className="mt-0.5 font-medium first-letter:uppercase">{value}</dd>
+    <div className="grid grid-cols-[8rem_1fr] gap-3 py-2.5">
+      <dt className="text-leaf-900/55">{<Tx>{label}</Tx>}</dt>
+      <dd className="font-medium first-letter:uppercase">{value}</dd>
     </div>
   );
 }
