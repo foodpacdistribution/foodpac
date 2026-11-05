@@ -4,12 +4,13 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
-import { getDb } from "@/lib/db";
+import { type DB, getDb } from "@/lib/db";
 import { customerPrices, products } from "@/lib/db/schema";
 import { parseDollars } from "@/lib/money";
 import { checkProductRow, duplicateSkus, MAX_IMPORT_ROWS, type ProductImportRow, type ProductValues } from "@/lib/product-import";
 import { UserError } from "@/lib/planning";
 import { readUpload } from "@/lib/proofs";
+import { fillWaiting } from "@/lib/stock-allocation";
 
 function revalidate() {
   revalidatePath("/admin/products");
@@ -54,8 +55,9 @@ export async function saveProduct(_prev: unknown, form: FormData) {
     };
     const [clash] = await db.select({ id: products.id }).from(products).where(eq(products.sku, sku)).limit(1);
     if (clash && clash.id !== id) throw new UserError("Another product already uses that SKU.");
-    if (id) await db.update(products).set(values).where(eq(products.id, id));
-    else await db.insert(products).values(values);
+    const productId = id ? (await db.update(products).set(values).where(eq(products.id, id)).returning({ id: products.id }))[0]?.id : (await db.insert(products).values(values).returning({ id: products.id }))[0].id;
+    // A higher stock count may be goods that waiting customers are owed.
+    if (productId) await fillWaiting(db, [productId]);
     revalidate();
     return { message: id ? "Product saved" : "Product added" };
   });
@@ -67,14 +69,22 @@ export async function adjustStock(productId: string, delta: number) {
     await assertUser(STAFF);
     if (!Number.isInteger(delta) || delta === 0) throw new UserError("Enter a whole number.");
     const db = await getDb();
-    const [p] = await db
-      .update(products)
-      .set({ stock: sql`greatest(0, ${products.stock} + ${delta})` })
-      .where(eq(products.id, productId))
-      .returning({ stock: products.stock, name: products.name });
-    if (!p) throw new UserError("Product not found.");
+    const { p, filled } = await db.transaction(async (tx) => {
+      const [p] = await tx
+        .update(products)
+        .set({ stock: sql`greatest(0, ${products.stock} + ${delta})` })
+        .where(eq(products.id, productId))
+        .returning({ name: products.name });
+      if (!p) throw new UserError("Product not found.");
+      // Goods received go to customers waiting for them first.
+      const filled = delta > 0 ? await fillWaiting(tx as unknown as DB, [productId]) : [];
+      const [{ stock }] = await tx.select({ stock: products.stock }).from(products).where(eq(products.id, productId));
+      return { p: { ...p, stock }, filled };
+    });
     revalidate();
-    return { message: `${p.name}: ${p.stock} in stock` };
+    revalidatePath("/admin/sales");
+    const toWaiting = filled.reduce((t, f) => t + f.qty, 0);
+    return { message: toWaiting ? `${p.name}: ${toWaiting} to waiting orders, ${p.stock} in stock` : `${p.name}: ${p.stock} in stock` };
   });
 }
 
@@ -185,9 +195,14 @@ export async function importProducts(rows: ProductImportRow[], opts: { pricesInc
           })),
         );
       }
+      const restocked: string[] = [];
       for (const { sku, ...set } of toUpdate) {
-        if (Object.keys(set).length) await tx.update(products).set({ ...set, updatedAt: new Date() }).where(eq(products.sku, sku));
+        if (!Object.keys(set).length) continue;
+        const [row] = await tx.update(products).set({ ...set, updatedAt: new Date() }).where(eq(products.sku, sku)).returning({ id: products.id });
+        if (row && set.stock !== undefined) restocked.push(row.id);
       }
+      // Imported stock counts go to waiting customers first.
+      await fillWaiting(tx as unknown as DB, restocked);
     });
     revalidate();
     return { data: { created: toCreate.length, updated: toUpdate.length, errors: [] } };

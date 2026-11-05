@@ -63,7 +63,7 @@ export async function createStaffUser(_prev: unknown, form: FormData) {
     const role = String(form.get("role"));
     const password = String(form.get("password") ?? "");
     if (!email || !name) throw new UserError("Name and email are required.");
-    if (role !== "admin" && role !== "dispatcher") throw new UserError("Choose a role.");
+    if (role !== "admin" && role !== "dispatcher" && role !== "sales") throw new UserError("Choose a role.");
     if (password.length < 8) throw new UserError("Password must be at least 8 characters.");
     const [exists] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (exists) throw new UserError("That email already has a login.");

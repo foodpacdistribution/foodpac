@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { ArrowLeft, ClipboardList, FileText, Truck } from "lucide-react";
+import { ArrowLeft, ClipboardList, FileText, Pencil, Truck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { notFound } from "next/navigation";
@@ -7,9 +7,10 @@ import { Badge, btn, Card, CardHeader } from "@/components/ui";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
-import { customers, orders, salesOrderItems, salesOrders } from "@/lib/db/schema";
+import { customers, orders, salesOrderItems, salesOrders, users } from "@/lib/db/schema";
 import { aud, FULFILMENT, PAYMENT_METHOD_LABEL, PAYMENT_STATUS, PAYMENT_TERMS_LABEL, SALES_STATUS } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
+import { editBlocker } from "@/lib/staff-orders";
 import { formatMinutesClock } from "@/lib/time";
 import { SaleActions } from "./sale-actions";
 import { T, Tx } from "@/components/i18n";
@@ -23,12 +24,17 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
   const db = await getDb();
   const [so] = await db.select().from(salesOrders).where(eq(salesOrders.id, id)).limit(1);
   if (!so) notFound();
-  const [[c], items, s, [d]] = await Promise.all([
+  const [[c], items, s, [d], [by]] = await Promise.all([
     db.select().from(customers).where(eq(customers.id, so.customerId)).limit(1),
     db.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id)),
     getSettings(db),
     so.deliveryOrderId ? db.select().from(orders).where(eq(orders.id, so.deliveryOrderId)).limit(1) : Promise.resolve([]),
+    so.userId ? db.select({ name: users.name, role: users.role }).from(users).where(eq(users.id, so.userId)).limit(1) : Promise.resolve([]),
   ]);
+  const canEdit = !editBlocker(so, d?.status ?? null);
+  const waiting = items.reduce((n, it) => n + it.backorderQty, 0);
+  // Orders entered in the back office say who took them.
+  const enteredBy = by && by.role !== "customer" ? by.name : null;
   const fmt = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "medium", timeStyle: "short" });
   const canCancel = so.status !== "cancelled" && (!d || d.status === "pending" || d.status === "planned" || d.status === "failed");
 
@@ -41,14 +47,28 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
           <h1 className="text-xl font-semibold tracking-tight text-slate-900"><T>{"Order"}</T>{" "}{so.number}</h1>
           <p className="mt-1 text-sm text-slate-500">
             {c.name} {" "}<T>{"· placed"}</T>{" "}{fmt.format(so.createdAt)}
+            {enteredBy && (
+              <>
+                {" "}
+                <T vars={{ name: enteredBy }}>{"· entered by {name}"}</T>
+              </>
+            )}
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Badge tone={SALES_STATUS[so.status].tone}>{<Tx>{SALES_STATUS[so.status].label}</Tx>}</Badge>
             <Badge tone={PAYMENT_STATUS[so.paymentStatus].tone}>{<Tx>{PAYMENT_STATUS[so.paymentStatus].label}</Tx>}</Badge>
             {so.status === "confirmed" && <Badge tone={FULFILMENT[so.fulfilment].tone}><T>{"Warehouse:"}</T>{" "}{<Tx>{FULFILMENT[so.fulfilment].label}</Tx>}</Badge>}
+            {so.status !== "cancelled" && waiting > 0 && <Badge tone="red"><T vars={{ n: waiting }}>{"{n} waiting for stock"}</T></Badge>}
           </div>
         </div>
+        <div className="flex flex-wrap gap-2">
+          {canEdit && (
+            <Link href={`/admin/sales/${so.id}/edit`} className={btn("secondary")}>
+              <Pencil className="size-4" /> <T>{"Edit order"}</T>
+            </Link>
+          )}
         <SaleActions id={so.id} status={so.status} paymentStatus={so.paymentStatus} paymentMethod={so.paymentMethod} fulfilment={so.fulfilment} canCancel={canCancel} isAdmin={me.role === "admin"} />
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
@@ -69,6 +89,13 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
                     <p className="text-xs text-slate-500">
                       {it.sku} · {it.packSize}
                     </p>
+                    {it.backorderQty > 0 && so.status !== "cancelled" && (
+                      <p className="mt-1">
+                        <Badge tone="red">
+                          {it.backorderQty === it.qty ? <T>{"Waiting for stock"}</T> : <T vars={{ n: it.backorderQty }}>{"{n} waiting for stock"}</T>}
+                        </Badge>
+                      </p>
+                    )}
                   </td>
                   <td className="px-2 py-2.5 text-right tabular-nums">
                     {it.qty} {it.unit}

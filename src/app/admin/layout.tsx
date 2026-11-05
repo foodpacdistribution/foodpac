@@ -2,7 +2,8 @@ import { and, count, eq, gte, ne, or } from "drizzle-orm";
 import { ExternalLink, LogOut } from "lucide-react";
 import Link from "@/components/link";
 import { logout } from "@/app/actions/auth";
-import { requireUser, STAFF } from "@/lib/auth/dal";
+import { PIPELINE, requireUser } from "@/lib/auth/dal";
+import { homeFor } from "@/lib/auth/session";
 import { Logo } from "@/components/brand";
 import { LanguageSwitch } from "@/components/language-switch";
 import { initials } from "@/lib/account";
@@ -10,18 +11,20 @@ import { getDb } from "@/lib/db";
 import { restoreDeliveries } from "@/lib/deliveries";
 import { enquiries, orders, salesOrders } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
+import { dueFollowUpCount } from "@/lib/pipeline";
 import { todayIn } from "@/lib/time";
 import { AdminLive } from "./admin-live";
 import { SideNav } from "./side-nav";
 import { T } from "@/components/i18n";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireUser(STAFF);
+  // Pages check their own roles too; sales staff only get the pipeline.
+  const user = await requireUser(PIPELINE);
   const db = await getDb();
   const s = await getSettings(db);
   await restoreDeliveries(db, s.timezone);
   // Sidebar badges. They update with the page's live refresh, so new orders show up without reloading.
-  const [[{ n: newEnquiries }], [{ n: newSales }], [{ n: toShip }]] = await Promise.all([
+  const [[{ n: newEnquiries }], [{ n: newSales }], [{ n: toShip }], followUps] = await Promise.all([
     db.select({ n: count() }).from(enquiries).where(eq(enquiries.status, "new")),
     // Shop orders waiting on the office: not yet confirmed, or confirmed and not yet picked.
     db
@@ -33,8 +36,10 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       .select({ n: count() })
       .from(orders)
       .where(and(eq(orders.status, "pending"), gte(orders.deliveryDate, todayIn(s.timezone)), ne(orders.source, "quick_route"))),
+    // Customers due a follow-up today (reminders set, or gone quiet).
+    dueFollowUpCount(db, user),
   ]);
-  const badges = { "/admin/enquiries": newEnquiries, "/admin/sales": newSales, "/admin/shipments": toShip };
+  const badges = { "/admin/enquiries": newEnquiries, "/admin/sales": newSales, "/admin/shipments": toShip, "/admin/pipeline": followUps };
 
   return (
     <div className="min-h-dvh lg:pl-60">
@@ -70,7 +75,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       {/* Mobile top bar */}
       <header className="no-print sticky top-0 z-30 border-b border-white/10 bg-navy-900 text-white lg:hidden">
         <div className="flex h-14 items-center justify-between gap-2 px-4">
-          <Link href="/admin" aria-label="Dashboard">
+          <Link href={homeFor(user.role)} aria-label="Dashboard">
             <Logo badge className="h-9" />
           </Link>
           <div className="flex items-center gap-1.5">

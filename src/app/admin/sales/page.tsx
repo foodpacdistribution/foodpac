@@ -47,6 +47,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
       so: salesOrders,
       customer: customers.name,
       items: sql<number>`(select coalesce(sum(soi.qty), 0)::int from ${salesOrderItems} soi where soi.sales_order_id = ${salesOrders}.id)`,
+      waiting: sql<number>`(select coalesce(sum(soi.backorder_qty), 0)::int from ${salesOrderItems} soi where soi.sales_order_id = ${salesOrders}.id)`,
     })
     .from(salesOrders)
     .innerJoin(customers, eq(customers.id, salesOrders.customerId))
@@ -67,7 +68,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
       today={today}
       todaySalesCents={todaySales}
       unpaidCount={unpaidIds.length}
-      rows={rows.map(({ so, customer, items }) => ({
+      rows={rows.map(({ so, customer, items, waiting }) => ({
         id: so.id,
         number: so.number,
         customer,
@@ -80,6 +81,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         fulfilment: so.fulfilment,
         delivery: so.deliveryOrderId ? (delivery.get(so.deliveryOrderId)?.stage ?? null) : null,
         dueDate: so.dueDate,
+        waiting,
       }))}
     />
   );

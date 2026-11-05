@@ -38,10 +38,12 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
   const items = so.length
     ? await db.select().from(salesOrderItems).where(inArray(salesOrderItems.salesOrderId, so.map((r) => r.so.id))).orderBy(asc(salesOrderItems.sku))
     : [];
-  const totals = new Map<string, { sku: string; name: string; packSize: string; unit: string; qty: number }>();
+  // Only what's on the shelf can be picked; units still waiting for stock are shown separately.
+  const totals = new Map<string, { sku: string; name: string; packSize: string; unit: string; qty: number; waiting: number }>();
   for (const it of items) {
-    const t = totals.get(it.sku) ?? { sku: it.sku, name: it.name, packSize: it.packSize, unit: it.unit, qty: 0 };
-    t.qty += it.qty;
+    const t = totals.get(it.sku) ?? { sku: it.sku, name: it.name, packSize: it.packSize, unit: it.unit, qty: 0, waiting: 0 };
+    t.qty += it.qty - it.backorderQty;
+    t.waiting += it.backorderQty;
     totals.set(it.sku, t);
   }
 
@@ -79,6 +81,11 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
                 </td>
                 <td className="px-4 py-2 text-right font-semibold tabular-nums">
                   {t.qty} {t.unit}
+                  {t.waiting > 0 && (
+                    <span className="block text-xs font-medium text-red-600">
+                      <T vars={{ n: t.waiting }}>{"{n} waiting for stock"}</T>
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -109,8 +116,13 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
                       <span className="mr-2 inline-block size-3 rounded-sm border border-slate-400 align-middle" />
                       {i.name}
                     </span>
-                    <span className="font-medium tabular-nums">
-                      {i.qty} {i.unit}
+                    <span className="text-right font-medium tabular-nums">
+                      {i.qty - i.backorderQty} {i.unit}
+                      {i.backorderQty > 0 && (
+                        <span className="block text-xs text-red-600">
+                          <T vars={{ n: i.backorderQty }}>{"{n} waiting for stock"}</T>
+                        </span>
+                      )}
                     </span>
                   </li>
                 ))}

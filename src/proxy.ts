@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { homeFor, SESSION_COOKIE, verifySession } from "./lib/auth/session";
+import { homeFor, SALES_HOME, SESSION_COOKIE, verifySession } from "./lib/auth/session";
 
 // The public website is open to everyone; only the back office and the driver app need a session.
 const PROTECTED = ["/admin", "/driver", "/quick-route", "/portal", "/account"];
@@ -23,6 +23,10 @@ export async function proxy(request: NextRequest) {
   }
   if (session.role === "driver" && !pathname.startsWith("/driver") && pathname !== "/quick-route" && pathname !== "/account") {
     return NextResponse.redirect(new URL("/driver", request.url));
+  }
+  // Sales staff only have the pipeline (and their own profile).
+  if (session.role === "sales" && !(pathname === SALES_HOME || pathname.startsWith(`${SALES_HOME}/`)) && pathname !== "/account") {
+    return NextResponse.redirect(new URL(SALES_HOME, request.url));
   }
   if (session.role === "customer" && !pathname.startsWith("/portal")) {
     return NextResponse.redirect(new URL(pathname === "/account" ? "/portal/profile" : "/portal", request.url));

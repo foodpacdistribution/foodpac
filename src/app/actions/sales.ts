@@ -1,17 +1,22 @@
 "use server";
 
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { orderConfirmed } from "@/lib/notify";
-import { type FulfilmentStatus, orders, products, salesOrderItems, salesOrders } from "@/lib/db/schema";
+import { type FulfilmentStatus, orders, type PaymentMethod, salesOrderItems, salesOrders } from "@/lib/db/schema";
+import { parseDollars } from "@/lib/money";
+import { createStaffOrder, updateStaffOrder } from "@/lib/staff-orders";
+import { inputToMinutes, todayIn } from "@/lib/time";
 import { refundOrExpire } from "@/lib/payments";
-import { UserError } from "@/lib/planning";
+import { getSettings, UserError } from "@/lib/planning";
 import { cancelOrder, confirmOrder } from "@/lib/shop";
 import { pruneEmptyRoutes } from "@/lib/shipments";
+import { fillWaiting, returnStock } from "@/lib/stock-allocation";
+import type { DB } from "@/lib/db";
 import { geocodeOrderIds } from "@/lib/sync";
 
 function revalidate(id?: string) {
@@ -127,17 +132,19 @@ export async function deleteSales(ids: string[]) {
     for (const so of rows) {
       await db.transaction(async (tx) => {
         const [d] = so.deliveryOrderId ? await tx.select().from(orders).where(eq(orders.id, so.deliveryOrderId)).limit(1) : [];
+        let returned: (string | null)[] = [];
         if (so.status !== "cancelled" && d?.status !== "delivered") {
+          // Only reserved units go back; anything still waiting for stock was never taken.
           const items = await tx.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id));
-          for (const it of items) {
-            if (it.productId) await tx.update(products).set({ stock: sql`${products.stock} + ${it.qty}` }).where(eq(products.id, it.productId));
-          }
+          for (const it of items) if (it.productId) await returnStock(tx as unknown as DB, it.productId, it.qty - it.backorderQty);
+          returned = items.map((it) => it.productId);
         }
         if (d) {
           dates.push(d.deliveryDate);
           await tx.delete(orders).where(eq(orders.id, d.id));
         }
         await tx.delete(salesOrders).where(eq(salesOrders.id, so.id));
+        await fillWaiting(tx as unknown as DB, returned);
       });
     }
     await pruneEmptyRoutes(db, dates);
@@ -145,5 +152,83 @@ export async function deleteSales(ids: string[]) {
     revalidatePath("/admin/shipments");
     revalidatePath("/admin/products");
     return { message: `Deleted ${rows.length} order${rows.length === 1 ? "" : "s"}` };
+  });
+}
+
+/** What the order form sends. Checked again on the server (staff-orders.ts). */
+export type StaffOrderPayload = {
+  customerId: string;
+  method: PaymentMethod;
+  deliveryDate: string;
+  recipient: string;
+  phone: string;
+  address: string;
+  instructions: string;
+  windowStart: string;
+  windowEnd: string;
+  notes: string;
+  deliveryFee: string;
+  lines: { productId: string; qty: number; unitPrice: string }[];
+  emailCustomer: boolean;
+  idempotencyKey: string;
+};
+
+function parsePayload(p: StaffOrderPayload) {
+  const cents = (v: string, what: string) => {
+    const n = parseDollars(String(v ?? "").trim() || "0");
+    if (n === null) throw new UserError(`${what} must be an amount, e.g. 12.50.`);
+    return n;
+  };
+  const text = (v: string, max: number) => String(v ?? "").trim().slice(0, max) || null;
+  return {
+    deliveryDate: String(p.deliveryDate ?? ""),
+    recipient: String(p.recipient ?? "").slice(0, 120),
+    phone: text(p.phone, 40),
+    address: String(p.address ?? "").slice(0, 300),
+    instructions: text(p.instructions, 500),
+    windowStartMin: inputToMinutes(text(p.windowStart, 10)),
+    windowEndMin: inputToMinutes(text(p.windowEnd, 10)),
+    notes: text(p.notes, 1000),
+    deliveryFeeCents: cents(p.deliveryFee, "Delivery fee"),
+    lines: (Array.isArray(p.lines) ? p.lines : []).slice(0, 300).map((l) => ({ productId: String(l.productId), qty: Math.round(Number(l.qty)), unitPriceCents: cents(l.unitPrice, "Price") })),
+  };
+}
+
+/** Staff enter an order for a customer (phone, email, or something that's out of stock and has to wait). */
+export async function createOrderForCustomer(p: StaffOrderPayload) {
+  return attempt<{ id: string }>(async () => {
+    const user = await assertUser(STAFF);
+    const db = await getDb();
+    const s = await getSettings(db);
+    const so = await createStaffOrder(db, user.id, { ...parsePayload(p), customerId: String(p.customerId ?? ""), method: p.method, idempotencyKey: String(p.idempotencyKey ?? "").slice(0, 80) }, todayIn(s.timezone));
+    if (so.deliveryOrderId) {
+      const id = so.deliveryOrderId;
+      after(async () => geocodeOrderIds(await getDb(), [id]));
+    }
+    if (p.emailCustomer) after(() => orderConfirmed(so.id, { office: false }));
+    revalidate(so.id);
+    revalidatePath("/admin/products");
+    revalidatePath("/", "layout");
+    return { message: `Order ${so.number} placed`, data: { id: so.id } };
+  });
+}
+
+/** Staff change an order: lines, quantities, prices, delivery details. Stock follows the change. */
+export async function updateOrderForCustomer(id: string, p: StaffOrderPayload) {
+  return attempt(async () => {
+    await assertUser(STAFF);
+    const db = await getDb();
+    const s = await getSettings(db);
+    const r = await updateStaffOrder(db, id, parsePayload(p), todayIn(s.timezone));
+    if (r.regeocode && r.deliveryOrderId) {
+      const deliveryId = r.deliveryOrderId;
+      after(async () => geocodeOrderIds(await getDb(), [deliveryId]));
+    }
+    await pruneEmptyRoutes(db, [r.previousDate]);
+    revalidate(id);
+    revalidatePath("/admin/products");
+    revalidatePath("/admin/planner");
+    revalidatePath("/", "layout");
+    return { message: "Order updated" };
   });
 }

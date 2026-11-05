@@ -6,7 +6,8 @@ import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "r
 import { deleteCustomer, removeCustomerLogin, saveCustomer } from "@/app/actions/customers";
 import { FormError, Modal, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
-import type { PaymentTerms } from "@/lib/db/schema";
+import type { PaymentTerms, SalesStage } from "@/lib/db/schema";
+import { SALES_STAGES, STAGE_INFO } from "@/lib/sales-stage";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { useT } from "@/components/i18n";
 import { AddressInput } from "@/components/address-input";
@@ -22,6 +23,7 @@ type Customer = {
   approved: boolean;
   paymentTerms: PaymentTerms;
   creditLimitCents: number | null;
+  salesStage: SalesStage;
   login: { email: string; name: string } | null;
   orderCount: number;
   spend90Cents: number;
@@ -111,6 +113,7 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
+                  {c.salesStage !== "won" && <Badge tone={STAGE_INFO[c.salesStage].tone}>{tr(STAGE_INFO[c.salesStage].label)}</Badge>}
                   {!c.approved && <Badge tone="amber">{tr("Needs approval")}</Badge>}
                   {!c.active && <Badge>{tr("Inactive")}</Badge>}
                   {c.login ? <Badge tone="green">{tr("Portal on")}</Badge> : <Badge>{tr("No login")}</Badge>}
@@ -209,12 +212,21 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
           <input name="abn" defaultValue={customer?.abn ?? ""} className={inputCls} />
         </Field>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Field label={tr("Payment terms")} hint={tr("Invoice terms let them choose “Pay by invoice” at checkout.")}>
           <select name="paymentTerms" defaultValue={customer?.paymentTerms ?? "prepay"} className={inputCls}>
             {Object.entries(PAYMENT_TERMS_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
                 {v}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={tr("Sales stage")} hint={tr("Also on the Sales Pipeline page.")}>
+          <select name="salesStage" defaultValue={customer?.salesStage ?? "won"} className={inputCls}>
+            {SALES_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {tr(STAGE_INFO[s].label)}
               </option>
             ))}
           </select>

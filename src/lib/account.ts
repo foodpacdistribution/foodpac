@@ -2,7 +2,7 @@
 
 export type AccountLink = { href: string; label: string };
 
-export const ROLE_LABEL = { admin: "Admin", dispatcher: "Dispatcher", driver: "Driver", customer: "Customer" } as const;
+export const ROLE_LABEL = { admin: "Admin", dispatcher: "Dispatcher", sales: "Salesperson", driver: "Driver", customer: "Customer" } as const;
 
 export function initials(name: string) {
   return name
@@ -31,8 +31,14 @@ export function accountLinks(role: keyof typeof ROLE_LABEL): AccountLink[] {
       { href: "/quick-route", label: "Quick route" },
       { href: "/account", label: "Profile & password" },
     ];
+  if (role === "sales")
+    return [
+      { href: "/admin/pipeline", label: "Sales pipeline" },
+      { href: "/account", label: "Profile & password" },
+    ];
   return [
     { href: "/admin", label: "Back office" },
+    { href: "/admin/pipeline", label: "Sales pipeline" },
     { href: "/admin/sales", label: "Sales orders" },
     { href: "/admin/planner", label: "Route planner" },
     { href: "/account", label: "Profile & password" },

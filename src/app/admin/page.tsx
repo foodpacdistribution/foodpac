@@ -8,6 +8,7 @@ import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { customers, deliveryEvents, drivers, orders, products, salesOrders } from "@/lib/db/schema";
 import { LOW_STOCK } from "@/lib/stock";
+import { listWaiting } from "@/lib/stock-allocation";
 import { restoreDeliveries } from "@/lib/deliveries";
 import { aud } from "@/lib/money";
 import { prettyDate } from "@/lib/dates";
@@ -71,6 +72,9 @@ export default async function DashboardPage() {
       .limit(6),
   ]);
 
+  // How many units customers are waiting for, per running-low product.
+  const waitingRows = low.length ? await listWaiting(db, low.map((p) => p.id)) : [];
+  const waitingFor = (id: string) => waitingRows.filter((w) => w.productId === id).reduce((n, w) => n + w.qty, 0);
   const plan = view.plan;
   const dispatched = plan?.status === "dispatched" || view.routes.some((r) => r.dispatchedAt);
   const count = (st: string) => dayOrders.filter((o) => o.status === st).length;
@@ -348,7 +352,15 @@ export default async function DashboardPage() {
                     <Boxes className="size-4 shrink-0 text-slate-400" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-slate-900">{p.name}</span>
-                      <span className="block text-xs text-slate-500">{p.sku}</span>
+                      <span className="block text-xs text-slate-500">
+                        {p.sku}
+                        {waitingFor(p.id) > 0 && (
+                          <span className="text-red-600">
+                            {" "}
+                            · <T vars={{ n: waitingFor(p.id) }}>{"{n} waiting for stock"}</T>
+                          </span>
+                        )}
+                      </span>
                     </span>
                     {p.stock <= 0 ? <Badge tone="red"><T>{"Sold out"}</T></Badge> : <Badge tone="amber"><T vars={{ n: p.stock }}>{"{n} left"}</T></Badge>}
                   </li>

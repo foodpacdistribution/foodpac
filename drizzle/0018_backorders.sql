@@ -1,0 +1,2 @@
+ALTER TABLE "sales_order_items" ADD COLUMN "backorder_qty" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+CREATE INDEX "sales_order_items_product_idx" ON "sales_order_items" USING btree ("product_id");

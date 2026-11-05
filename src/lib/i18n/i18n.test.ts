@@ -42,3 +42,26 @@ describe("zhDates", () => {
     expect(zhDates("Baking paper 40 cm x 120 m")).toBe("Baking paper 40 cm x 120 m");
   });
 });
+
+describe("sales pipeline messages", () => {
+  it("translates stage changes and saves", () => {
+    expect(translate(zh, "Lucky Noodle Bar: In talks")).toBe("Lucky Noodle Bar:洽谈中");
+    expect(translate(zh, "Customer added: Corner Bakehouse")).toBe("已添加客户:Corner Bakehouse");
+    expect(translate(zh, "{n} days ago", { n: 3 })).toBe("3 天前");
+  });
+});
+
+describe("follow-up messages", () => {
+  it("translates reminders, dates included", () => {
+    expect(translate(zh, "Reminder set for Sun, 8 Nov 2026")).toBe("已设置提醒:2026年11月8日 周日");
+    expect(translate(zh, "Followed up: Lucky Noodle Bar")).toBe("已回访:Lucky Noodle Bar");
+    expect(translate(zh, "No order for {n} days", { n: 16 })).toBe("已经 16 天没下单");
+  });
+});
+
+describe("staff order messages", () => {
+  it("translates order and stock messages", () => {
+    expect(translate(zh, "Order FP-10023 placed")).toBe("订单 FP-10023 已提交");
+    expect(translate(zh, "Cup 8 oz: 3 to waiting orders, 7 in stock")).toBe("Cup 8 oz:3 件分给了等货的订单,库存 7");
+  });
+});

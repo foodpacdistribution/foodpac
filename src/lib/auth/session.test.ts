@@ -10,6 +10,13 @@ describe("afterLogin", () => {
     expect(afterLogin("customer", "/admin/sales")).toBe("/portal");
     expect(afterLogin("driver", "/admin")).toBe("/driver");
     expect(afterLogin("admin", "/portal")).toBe("/admin");
+    expect(afterLogin("sales", "/admin/sales")).toBe("/admin/pipeline");
+    expect(afterLogin("sales", "/quick-route")).toBe("/admin/pipeline");
+  });
+  it("lands sales staff on the pipeline", () => {
+    expect(afterLogin("sales", null)).toBe("/admin/pipeline");
+    expect(afterLogin("sales", "/admin/pipeline?stage=won")).toBe("/admin/pipeline?stage=won");
+    expect(afterLogin("sales", "/account")).toBe("/account");
   });
   it("rejects external and malformed targets", () => {
     expect(afterLogin("admin", "https://evil.example")).toBe("/admin");

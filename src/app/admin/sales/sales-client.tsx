@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, ClipboardList, Download, Search, ShoppingBag, Trash2, X } from "lucide-react";
+import { BadgeCheck, ClipboardList, Download, Plus, Search, ShoppingBag, Trash2, X } from "lucide-react";
 import Link from "@/components/link";
 import { useState, useTransition } from "react";
 import { deleteSales, markManyPaid, setFulfilment } from "@/app/actions/sales";
@@ -34,6 +34,8 @@ type Row = {
   fulfilment: FulfilmentStatus;
   delivery: PortalStage | null;
   dueDate: string | null;
+  /** Units on this order still waiting for stock. */
+  waiting: number;
 };
 
 export function SalesClient({
@@ -81,7 +83,7 @@ export function SalesClient({
     <>
       <PageHeader
         title={tr("Sales Orders")}
-        subtitle={tr("Orders from the online shop. Confirmed orders go to the route planner automatically on their delivery day.")}
+        subtitle={tr("Orders from the online shop and orders entered here by staff. Confirmed orders go to the route planner automatically on their delivery day.")}
         actions={
           <>
             {rows.length > 0 && (
@@ -91,6 +93,9 @@ export function SalesClient({
             )}
             <Link href={ids.length ? `/admin/sales/picklist?ids=${ids.join(",")}` : "/admin/sales/picklist"} className={btn("secondary")}>
               <ClipboardList className="size-4" /> {ids.length ? tr(`Pick list (${ids.length})`) : tr("Pick list")}
+            </Link>
+            <Link href="/admin/sales/new" className={btn("primary")}>
+              <Plus className="size-4" /> {tr("New order")}
             </Link>
           </>
         }
@@ -200,6 +205,7 @@ export function SalesClient({
                       {paymentBadge(r)}
                       {r.status === "confirmed" && <Badge tone={FULFILMENT[r.fulfilment].tone}>{<Tx>{FULFILMENT[r.fulfilment].label}</Tx>}</Badge>}
                       {r.delivery && <Badge tone={DELIVERY[r.delivery].tone}>{<Tx>{DELIVERY[r.delivery].label}</Tx>}</Badge>}
+                      {r.waiting > 0 && r.status !== "cancelled" && <Badge tone="red">{tr("{n} waiting for stock", { n: r.waiting })}</Badge>}
                     </span>
                   </Link>
                 </div>
@@ -236,6 +242,7 @@ export function SalesClient({
                       <p className="text-xs text-slate-500">
                         {r.customer} · {tr(r.items === 1 ? "{n} item" : "{n} items", { n: r.items })}
                       </p>
+                      {r.waiting > 0 && r.status !== "cancelled" && <Badge tone="red" className="mt-1">{tr("{n} waiting for stock", { n: r.waiting })}</Badge>}
                     </td>
                     <td className={cx("px-2 py-2.5", r.deliveryDate === today && "font-semibold")}>{<Tx>{prettyDate(r.deliveryDate, { weekday: "short", day: "numeric", month: "short" })}</Tx>}</td>
                     <td className="px-2 py-2.5">

@@ -37,6 +37,8 @@ export async function assertUser(roles: Role[]): Promise<CurrentUser> {
 }
 
 export const STAFF: Role[] = ["admin", "dispatcher"];
+/** Everyone who works the sales pipeline: office staff and sales staff. */
+export const PIPELINE: Role[] = ["admin", "dispatcher", "sales"];
 
 /** The signed-in customer's business, or null for guests, staff and drivers. */
 export const getCurrentCustomer = cache(async () => {

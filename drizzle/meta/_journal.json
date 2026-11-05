@@ -113,6 +113,27 @@
       "when": 1793760012891,
       "tag": "0015_business_details",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793883903660,
+      "tag": "0016_sales_pipeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793884701764,
+      "tag": "0017_follow_ups",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793885365412,
+      "tag": "0018_backorders",
+      "breakpoints": true
     }
   ]
 }

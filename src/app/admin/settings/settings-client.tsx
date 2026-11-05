@@ -123,7 +123,7 @@ export function SettingsClient({
 
         <div className="space-y-4">
           <Card>
-            <CardHeader title={<span className="flex items-center gap-2"><Users className="size-4 text-slate-400" /> {" "}{tr("Staff logins")}</span>} subtitle={tr("Driver logins are managed on the Drivers page.")} />
+            <CardHeader title={<span className="flex items-center gap-2"><Users className="size-4 text-slate-400" /> {" "}{tr("Staff logins")}</span>} subtitle={tr("Sales staff only see the Sales Pipeline. Driver logins are managed on the Drivers page.")} />
             {notice && <p className="border-b border-line bg-slate-50 px-4 py-2 text-xs text-slate-600">{notice}</p>}
             <ul className="divide-y divide-line">
               {users.map((u) => (
@@ -132,7 +132,7 @@ export function SettingsClient({
                     <p className="truncate text-sm font-medium text-slate-800">{u.name}</p>
                     <p className="truncate text-xs text-slate-500">{u.email}</p>
                   </div>
-                  <Badge tone={u.role === "admin" ? "violet" : u.role === "dispatcher" ? "blue" : "slate"}>{tr(u.role)}</Badge>
+                  <Badge tone={u.role === "admin" ? "violet" : u.role === "dispatcher" ? "blue" : u.role === "sales" ? "green" : "slate"}>{tr(u.role)}</Badge>
                   {u.id !== meId && u.role !== "driver" && (
                     <button
                       className={btn("ghost", "icon", "text-slate-400 hover:text-red-600")}
@@ -159,6 +159,7 @@ export function SettingsClient({
                 <input name="name" placeholder={tr("Name")} className={inputCls} />
                 <select name="role" defaultValue="dispatcher" className={inputCls}>
                   <option value="dispatcher">{tr("Dispatcher")}</option>
+                  <option value="sales">{tr("Salesperson")}</option>
                   <option value="admin">{tr("Admin")}</option>
                 </select>
                 <input name="email" type="email" placeholder={tr("Email")} className={cx(inputCls, "col-span-2")} />

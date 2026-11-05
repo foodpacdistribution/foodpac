@@ -1,12 +1,13 @@
 "use client";
 
-import { Download, Eye, EyeOff, FileUp, ImageIcon, PackagePlus, Pencil, Percent, Plus, Search, Star, Tag, Trash2 } from "lucide-react";
+import { Clock, Download, Eye, EyeOff, FileUp, ImageIcon, PackagePlus, Pencil, Percent, Phone, Plus, Search, Star, Tag, Trash2 } from "lucide-react";
 import Link from "@/components/link";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { adjustStock, bulkProducts, deleteProduct, type ProductBulkOp, saveProduct } from "@/app/actions/products";
 import { FormError, Modal, SubmitButton, Toast, type ToastMessage, KeptForm, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import { aud } from "@/lib/money";
+import { prettyDate } from "@/lib/dates";
 import { LOW_STOCK } from "@/lib/stock";
 import { TEMPLATE_HEADERS, toCsv } from "@/lib/product-import";
 import { useT } from "@/components/i18n";
@@ -30,7 +31,12 @@ type Product = {
   hasImage: boolean;
   /** Versioned, so a new photo shows straight away. */
   imageUrl: string | null;
+  /** Orders waiting for this product, oldest first. */
+  waiting: Waiting[];
 };
+
+type Waiting = { orderId: string; number: string; customer: string; phone: string | null; qty: number; deliveryDate: string };
+const waitingQty = (p: Product) => p.waiting.reduce((n, w) => n + w.qty, 0);
 
 
 type ActionResult = { ok: boolean; message?: string; error?: string };
@@ -40,7 +46,8 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
   const tr = useT();
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<"all" | "low" | "inactive">("all");
+  const [filter, setFilter] = useState<"all" | "low" | "waiting" | "inactive">("all");
+  const [showWaiting, setShowWaiting] = useState<Product | null>(null);
   const [category, setCategory] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -50,13 +57,14 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
     const s = deferredQ.trim().toLowerCase();
     return products.filter(
       (p) =>
-        (filter === "all" || (filter === "low" ? p.active && p.stock <= LOW_STOCK : !p.active)) &&
+        (filter === "all" || (filter === "low" ? p.active && p.stock <= LOW_STOCK : filter === "waiting" ? p.waiting.length > 0 : !p.active)) &&
         (!category || p.category === category) &&
         (!s || p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s) || p.barcode?.includes(s)),
     );
   }, [products, deferredQ, filter, category]);
   const low = products.filter((p) => p.active && p.stock <= LOW_STOCK).length;
   const hidden = products.filter((p) => !p.active).length;
+  const waitingCount = products.filter((p) => p.waiting.length > 0).length;
   const usedCategories = useMemo(() => [...new Set(products.map((p) => p.category))].sort(), [products]);
   // Only rows still on screen count as selected, so a filter change can't act on hidden rows.
   const ids = shown.filter((p) => selected.has(p.id)).map((p) => p.id);
@@ -109,11 +117,13 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
           ))}
         </select>
         <div className="flex gap-1">
-          {(["all", "low", "inactive"] as const).map((f) => (
-            <button key={f} onClick={() => setFilter(f)} className={cx(btn(filter === f ? "primary" : "ghost", "sm"))}>
-              {f === "all" ? tr(`All (${products.length})`) : f === "low" ? tr(`Low stock (${low})`) : tr(`Hidden (${hidden})`)}
-            </button>
-          ))}
+          {(["all", "low", "waiting", "inactive"] as const).map((f) =>
+            f === "waiting" && !waitingCount ? null : (
+              <button key={f} onClick={() => setFilter(f)} className={cx(btn(filter === f ? "primary" : "ghost", "sm"), f === "waiting" && filter !== f && "text-red-600")}>
+                {f === "all" ? tr(`All (${products.length})`) : f === "low" ? tr(`Low stock (${low})`) : f === "waiting" ? tr("Waiting for stock ({n})", { n: waitingCount }) : tr(`Hidden (${hidden})`)}
+              </button>
+            ),
+          )}
         </div>
       </div>
 
@@ -203,6 +213,7 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
                       <span className={cx("text-xs font-semibold tabular-nums", stockTone(p.stock))}>
                         {tr("Stock")} {p.stock}
                       </span>
+                      {p.waiting.length > 0 && <WaitingChip p={p} onClick={() => setShowWaiting(p)} />}
                       {p.featured && <Badge tone="violet">{tr("Featured")}</Badge>}
                       {!p.active && <Badge>{tr("Hidden")}</Badge>}
                     </div>
@@ -264,7 +275,14 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
                       {aud(p.priceCents)}
                       {!p.gst && <span className="block text-[11px] text-slate-400">{tr("GST free")}</span>}
                     </td>
-                    <td className={cx("px-2 py-2.5 text-right font-semibold tabular-nums", stockTone(p.stock))}>{p.stock}</td>
+                    <td className={cx("px-2 py-2.5 text-right font-semibold tabular-nums", stockTone(p.stock))}>
+                      {p.stock}
+                      {p.waiting.length > 0 && (
+                        <span className="mt-0.5 block">
+                          <WaitingChip p={p} onClick={() => setShowWaiting(p)} />
+                        </span>
+                      )}
+                    </td>
                     <td className="px-2 py-2.5">
                       <StockAdjust id={p.id} onResult={setToast} />
                     </td>
@@ -295,6 +313,9 @@ export function ProductsClient({ products, categories, isAdmin }: { products: Pr
             onDone={() => setEditing(null)}
           />
         )}
+      </Modal>
+      <Modal open={showWaiting !== null} onClose={() => setShowWaiting(null)} title={showWaiting ? tr("Waiting for {name}", { name: showWaiting.name }) : ""}>
+        {showWaiting && <WaitingList p={showWaiting} />}
       </Modal>
       <Toast toast={toast} onDone={() => setToast(null)} />
     </>
@@ -426,5 +447,50 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
       </div>
       <SubmitButton className="sm:col-span-2">{p ? tr("Save product") : tr("Add product")}</SubmitButton>
     </KeptForm>
+  );
+}
+
+/** "12 waiting · 3 customers": tap to see who. */
+function WaitingChip({ p, onClick }: { p: Product; onClick: () => void }) {
+  const tr = useT();
+  const customers = new Set(p.waiting.map((w) => w.customer)).size;
+  return (
+    <button type="button" onClick={onClick} className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-red-700 ring-1 ring-red-200 hover:bg-red-100">
+      <Clock className="size-3" />
+      {tr(customers === 1 ? "{n} waiting · 1 customer" : "{n} waiting · {c} customers", { n: waitingQty(p), c: customers })}
+    </button>
+  );
+}
+
+/** Who ordered a product that's out of stock, oldest first: the order stock goes to when it arrives. */
+function WaitingList({ p }: { p: Product }) {
+  const tr = useT();
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-600">{tr("Stock you receive with + goes to these orders first, oldest first. What's left goes back on sale in the shop.")}</p>
+      <ul className="divide-y divide-line rounded-lg border border-line">
+        {p.waiting.map((w) => (
+          <li key={w.orderId} className="flex items-center gap-3 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-slate-900">{w.customer}</p>
+              <p className="text-xs text-slate-500">
+                <Link href={`/admin/sales/${w.orderId}`} className="font-medium text-blue-700 hover:underline">
+                  {w.number}
+                </Link>{" "}
+                · {tr("delivery {date}", { date: tr(prettyDate(w.deliveryDate, { weekday: "short", day: "numeric", month: "short" })) })}
+              </p>
+            </div>
+            {w.phone && (
+              <a href={`tel:${w.phone.replace(/\s/g, "")}`} className={btn("ghost", "sm")} title={w.phone}>
+                <Phone className="size-3.5" /> <span className="max-sm:sr-only">{w.phone}</span>
+              </a>
+            )}
+            <span className="shrink-0 text-sm font-semibold text-red-700 tabular-nums">
+              {w.qty} {tr(p.unit)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -15,9 +15,12 @@ function secret() {
   return new TextEncoder().encode(s);
 }
 
+/** The one back-office page sales staff use. */
+export const SALES_HOME = "/admin/pipeline";
+
 /** Where each role lands after signing in, and where it is sent when it opens a page it can't use. */
 export function homeFor(role: Role) {
-  return role === "driver" ? "/driver" : role === "customer" ? "/portal" : "/admin";
+  return role === "driver" ? "/driver" : role === "customer" ? "/portal" : role === "sales" ? SALES_HOME : "/admin";
 }
 
 /**
@@ -30,7 +33,9 @@ export function afterLogin(role: Role, next: string | null | undefined) {
   const path = next.split(/[?#]/)[0];
   const under = (p: string) => path === p || path.startsWith(`${p}/`);
   const ok =
-    role === "customer"
+    role === "sales"
+      ? under(SALES_HOME) || path === "/account" || !(under("/admin") || under("/portal") || under("/driver") || path === "/quick-route")
+      : role === "customer"
       ? !under("/admin") && !under("/driver") && !under("/quick-route")
       : role === "driver"
         ? under("/driver") || path === "/quick-route" || !(under("/admin") || under("/portal"))

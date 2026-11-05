@@ -5,6 +5,7 @@ import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { productImageUrl } from "@/lib/product-image";
+import { listWaiting } from "@/lib/stock-allocation";
 import { ProductsClient } from "./products-client";
 
 export const metadata: Metadata = { title: "Products & Stock" };
@@ -33,10 +34,18 @@ export default async function ProductsPage() {
     })
     .from(products)
     .orderBy(asc(products.category), asc(products.name));
+  // Who is waiting for each product, oldest order first.
+  const waiting = await listWaiting(db);
   const categories = [...new Set([...CATEGORIES.map((c) => c.title), ...rows.map((r) => r.category)])];
   return (
     <ProductsClient
-      products={rows.map(({ updatedAt, ...r }) => ({ ...r, imageUrl: r.hasImage ? productImageUrl({ id: r.id, updatedAt }) : null }))}
+      products={rows.map(({ updatedAt, ...r }) => ({
+        ...r,
+        imageUrl: r.hasImage ? productImageUrl({ id: r.id, updatedAt }) : null,
+        waiting: waiting
+          .filter((w) => w.productId === r.id)
+          .map((w) => ({ orderId: w.orderId, number: w.number, customer: w.customer, phone: w.phone, qty: w.qty, deliveryDate: w.deliveryDate })),
+      }))}
       categories={categories}
       isAdmin={me.role === "admin"}
     />

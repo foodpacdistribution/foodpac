@@ -9,6 +9,7 @@ const DEMO = [
   ["customer@demo.local", "Customer"],
   ["admin@demo.local", "Admin"],
   ["dispatch@demo.local", "Dispatcher"],
+  ["sales@demo.local", "Salesperson"],
   ["john@demo.local", "Driver"],
 ];
 

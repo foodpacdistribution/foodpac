@@ -11,6 +11,7 @@ import { getDb } from "@/lib/db";
 import { accountApproved } from "@/lib/notify";
 import { customers, type PaymentTerms, salesOrders, users } from "@/lib/db/schema";
 import { parseDollars } from "@/lib/money";
+import { isSalesStage } from "@/lib/sales-stage";
 import { UserError } from "@/lib/planning";
 
 export async function saveCustomer(_prev: unknown, form: FormData) {
@@ -32,6 +33,7 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
       paymentTerms: (["prepay", "net7", "net14", "net30"].includes(get("paymentTerms")) ? get("paymentTerms") : "prepay") as PaymentTerms,
       creditLimitCents: get("creditLimit") ? parseDollars(get("creditLimit")) : null,
     };
+    const stage = get("salesStage");
     if (get("creditLimit") && values.creditLimitCents === null) throw new UserError("Credit limit must be an amount, e.g. 5000.");
 
     const loginEmail = get("loginEmail").toLowerCase();
@@ -39,11 +41,13 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
     const password = get("password");
     if (password && password.length < 8) throw new UserError("Password must be at least 8 characters.");
 
-    const [before] = id ? await db.select({ approved: customers.approved }).from(customers).where(eq(customers.id, id)).limit(1) : [];
+    const [before] = id ? await db.select({ approved: customers.approved, stage: customers.salesStage }).from(customers).where(eq(customers.id, id)).limit(1) : [];
+    // The office form can move the sales stage too; the date only changes when the stage does.
+    const stageFields = isSalesStage(stage) && stage !== before?.stage ? { salesStage: stage, salesStageAt: new Date() } : {};
     const customerId = await db.transaction(async (tx) => {
       let customerId = id;
-      if (id) await tx.update(customers).set(values).where(eq(customers.id, id));
-      else customerId = (await tx.insert(customers).values(values).returning({ id: customers.id }))[0].id;
+      if (id) await tx.update(customers).set({ ...values, ...stageFields }).where(eq(customers.id, id));
+      else customerId = (await tx.insert(customers).values({ ...values, ...stageFields }).returning({ id: customers.id }))[0].id;
 
       if (!loginEmail) return customerId!;
       const [login] = await tx.select().from(users).where(eq(users.customerId, customerId!)).limit(1);
@@ -69,6 +73,7 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
     // Registration promises an email once the account can order.
     if (before && !before.approved && values.approved) after(() => accountApproved(customerId));
     revalidatePath("/admin/customers");
+    revalidatePath("/admin/pipeline");
     return { message: id ? "Customer updated" : "Customer added" };
   });
 }

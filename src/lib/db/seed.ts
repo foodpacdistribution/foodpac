@@ -65,6 +65,7 @@ export async function seedDemo(db: DB) {
   await db.insert(users).values([
     { email: "admin@demo.local", name: "Alex Admin", role: "admin", passwordHash },
     { email: "dispatch@demo.local", name: "Dana Dispatcher", role: "dispatcher", passwordHash },
+    { email: "sales@demo.local", name: "Sophie Sales", role: "sales", passwordHash },
     ...driverRows.map((d) => ({
       email: `${d.name.split(" ")[0].toLowerCase()}@demo.local`,
       name: d.name,
@@ -158,8 +159,14 @@ export async function seedShopDemo(db: DB) {
   // Named like a demo delivery order so the portal also shows today's tracked delivery.
   const [c] = await db
     .insert(customers)
-    .values({ name: "Demo Customer 01", phone: "07 3000 0001", email: "customer@demo.local", address: "Fortitude Valley QLD 4006", paymentTerms: "net14", creditLimitCents: 500000 })
+    .values({ name: "Demo Customer 01", phone: "07 3000 0001", email: "customer@demo.local", address: "Fortitude Valley QLD 4006", paymentTerms: "net14", creditLimitCents: 500000, salesStage: "won" })
     .returning();
+  // A few businesses at earlier stages, for the Sales Pipeline.
+  await db.insert(customers).values([
+    { name: "Corner Bakehouse", phone: "07 3000 0101", address: "West End QLD 4101", salesStage: "new" },
+    { name: "Lucky Noodle Bar", phone: "07 3000 0102", email: "hello@luckynoodle.example", address: "Sunnybank QLD 4109", salesStage: "interested" },
+    { name: "Harbour Fish & Chips", phone: "07 3000 0103", address: "Manly QLD 4179", salesStage: "negotiating" },
+  ]);
   await db.insert(users).values({ email: "customer@demo.local", name: "Casey Customer", role: "customer", customerId: c.id, passwordHash: await hashPassword("demo1234") }).onConflictDoNothing();
   const special = rows.filter((r) => r.sku === "FP-2001" || r.sku === "FP-1001");
   if (special.length) await db.insert(customerPrices).values(special.map((r) => ({ customerId: c.id, productId: r.id, priceCents: Math.round(r.priceCents * 0.9) })));

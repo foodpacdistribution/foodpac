@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   customType,
   date,
@@ -16,7 +17,10 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-export type Role = "admin" | "dispatcher" | "driver" | "customer";
+export type Role = "admin" | "dispatcher" | "driver" | "customer" | "sales";
+
+/** Where a customer is in the sales process: a fresh lead, keen to work with us, in talks, or won. */
+export type SalesStage = "new" | "interested" | "negotiating" | "won";
 
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -57,6 +61,8 @@ export const settings = pgTable("settings", {
   contactAddress: text("contact_address").notNull().default(""),
   abn: text("abn").notNull().default(""),
   openingHours: text("opening_hours").notNull().default(""),
+  /** Sales pipeline: remind sales staff about a customer who hasn't ordered for this many days. */
+  quietDays: integer("quiet_days").notNull().default(14),
 });
 
 export const depots = pgTable("depots", {
@@ -103,6 +109,16 @@ export const customers = pgTable("customers", {
   paymentTerms: text("payment_terms").$type<PaymentTerms>().notNull().default("prepay"),
   /** Max unpaid invoice balance for account customers. null = no limit. */
   creditLimitCents: integer("credit_limit_cents"),
+  /** Sales pipeline, set by sales staff. */
+  salesStage: text("sales_stage").$type<SalesStage>().notNull().default("new"),
+  salesStageAt: timestamp("sales_stage_at", { withTimezone: true }).notNull().defaultNow(),
+  /** The salesperson looking after this customer (whoever added it, or first moved it along). */
+  salesRepId: uuid("sales_rep_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+  /** A reminder to get back in touch on this day (and a note on what about). */
+  followUpOn: date("follow_up_on", { mode: "string" }),
+  followUpNote: text("follow_up_note"),
+  /** Last time someone marked a follow-up done; quiet-customer reminders wait a full quiet spell after it. */
+  contactedAt: timestamp("contacted_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
 
@@ -635,6 +651,11 @@ export const salesOrderItems = pgTable(
     qty: integer("qty").notNull(),
     gst: boolean("gst").notNull(),
     lineCents: integer("line_cents").notNull(),
+    /**
+     * Ordered by staff while short: this many of `qty` are still waiting for stock (the rest is
+     * reserved). Goods received go to waiting lines first, oldest order first.
+     */
+    backorderQty: integer("backorder_qty").notNull().default(0),
   },
-  (t) => [index("sales_order_items_order_idx").on(t.salesOrderId)],
+  (t) => [index("sales_order_items_order_idx").on(t.salesOrderId), index("sales_order_items_product_idx").on(t.productId)],
 );

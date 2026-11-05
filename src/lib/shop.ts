@@ -20,6 +20,7 @@ import { shiftDate } from "./dates";
 import { GST_RATE } from "./money";
 import { orderConfirmed } from "./notify";
 import { UserError } from "./planning";
+import { fillWaiting, returnStock } from "./stock-allocation";
 import { nowSecondsIn, todayIn } from "./time";
 
 type Settings = typeof settings.$inferSelect;
@@ -342,7 +343,7 @@ export type Checkout = {
   notes: string | null;
 };
 
-const dueIn = { prepay: 0, net7: 7, net14: 14, net30: 30 } as const;
+export const dueIn = { prepay: 0, net7: 7, net14: 14, net30: 30 } as const;
 
 /**
  * Creates the order in one transaction: re-prices the cart, reserves stock with a
@@ -428,7 +429,7 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
 }
 
 /** The stop the planner routes. Same number as the sales order so drivers and customers see one reference. */
-async function createDeliveryOrder(db: DB, so: typeof salesOrders.$inferSelect, customer: Customer, lines?: { qty: number }[]) {
+export async function createDeliveryOrder(db: DB, so: typeof salesOrders.$inferSelect, customer: Customer, lines?: { qty: number }[]) {
   const qty = lines ? lines.reduce((t, l) => t + l.qty, 0) : await itemCount(db, so.id);
   const [row] = await db
     .insert(orders)
@@ -531,15 +532,16 @@ export async function cancelOrder(db: DB, salesOrderId: string) {
       await tx.delete(routeStops).where(and(eq(routeStops.orderId, so.deliveryOrderId), eq(routeStops.status, "pending")));
       await tx.delete(orders).where(eq(orders.id, so.deliveryOrderId));
     }
+    // Only what was actually reserved goes back; units still waiting for stock never left the shelf.
     const items = await tx.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id));
-    for (const it of items) {
-      if (it.productId) await tx.update(products).set({ stock: sql`${products.stock} + ${it.qty}` }).where(eq(products.id, it.productId));
-    }
+    for (const it of items) if (it.productId) await returnStock(tx as unknown as DB, it.productId, it.qty - it.backorderQty);
     const [updated] = await tx
       .update(salesOrders)
       .set({ status: "cancelled", cancelledAt: new Date(), deliveryOrderId: null })
       .where(eq(salesOrders.id, so.id))
       .returning();
+    // The returned stock may be what another customer is waiting for.
+    await fillWaiting(tx as unknown as DB, items.map((it) => it.productId));
     return updated;
   });
 }

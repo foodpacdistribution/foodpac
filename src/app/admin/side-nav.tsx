@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Boxes, Building2, GalleryHorizontal, Inbox, LayoutDashboard, Map, Package, PackageCheck, Radio, Settings, ShoppingBag, TrendingUp, Truck, Zap } from "lucide-react";
+import { BarChart3, Boxes, Building2, Target, GalleryHorizontal, Inbox, LayoutDashboard, Map, Package, PackageCheck, Radio, Settings, ShoppingBag, TrendingUp, Truck, Zap } from "lucide-react";
 import Link from "@/components/link";
 import { usePathname } from "next/navigation";
 import { LinkPending } from "@/components/client-ui";
@@ -30,6 +30,7 @@ const SECTIONS = [
   {
     title: "People",
     items: [
+      { href: "/admin/pipeline", label: "Sales Pipeline", icon: Target },
       { href: "/admin/customers", label: "Customers", icon: Building2 },
       { href: "/admin/drivers", label: "Drivers", icon: Truck },
     ],
@@ -59,7 +60,9 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
   const tr = useT();
   const isActive = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname.startsWith(href));
   const count = (href: string) => (badges[href] ? badges[href] : null);
-  const sections = SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => !("adminOnly" in i) || role === "admin") })).filter(
+  const allowed = (i: (typeof SECTIONS)[number]["items"][number]) =>
+    role === "sales" ? i.href === "/admin/pipeline" : !("adminOnly" in i) || role === "admin";
+  const sections = SECTIONS.map((s) => ({ ...s, items: s.items.filter(allowed) })).filter(
     (s) => s.items.length,
   );
 
