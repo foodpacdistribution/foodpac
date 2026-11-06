@@ -12,18 +12,21 @@ import { ShopSettingsCard } from "./shop-settings";
 import { BusinessDetailsCard } from "./business-details";
 import { stripeEnabled } from "@/lib/stripe";
 import { databaseUrl } from "@/lib/db/url";
+import { emailDomainStatus, officeEmail, resendKeyHasExtra, senderAddress } from "@/lib/email";
+import { EmailCard } from "./email-card";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const me = await requireUser(["admin"]);
   const db = await getDb();
-  const [s, userRows, depotRows, keyRows, feedRows] = await Promise.all([
+  const [s, userRows, depotRows, keyRows, feedRows, emailDomain] = await Promise.all([
     getSettings(db),
     db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).where(ne(users.role, "customer")).orderBy(asc(users.role), asc(users.name)),
     db.select().from(depots).orderBy(asc(depots.createdAt)),
     db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt)),
     db.select().from(orderFeeds).orderBy(asc(orderFeeds.createdAt)),
+    emailDomainStatus(),
   ]);
 
   return (
@@ -42,6 +45,7 @@ export default async function SettingsPage() {
       }}
     >
       <BusinessDetailsCard contactPhone={s.contactPhone} contactEmail={s.contactEmail} contactAddress={s.contactAddress} abn={s.abn} openingHours={s.openingHours} />
+      <EmailCard sender={senderAddress()} office={officeEmail()} domain={emailDomain} keyHasExtra={resendKeyHasExtra()} myEmail={me.email} />
       <ShopSettingsCard
         deliveryFeeCents={s.deliveryFeeCents}
         freeDeliveryOverCents={s.freeDeliveryOverCents}

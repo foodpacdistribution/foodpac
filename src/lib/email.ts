@@ -9,7 +9,16 @@ import { siteUrl } from "./site-url";
 
 const RESEND_URL = "https://api.resend.com/emails";
 
-export const emailEnabled = () => !!process.env.RESEND_API_KEY;
+/**
+ * The API key. Only its first word: a value pasted with more on the following lines (another
+ * VAR=... line copied along with it) would otherwise make every request fail with an invalid header.
+ */
+export const resendKey = () => process.env.RESEND_API_KEY?.trim().split(/\s+/)[0] || undefined;
+
+/** True when the key setting has more than the key in it (worth fixing in the environment settings). */
+export const resendKeyHasExtra = () => /\s/.test(process.env.RESEND_API_KEY?.trim() ?? "");
+
+export const emailEnabled = () => !!resendKey();
 
 /** Where notifications for the office go (new orders, enquiries, sign-ups). */
 export const officeEmail = () => process.env.OFFICE_EMAIL?.trim() || null;
@@ -34,7 +43,7 @@ export function explainResendError(status: number, message: string) {
  * not undo or block the order, sign-up or message that triggered it.
  */
 export async function sendEmailResult(msg: Email): Promise<{ ok: true; id: string | null } | { ok: false; error: string }> {
-  const key = process.env.RESEND_API_KEY;
+  const key = resendKey();
   if (!key) return { ok: false, error: "Email isn't set up (RESEND_API_KEY is missing)." };
   try {
     const res = await fetch(RESEND_URL, {
@@ -59,8 +68,47 @@ export async function sendEmailResult(msg: Email): Promise<{ ok: true; id: strin
     console.info(`[email] sent "${msg.subject}" to ${String(msg.to)} (${id ?? "no id"})`);
     return { ok: true, id };
   } catch (err) {
-    console.warn(`[email] couldn't send "${msg.subject}":`, (err as Error).message);
-    return { ok: false, error: (err as Error).name === "TimeoutError" ? "Resend didn't answer in time. Try again." : "Couldn't reach Resend. Try again." };
+    // Never log the raw message: for a malformed key it repeats the whole Authorization header.
+    const badKey = (err as Error).message.includes("header");
+    console.warn(`[email] couldn't send "${msg.subject}": ${(err as Error).name}${badKey ? " (the RESEND_API_KEY setting isn't a valid key)" : ""}`);
+    return {
+      ok: false,
+      error: badKey
+        ? "The RESEND_API_KEY setting isn't a valid key. Paste just the key (re_…) into it, on one line."
+        : (err as Error).name === "TimeoutError"
+          ? "Resend didn't answer in time. Try again."
+          : "Couldn't reach Resend. Try again.",
+    };
+  }
+}
+
+/** The From address emails go out with. */
+export const senderAddress = () => from();
+
+export type DomainStatus =
+  | { kind: "off" }
+  | { kind: "test-sender" } // onboarding@resend.dev: only the Resend account owner receives
+  | { kind: "unknown"; note: string } // a sending-only key can't read domains; the test email will tell
+  | { kind: "missing"; domain: string; others: string[] }
+  | { kind: "found"; domain: string; status: string; region: string | null };
+
+/** Whether the sender's domain is set up in the Resend account this API key belongs to. */
+export async function emailDomainStatus(): Promise<DomainStatus> {
+  const key = resendKey();
+  if (!key) return { kind: "off" };
+  const domain = /@([^>\s]+)>?\s*$/.exec(from())?.[1]?.toLowerCase() ?? "";
+  if (domain === "resend.dev") return { kind: "test-sender" };
+  try {
+    const res = await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(5000), cache: "no-store" });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { name?: string; message?: string } | null;
+      return { kind: "unknown", note: body?.name === "restricted_api_key" ? "This API key can only send, so it can't read the domain list." : `Resend answered ${res.status}${body?.message ? `: ${body.message}` : ""}` };
+    }
+    const { data } = (await res.json()) as { data?: { name: string; status: string; region?: string }[] };
+    const d = data?.find((x) => x.name.toLowerCase() === domain);
+    return d ? { kind: "found", domain, status: d.status, region: d.region ?? null } : { kind: "missing", domain, others: (data ?? []).map((x) => x.name) };
+  } catch {
+    return { kind: "unknown", note: "Couldn't reach Resend to check." };
   }
 }
 

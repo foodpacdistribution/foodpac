@@ -28,3 +28,23 @@ describe("Resend refusals", () => {
     expect(explainResendError(422, "Invalid `to` field.")).toMatch(/couldn't send to that address/);
   });
 });
+
+describe("Resend API key", () => {
+  it("uses only the key when more was pasted into the setting", async () => {
+    const { resendKey, resendKeyHasExtra } = await import("./email");
+    const before = process.env.RESEND_API_KEY;
+    try {
+      process.env.RESEND_API_KEY = "re_abc123\nOFFICE_EMAIL=office@example.com";
+      expect(resendKey()).toBe("re_abc123");
+      expect(resendKeyHasExtra()).toBe(true);
+      process.env.RESEND_API_KEY = "  re_abc123  ";
+      expect(resendKey()).toBe("re_abc123");
+      expect(resendKeyHasExtra()).toBe(false);
+      process.env.RESEND_API_KEY = "";
+      expect(resendKey()).toBeUndefined();
+    } finally {
+      process.env.RESEND_API_KEY = before;
+      if (before === undefined) delete process.env.RESEND_API_KEY;
+    }
+  });
+});

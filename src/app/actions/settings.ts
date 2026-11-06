@@ -252,3 +252,21 @@ export async function saveBusinessDetails(_prev: unknown, form: FormData) {
     return { message: "Business details saved" };
   });
 }
+
+/** Sends a test email and reports exactly what Resend said, so email problems can be fixed from here. */
+export async function sendTestEmail(_prev: unknown, form: FormData) {
+  return attempt(async () => {
+    const me = await assertUser(["admin"]);
+    const to = String(form.get("to") ?? "").trim() || me.email;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new UserError("Enter an email address to send the test to.");
+    const { layout, senderAddress, sendEmailResult } = await import("@/lib/email");
+    const result = await sendEmailResult({
+      to,
+      subject: "Foodpac test email",
+      html: layout({ heading: "Email is working", body: `<p style="margin:0">This test was sent from Settings in the Foodpac back office. Password resets, order confirmations and invoices go out the same way.</p>` }),
+      text: "Email is working. This test was sent from Settings in the Foodpac back office.",
+    });
+    if (!result.ok) throw new UserError(result.error);
+    return { message: `Resend accepted it (from ${senderAddress()} to ${to}). It should arrive within a minute; check spam if not.` };
+  });
+}
