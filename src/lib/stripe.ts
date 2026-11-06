@@ -43,7 +43,9 @@ export const getCheckoutSession = (id: string) => stripe<StripeSession>(`checkou
 
 export const expireCheckoutSession = (id: string) => stripe<StripeSession>(`checkout/sessions/${encodeURIComponent(id)}/expire`);
 
-export const refundPayment = (paymentIntent: string) => stripe<{ id: string; status: string }>("refunds", { payment_intent: paymentIntent });
+/** Refunds a payment: all of it, or `amountCents` of it (a customer return). */
+export const refundPayment = (paymentIntent: string, amountCents?: number) =>
+  stripe<{ id: string; status: string }>("refunds", { payment_intent: paymentIntent, ...(amountCents ? { amount: String(amountCents) } : {}) });
 
 /** Verifies the Stripe-Signature header (HMAC-SHA256 of "timestamp.body", 5-minute tolerance). */
 export function verifyWebhook(body: string, header: string | null) {

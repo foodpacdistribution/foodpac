@@ -25,6 +25,12 @@ export type OrderFormProps = {
   products: FormProduct[];
   /** customerId → productId → their own price. */
   prices: Record<string, Record<string, number>>;
+  /** customerId → store credit they can spend, in cents. */
+  credits: Record<string, number>;
+  /** New order: start with this customer chosen. */
+  initialCustomerId?: string;
+  /** New order: replacement goods for this customer return (its credit is used). */
+  exchangeReturnId?: string;
   fees: { deliveryFeeCents: number; freeDeliveryOverCents: number };
   today: string;
   idempotencyKey?: string;
@@ -60,7 +66,9 @@ export function OrderForm(p: OrderFormProps) {
   const tr = useT();
   const router = useRouter();
   const o = p.order;
-  const [customerId, setCustomerId] = useState(o?.customerId ?? "");
+  // Opened for a given customer (e.g. an exchange from a customer return): start with them chosen.
+  const start0 = !o && p.initialCustomerId ? (p.customers.find((x) => x.id === p.initialCustomerId) ?? null) : null;
+  const [customerId, setCustomerId] = useState(o?.customerId ?? start0?.id ?? "");
   const customer = p.customers.find((c) => c.id === customerId) ?? null;
   const priceFor = (cid: string, productId: string) => p.prices[cid]?.[productId] ?? p.products.find((x) => x.id === productId)?.priceCents ?? 0;
 
@@ -69,17 +77,20 @@ export function OrderForm(p: OrderFormProps) {
   );
   const [delivery, setDelivery] = useState({
     deliveryDate: o?.deliveryDate ?? p.defaultDate,
-    recipient: o?.recipient ?? "",
-    phone: o?.phone ?? "",
-    address: o?.address ?? "",
+    recipient: o?.recipient ?? start0?.name ?? "",
+    phone: o?.phone ?? start0?.phone ?? "",
+    address: o?.address ?? start0?.address ?? "",
     instructions: o?.instructions ?? "",
     windowStart: minutesToInput(o?.windowStartMin ?? null),
     windowEnd: minutesToInput(o?.windowEndMin ?? null),
     notes: o?.notes ?? "",
   });
-  const [method, setMethod] = useState<PaymentMethod>("invoice");
+  const [method, setMethod] = useState<PaymentMethod>(start0?.paymentTerms === "prepay" ? "bank_transfer" : "invoice");
   const [fee, setFee] = useState<string | null>(o ? dollars(o.deliveryFeeCents) : null);
   const [emailCustomer, setEmailCustomer] = useState(true);
+  // Store credit towards a new order: on by default for an exchange.
+  const [useCredit, setUseCredit] = useState(!!p.exchangeReturnId);
+  const [creditInput, setCreditInput] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -92,10 +103,14 @@ export function OrderForm(p: OrderFormProps) {
     parsed.map((l) => ({ qty: l.q, unitPriceCents: l.cents ?? 0, gst: l.p.gst })),
     feeCents,
   );
+  const creditAvailable = p.mode === "new" && customerId ? (p.credits[customerId] ?? 0) : 0;
+  const creditMax = Math.min(creditAvailable, totals.totalCents);
+  const creditCents = useCredit && creditMax > 0 ? Math.min(creditMax, creditInput === null ? creditMax : (toCents(creditInput) ?? 0)) : 0;
   const waitingLines = parsed.filter((l) => waitingFor(l.q, l.p.stock + (o?.reserved[l.productId] ?? 0)) > 0);
 
   const pickCustomer = (c: FormCustomer) => {
     setCustomerId(c.id);
+    setCreditInput(null);
     setDelivery((d) => ({ ...d, recipient: c.name, phone: c.phone ?? "", address: c.address ?? "" }));
     setMethod(c.paymentTerms === "prepay" ? "bank_transfer" : "invoice");
     setEmailCustomer(!!c.email);
@@ -124,6 +139,8 @@ export function OrderForm(p: OrderFormProps) {
       lines: parsed.map((l) => ({ productId: l.productId, qty: l.q, unitPrice: l.price })),
       emailCustomer: p.mode === "new" && emailCustomer,
       idempotencyKey: p.idempotencyKey ?? "",
+      creditCents,
+      exchangeReturnId: p.exchangeReturnId,
     };
     start(async () => {
       if (p.mode === "new") {
@@ -319,6 +336,37 @@ export function OrderForm(p: OrderFormProps) {
                   <dt>{tr("Total")}</dt>
                   <dd className="tabular-nums">{aud(totals.totalCents)}</dd>
                 </div>
+                {creditAvailable > 0 && (
+                  <div className="rounded-lg bg-emerald-50 p-2.5 ring-1 ring-emerald-200">
+                    <label className="flex items-center justify-between gap-2 text-sm text-emerald-900">
+                      <span className="flex items-center gap-2">
+                        <input type="checkbox" checked={useCredit} onChange={(e) => setUseCredit(e.target.checked)} /> {tr("Use store credit")}
+                      </span>
+                      <span className="text-xs">{tr("{amount} available", { amount: aud(creditAvailable) })}</span>
+                    </label>
+                    {useCredit && (
+                      <div className="mt-2 flex items-center justify-between gap-3 text-sm text-emerald-900">
+                        <span>{tr("Credit used")}</span>
+                        <span className="relative w-28">
+                          <span className="pointer-events-none absolute top-1.5 left-2 text-sm text-slate-400">−$</span>
+                          <input inputMode="decimal" aria-label={tr("Credit used")} value={creditInput ?? dollars(creditMax)} onChange={(e) => setCreditInput(e.target.value)} onBlur={() => setCreditInput(dollars(creditCents))} className={cx(inputCls, "h-8 pl-6 text-right tabular-nums")} />
+                        </span>
+                      </div>
+                    )}
+                    {useCredit && (
+                      <p className="mt-1.5 flex justify-between text-xs text-emerald-800">
+                        <span>{tr("Credit left after this order")}</span>
+                        <span className="tabular-nums">{aud(creditAvailable - creditCents)}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+                {creditCents > 0 && (
+                  <div className="flex justify-between text-base font-semibold text-slate-900">
+                    <dt>{tr("To pay")}</dt>
+                    <dd className="tabular-nums">{aud(totals.totalCents - creditCents)}</dd>
+                  </div>
+                )}
               </dl>
               {waitingLines.length > 0 && (
                 <p className="flex gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200">

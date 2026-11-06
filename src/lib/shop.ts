@@ -21,6 +21,8 @@ import { GST_RATE } from "./money";
 import { orderConfirmed } from "./notify";
 import { UserError } from "./planning";
 import { fillWaiting, returnStock } from "./stock-allocation";
+import { withStockContext } from "./stock-ledger";
+import { releaseOrderCredit } from "./credit";
 import { nowSecondsIn, todayIn } from "./time";
 
 type Settings = typeof settings.$inferSelect;
@@ -320,7 +322,7 @@ export function allowedMethods(c: Customer, stripeOn: boolean): PaymentMethod[] 
 /** Unpaid balance on open invoice orders, for the credit limit check. */
 export async function openBalance(db: DB, customerId: string) {
   const [r] = await db
-    .select({ n: sql<number>`coalesce(sum(${salesOrders.totalCents}), 0)::int` })
+    .select({ n: sql<number>`coalesce(sum(${salesOrders.totalCents} - ${salesOrders.creditAppliedCents}), 0)::int` })
     .from(salesOrders)
     .where(and(eq(salesOrders.customerId, customerId), ne(salesOrders.status, "cancelled"), eq(salesOrders.paymentStatus, "unpaid")));
   return r.n;
@@ -374,14 +376,16 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
   }
 
   const order = await db.transaction(async (tx) => {
-    for (const l of lines) {
-      const ok = await tx
-        .update(products)
-        .set({ stock: sql`${products.stock} - ${l.qty}` })
-        .where(and(eq(products.id, l.id), eq(products.active, true), gte(products.stock, l.qty)))
-        .returning({ id: products.id });
-      if (!ok.length) throw new UserError(`${l.name} just sold out. Please update your cart.`);
-    }
+    await withStockContext(tx as unknown as DB, { type: "sale_reserved", note: `Online order · ${customer.name}`, by: userId }, async (t) => {
+      for (const l of lines) {
+        const ok = await t
+          .update(products)
+          .set({ stock: sql`${products.stock} - ${l.qty}` })
+          .where(and(eq(products.id, l.id), eq(products.active, true), gte(products.stock, l.qty)))
+          .returning({ id: products.id });
+        if (!ok.length) throw new UserError(`${l.name} just sold out. Please update your cart.`);
+      }
+    });
     const confirmed = c.method !== "card";
     const [so] = await tx
       .insert(salesOrders)
@@ -494,7 +498,8 @@ export async function markCardPaid(db: DB, salesOrderId: string) {
   const [customer] = await db.select().from(customers).where(eq(customers.id, so.customerId)).limit(1);
   const [updated] = await db
     .update(salesOrders)
-    .set({ status: "confirmed", paymentStatus: "paid", paidAt: new Date() })
+    // Paid up front, so nothing is left to change: the invoice is final straight away.
+    .set({ status: "confirmed", paymentStatus: "paid", paidAt: new Date(), invoiceStatus: "final", invoicedAt: new Date() })
     .where(and(eq(salesOrders.id, so.id), ne(salesOrders.paymentStatus, "paid")))
     .returning();
   if (updated && !updated.deliveryOrderId) await createDeliveryOrder(db, updated, customer);
@@ -534,7 +539,9 @@ export async function cancelOrder(db: DB, salesOrderId: string) {
     }
     // Only what was actually reserved goes back; units still waiting for stock never left the shelf.
     const items = await tx.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id));
-    for (const it of items) if (it.productId) await returnStock(tx as unknown as DB, it.productId, it.qty - it.backorderQty);
+    for (const it of items) if (it.productId) await returnStock(tx as unknown as DB, it.productId, it.qty - it.backorderQty, { id: so.id, number: so.number, note: "Order cancelled" });
+    // Store credit spent on it goes back to the customer.
+    await releaseOrderCredit(tx as unknown as DB, so, 0, "Order cancelled", null);
     const [updated] = await tx
       .update(salesOrders)
       .set({ status: "cancelled", cancelledAt: new Date(), deliveryOrderId: null })

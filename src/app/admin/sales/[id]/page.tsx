@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { ArrowLeft, ClipboardList, FileText, Pencil, Truck } from "lucide-react";
+import { ArrowLeft, ClipboardList, Pencil, Truck, Undo2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { notFound } from "next/navigation";
@@ -7,12 +7,18 @@ import { Badge, btn, Card, CardHeader } from "@/components/ui";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
-import { customers, orders, salesOrderItems, salesOrders, users } from "@/lib/db/schema";
+import { emailEnabled } from "@/lib/email";
+import { finaliseBlocker, reopenBlocker } from "@/lib/invoices";
+import { customerEmail } from "@/lib/notify";
+import { customerReturns, customers, orders, salesOrderItems, salesOrders, users } from "@/lib/db/schema";
+import { creditBalance } from "@/lib/credit";
+import { CUSTOMER_RETURN_STATUS } from "@/lib/customer-return-labels";
 import { aud, FULFILMENT, PAYMENT_METHOD_LABEL, PAYMENT_STATUS, PAYMENT_TERMS_LABEL, SALES_STATUS } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
 import { editBlocker } from "@/lib/staff-orders";
 import { formatMinutesClock } from "@/lib/time";
-import { SaleActions } from "./sale-actions";
+import { InvoiceActions } from "./invoice-actions";
+import { ApplyCredit, SaleActions } from "./sale-actions";
 import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Sales Order" };
@@ -24,18 +30,23 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
   const db = await getDb();
   const [so] = await db.select().from(salesOrders).where(eq(salesOrders.id, id)).limit(1);
   if (!so) notFound();
-  const [[c], items, s, [d], [by]] = await Promise.all([
+  const [[c], items, s, [d], [by], emailTo, credit, returns] = await Promise.all([
     db.select().from(customers).where(eq(customers.id, so.customerId)).limit(1),
     db.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id)),
     getSettings(db),
     so.deliveryOrderId ? db.select().from(orders).where(eq(orders.id, so.deliveryOrderId)).limit(1) : Promise.resolve([]),
     so.userId ? db.select({ name: users.name, role: users.role }).from(users).where(eq(users.id, so.userId)).limit(1) : Promise.resolve([]),
+    customerEmail(db, so.customerId),
+    creditBalance(db, so.customerId),
+    db.select().from(customerReturns).where(eq(customerReturns.salesOrderId, so.id)),
   ]);
+  const dueCents = so.totalCents - so.creditAppliedCents;
   const canEdit = !editBlocker(so, d?.status ?? null);
   const waiting = items.reduce((n, it) => n + it.backorderQty, 0);
   // Orders entered in the back office say who took them.
   const enteredBy = by && by.role !== "customer" ? by.name : null;
   const fmt = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "medium", timeStyle: "short" });
+  const day = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "medium" });
   const canCancel = so.status !== "cancelled" && (!d || d.status === "pending" || d.status === "planned" || d.status === "failed");
 
   return (
@@ -62,6 +73,11 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {so.status === "confirmed" && d?.status === "delivered" && (
+            <Link href={`/admin/customer-returns/new?order=${so.id}`} className={btn("secondary")}>
+              <Undo2 className="size-4" /> <T>{"Customer return"}</T>
+            </Link>
+          )}
           {canEdit && (
             <Link href={`/admin/sales/${so.id}/edit`} className={btn("secondary")}>
               <Pencil className="size-4" /> <T>{"Edit order"}</T>
@@ -121,6 +137,18 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
               <dt><T>{"Total"}</T></dt>
               <dd className="tabular-nums">{aud(so.totalCents)}</dd>
             </div>
+            {so.creditAppliedCents > 0 && (
+              <>
+                <div className="flex justify-between text-slate-600">
+                  <dt><T>{"Paid with store credit"}</T></dt>
+                  <dd className="tabular-nums">−{aud(so.creditAppliedCents)}</dd>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <dt><T>{"Amount due"}</T></dt>
+                  <dd className="tabular-nums">{aud(so.paymentStatus === "unpaid" ? dueCents : 0)}</dd>
+                </div>
+              </>
+            )}
           </dl>
         </Card>
 
@@ -156,9 +184,41 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
               {so.dueDate && <p className="text-slate-600"><T>{"Due"}</T>{" "}{<Tx>{prettyDate(so.dueDate)}</Tx>}</p>}
               {so.paidAt && <p className="text-slate-600"><T>{"Paid"}</T>{" "}{fmt.format(so.paidAt)}</p>}
               {so.stripeSessionId && <p className="truncate text-xs text-slate-400"><T>{"Stripe"}</T>{" "}{so.stripeSessionId}</p>}
-              <Link href={`/admin/sales/${so.id}/invoice`} className={btn("secondary", "sm", "mt-3")}>
-                <FileText className="size-3.5" /> {" "}<T>{"Tax invoice"}</T></Link>
+              <p className="pt-1 text-slate-600">
+                <T>{"Store credit available:"}</T>{" "}
+                <Link href={`/admin/customers/${c.id}#credit`} className="font-medium text-blue-700 hover:underline">{aud(Math.round(credit * 100))}</Link>
+              </p>
+              {so.status !== "cancelled" && so.paymentStatus === "unpaid" && credit > 0 && dueCents > 0 && <ApplyCredit id={so.id} maxCents={Math.min(dueCents, Math.round(credit * 100))} />}
             </div>
+          </Card>
+          {returns.length > 0 && (
+            <Card>
+              <CardHeader title={<T>{"Customer returns"}</T>} />
+              <ul className="divide-y divide-line text-sm">
+                {returns.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between px-4 py-2.5">
+                    <Link href={`/admin/customer-returns/${r.id}`} className="font-medium text-blue-700 hover:underline">{r.returnNumber}</Link>
+                    <Badge tone={CUSTOMER_RETURN_STATUS[r.status].tone}><Tx>{CUSTOMER_RETURN_STATUS[r.status].label}</Tx></Badge>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+          <Card>
+            <CardHeader title={<T>{"Invoice"}</T>} />
+            <InvoiceActions
+              id={so.id}
+              number={so.number}
+              invoiceStatus={so.invoiceStatus}
+              issued={so.invoicedAt ? day.format(so.invoicedAt) : null}
+              sentAt={so.invoiceSentAt ? fmt.format(so.invoiceSentAt) : null}
+              sentTo={so.invoiceSentTo}
+              finaliseBlocked={so.invoiceStatus === "proforma" ? finaliseBlocker(so) : null}
+              reopenBlocked={reopenBlocker(so)}
+              emailTo={emailTo}
+              emailEnabled={emailEnabled()}
+              waiting={so.status === "cancelled" ? 0 : waiting}
+            />
           </Card>
         </div>
       </div>

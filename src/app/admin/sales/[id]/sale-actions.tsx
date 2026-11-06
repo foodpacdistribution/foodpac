@@ -2,12 +2,38 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { cancelSale, confirmSale, deleteSales, markPaid, setFulfilment } from "@/app/actions/sales";
+import { applyOrderCredit, cancelSale, confirmSale, deleteSales, markPaid, setFulfilment } from "@/app/actions/sales";
 import { Toast, type ToastMessage } from "@/components/client-ui";
-import { btn } from "@/components/ui";
+import { btn, cx, inputCls } from "@/components/ui";
 import type { FulfilmentStatus, PaymentMethod, PaymentStatus, SalesStatus } from "@/lib/db/schema";
 import { FULFILMENT } from "@/lib/money";
 import { useT } from "@/components/i18n";
+
+/** Pay (part of) this unpaid order with the customer's store credit. */
+export function ApplyCredit({ id, maxCents }: { id: string; maxCents: number }) {
+  const tr = useT();
+  const [amount, setAmount] = useState((maxCents / 100).toFixed(2));
+  const [pending, start] = useTransition();
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" aria-label={tr("Store credit to use")} className={cx(inputCls, "w-28")} />
+      <button
+        disabled={pending}
+        className={btn("secondary", "sm")}
+        onClick={() =>
+          start(async () => {
+            const r = await applyOrderCredit(id, amount);
+            setToast({ id: Date.now(), text: r.ok ? (r.message ?? "Done") : r.error, tone: r.ok ? "ok" : "warn" });
+          })
+        }
+      >
+        {tr("Use store credit")}
+      </button>
+      <Toast toast={toast} onDone={() => setToast(null)} />
+    </div>
+  );
+}
 
 export function SaleActions(p: { id: string; status: SalesStatus; paymentStatus: PaymentStatus; paymentMethod: PaymentMethod; fulfilment: FulfilmentStatus; canCancel: boolean; isAdmin: boolean }) {
   const tr = useT();

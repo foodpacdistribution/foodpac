@@ -1,24 +1,36 @@
 import "server-only";
-import { and, asc, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, ne } from "drizzle-orm";
 import type { DB } from "./db";
 import { customers, products, salesOrderItems, salesOrders } from "./db/schema";
+import { changeStock, type StockContext } from "./stock-ledger";
 
 // Stock on a product is what's free to sell. An order reserves from it; anything staff order
 // beyond it is kept on the order line as "waiting for stock" (backorderQty), and goods received
 // later go to those waiting lines first, oldest order first. Stock itself never goes below zero.
+// Every change goes through stock-ledger.ts, so the stock ledger says which order it was for.
+
+/** Which sales order a stock change was for, as far as it's known (a new order has no number yet). */
+export type SaleRef = { id?: string; number?: string; note?: string; by?: string | null };
+
+const saleCtx = (type: "sale_reserved" | "sale_released", ref?: SaleRef): StockContext => ({
+  type,
+  ...(ref?.id || ref?.number ? { refType: "sales_order", refId: ref.id, refNumber: ref.number } : {}),
+  note: ref?.note,
+  by: ref?.by,
+});
 
 /** Takes up to `qty` from stock. Returns how many were reserved and how many have to wait. */
-export async function reserveStock(tx: DB, productId: string, qty: number) {
+export async function reserveStock(tx: DB, productId: string, qty: number, ref?: SaleRef) {
   if (qty <= 0) return { reserved: 0, short: 0 };
   const [p] = await tx.select({ stock: products.stock }).from(products).where(eq(products.id, productId)).for("update");
   const reserved = Math.min(qty, Math.max(0, p?.stock ?? 0));
-  if (reserved > 0) await tx.update(products).set({ stock: sql`${products.stock} - ${reserved}` }).where(eq(products.id, productId));
+  if (reserved > 0) await changeStock(tx, productId, -reserved, saleCtx("sale_reserved", ref));
   return { reserved, short: qty - reserved };
 }
 
 /** Puts reserved units back on the shelf (cancelled or reduced orders). Call fillWaiting afterwards. */
-export async function returnStock(tx: DB, productId: string, qty: number) {
-  if (qty > 0) await tx.update(products).set({ stock: sql`${products.stock} + ${qty}` }).where(eq(products.id, productId));
+export async function returnStock(tx: DB, productId: string, qty: number, ref?: SaleRef) {
+  if (qty > 0) await changeStock(tx, productId, qty, saleCtx("sale_released", ref));
 }
 
 export type Filled = { productId: string; orderId: string; number: string; customer: string; qty: number };
@@ -41,16 +53,14 @@ export async function fillWaiting(tx: DB, productIds: (string | null)[]): Promis
       .innerJoin(customers, eq(customers.id, salesOrders.customerId))
       .where(and(eq(salesOrderItems.productId, productId), gt(salesOrderItems.backorderQty, 0), ne(salesOrders.status, "cancelled")))
       .orderBy(asc(salesOrders.createdAt), asc(salesOrderItems.id));
-    let given = 0;
     for (const w of waiting) {
       if (free <= 0) break;
       const n = Math.min(free, w.waiting);
       await tx.update(salesOrderItems).set({ backorderQty: w.waiting - n }).where(eq(salesOrderItems.id, w.id));
+      await changeStock(tx, productId, -n, saleCtx("sale_reserved", { id: w.orderId, number: w.number, note: `Waiting order filled · ${w.customer}` }));
       free -= n;
-      given += n;
       filled.push({ productId, orderId: w.orderId, number: w.number, customer: w.customer, qty: n });
     }
-    if (given > 0) await tx.update(products).set({ stock: sql`${products.stock} - ${given}` }).where(eq(products.id, productId));
   }
   return filled;
 }

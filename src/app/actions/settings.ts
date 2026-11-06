@@ -65,9 +65,9 @@ export async function createStaffUser(_prev: unknown, form: FormData) {
     if (!email || !name) throw new UserError("Name and email are required.");
     if (role !== "admin" && role !== "dispatcher" && role !== "sales") throw new UserError("Choose a role.");
     if (password.length < 8) throw new UserError("Password must be at least 8 characters.");
-    const [exists] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
-    if (exists) throw new UserError("That email already has a login.");
-    await db.insert(users).values({ email, name, role, passwordHash: await hashPassword(password) });
+    // One round trip: the unique email decides whether it's taken (no separate look-up first).
+    const created = await db.insert(users).values({ email, name, role, passwordHash: await hashPassword(password) }).onConflictDoNothing({ target: users.email }).returning({ id: users.id });
+    if (!created.length) throw new UserError("That email already has a login.");
     revalidatePath("/admin/settings");
     return { message: `Login created for ${name}` };
   });

@@ -5,6 +5,7 @@ import { customers, orders, type PaymentMethod, products, routeStops, salesOrder
 import { shiftDate } from "./dates";
 import { orderTotals } from "./order-totals";
 import { UserError } from "./planning";
+import { applyCreditToOrder, releaseOrderCredit } from "./credit";
 import { createDeliveryOrder, dueIn } from "./shop";
 import { fillWaiting, reserveStock, returnStock } from "./stock-allocation";
 
@@ -54,7 +55,7 @@ async function productsFor(tx: DB, ids: string[]) {
 const snapshot = (p: typeof products.$inferSelect) => ({ sku: p.sku, name: p.name, packSize: p.packSize, unit: p.unit, gst: p.gst });
 
 /** Places an order for a customer. It's confirmed straight away and goes to the planner; short lines wait for stock. */
-export async function createStaffOrder(db: DB, staffId: string, input: StaffOrderInput & { method: PaymentMethod; idempotencyKey: string }, today: string) {
+export async function createStaffOrder(db: DB, staffId: string, input: StaffOrderInput & { method: PaymentMethod; idempotencyKey: string; creditCents?: number }, today: string) {
   const [existing] = await db.select().from(salesOrders).where(eq(salesOrders.idempotencyKey, input.idempotencyKey)).limit(1);
   if (existing) return existing;
   const lines = check(input, today);
@@ -67,7 +68,7 @@ export async function createStaffOrder(db: DB, staffId: string, input: StaffOrde
     const byId = await productsFor(tx, lines.map((l) => l.productId));
     const items = [];
     for (const l of lines) {
-      const { short } = await reserveStock(tx, l.productId, l.qty);
+      const { short } = await reserveStock(tx, l.productId, l.qty, { note: `New order · ${customer.name}`, by: staffId });
       items.push({ ...snapshot(byId.get(l.productId)!), productId: l.productId, qty: l.qty, unitPriceCents: l.unitPriceCents, lineCents: l.qty * l.unitPriceCents, backorderQty: short });
     }
     const totals = orderTotals(items, input.deliveryFeeCents);
@@ -95,14 +96,17 @@ export async function createStaffOrder(db: DB, staffId: string, input: StaffOrde
       .returning();
     await tx.insert(salesOrderItems).values(items.map((it) => ({ ...it, salesOrderId: so.id })));
     const deliveryOrderId = await createDeliveryOrder(tx, so, customer, items);
-    return { ...so, deliveryOrderId };
+    // Store credit towards it, in the same transaction: not enough credit undoes the whole order.
+    const creditAppliedCents = input.creditCents ? await applyCreditToOrder(tx, so.id, input.creditCents, staffId) : 0;
+    return { ...so, deliveryOrderId, creditAppliedCents };
   });
 }
 
 /** Why an order can't be changed any more, or null if it can. */
-export function editBlocker(so: Pick<typeof salesOrders.$inferSelect, "status" | "paymentMethod" | "fulfilment">, deliveryStatus: string | null) {
+export function editBlocker(so: Pick<typeof salesOrders.$inferSelect, "status" | "paymentMethod" | "fulfilment" | "invoiceStatus">, deliveryStatus: string | null) {
   if (so.status === "cancelled") return "This order is cancelled.";
   if (so.paymentMethod === "card") return "Card orders can't be changed after payment. Cancel it and enter a new order instead.";
+  if (so.invoiceStatus === "final") return "The invoice is final, so this order can't be changed. Reopen it as a proforma first.";
   if (so.fulfilment === "loaded") return "This order is already loaded on the van.";
   if (deliveryStatus === "dispatched" || deliveryStatus === "delivered") return "This order is already out for delivery or delivered.";
   return null;
@@ -127,6 +131,7 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
     const old = await tx.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id));
     const byId = await productsFor(tx, [...new Set([...lines.map((l) => l.productId), ...old.flatMap((o) => (o.productId ? [o.productId] : []))])]);
     const freed: string[] = [];
+    const ref = { id: so.id, number: so.number, note: "Order changed" };
     const kept: { qty: number; unitPriceCents: number; gst: boolean }[] = [];
 
     // Lines that went or got smaller: waiting units go first, then reserved ones back on the shelf.
@@ -134,7 +139,7 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
       const next = lines.find((l) => l.productId === o.productId);
       if (!o.productId || !next) {
         if (o.productId) {
-          await returnStock(tx, o.productId, o.qty - o.backorderQty);
+          await returnStock(tx, o.productId, o.qty - o.backorderQty, ref);
           freed.push(o.productId);
         }
         await tx.delete(salesOrderItems).where(eq(salesOrderItems.id, o.id));
@@ -145,10 +150,10 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
         const less = o.qty - next.qty;
         const fromWaiting = Math.min(backorderQty, less);
         backorderQty -= fromWaiting;
-        await returnStock(tx, o.productId, less - fromWaiting);
+        await returnStock(tx, o.productId, less - fromWaiting, ref);
         if (less - fromWaiting > 0) freed.push(o.productId);
       } else if (next.qty > o.qty) {
-        backorderQty += (await reserveStock(tx, o.productId, next.qty - o.qty)).short;
+        backorderQty += (await reserveStock(tx, o.productId, next.qty - o.qty, ref)).short;
       }
       await tx
         .update(salesOrderItems)
@@ -159,7 +164,7 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
     // New lines.
     for (const l of lines.filter((l) => !old.some((o) => o.productId === l.productId))) {
       const p = byId.get(l.productId)!;
-      const { short } = await reserveStock(tx, l.productId, l.qty);
+      const { short } = await reserveStock(tx, l.productId, l.qty, ref);
       await tx.insert(salesOrderItems).values({ ...snapshot(p), salesOrderId: so.id, productId: l.productId, qty: l.qty, unitPriceCents: l.unitPriceCents, lineCents: l.qty * l.unitPriceCents, backorderQty: short });
       kept.push({ qty: l.qty, unitPriceCents: l.unitPriceCents, gst: p.gst });
     }
@@ -180,8 +185,12 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
         windowEndMin: input.windowEndMin,
         notes: input.notes,
         ...(dateChanged && so.paymentMethod === "invoice" && customer ? { dueDate: shiftDate(input.deliveryDate, dueIn[customer.paymentTerms]) } : {}),
+        // Paid entirely with store credit and now costs more: the difference is still to pay.
+        ...(so.creditAppliedCents > 0 && so.creditAppliedCents >= so.totalCents && totals.totalCents > so.creditAppliedCents ? { paymentStatus: "unpaid" as const, paidAt: null } : {}),
       })
       .where(eq(salesOrders.id, so.id));
+    // Now cheaper than the credit used on it: the extra credit goes back to the customer.
+    if (so.creditAppliedCents > totals.totalCents) await releaseOrderCredit(tx, so, totals.totalCents, "Order reduced", null);
 
     // The delivery follows: new day or address takes it off any planned route until it's re-planned.
     let regeocode = false;

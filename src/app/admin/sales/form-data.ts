@@ -1,7 +1,7 @@
 import "server-only";
 import { asc, eq, sql } from "drizzle-orm";
 import type { DB } from "@/lib/db";
-import { customerPrices, customers, products, salesOrderItems } from "@/lib/db/schema";
+import { customerCreditAccounts, customerPrices, customers, products, salesOrderItems } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { deliveryDates } from "@/lib/shop";
 import { listWaiting } from "@/lib/stock-allocation";
@@ -13,7 +13,7 @@ import type { FormCustomer, FormProduct } from "./order-form";
 export async function orderFormData(db: DB, opts: { customerId?: string } = {}) {
   const s = await getSettings(db);
   const today = todayIn(s.timezone);
-  const [custRows, productRows, priceRows, waiting] = await Promise.all([
+  const [custRows, productRows, priceRows, waiting, creditRows] = await Promise.all([
     db
       .select({ id: customers.id, name: customers.name, phone: customers.phone, email: customers.email, address: customers.address, paymentTerms: customers.paymentTerms, approved: customers.approved, active: customers.active })
       .from(customers)
@@ -27,7 +27,11 @@ export async function orderFormData(db: DB, opts: { customerId?: string } = {}) 
       .from(customerPrices)
       .where(opts.customerId ? eq(customerPrices.customerId, opts.customerId) : undefined),
     listWaiting(db),
+    db.select({ customerId: customerCreditAccounts.customerId, balance: customerCreditAccounts.balance }).from(customerCreditAccounts),
   ]);
+  /** Store credit each customer can spend, in cents. */
+  const credits: Record<string, number> = {};
+  for (const c of creditRows) if (c.balance > 0) credits[c.customerId] = Math.round(c.balance * 100);
   const prices: Record<string, Record<string, number>> = {};
   for (const r of priceRows) (prices[r.customerId] ??= {})[r.productId] = r.priceCents;
   const waitingBy = new Map<string, number>();
@@ -39,6 +43,7 @@ export async function orderFormData(db: DB, opts: { customerId?: string } = {}) 
     customers: custRows.filter((c) => c.active || c.id === opts.customerId) satisfies FormCustomer[],
     products: productRows.map((p) => ({ ...p, waiting: waitingBy.get(p.id) ?? 0 })) satisfies FormProduct[],
     prices,
+    credits,
   };
 }
 

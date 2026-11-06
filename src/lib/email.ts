@@ -120,3 +120,18 @@ ${items
       `<tr><td style="padding:12px 12px 12px 0;border-top:1px solid ${C.line}">${esc(it.name)}<br><span style="color:${C.muted};font-size:12px">${esc(it.detail)}</span></td><td style="padding:12px 0;border-top:1px solid ${C.line};text-align:right;white-space:nowrap;color:${C.muted}">${it.qty} × ${esc(it.price)}</td><td style="padding:12px 0 12px 12px;border-top:1px solid ${C.line};text-align:right;white-space:nowrap;font-weight:600">${esc(it.total)}</td></tr>`,
   )
   .join("")}</table>`;
+
+/** A statement of account: one row per open invoice (values already escaped), then what's owing. */
+export const statementTable = (lines: { number: string; issued: string; due: string; amount: string; overdue: boolean; current: boolean }[], owing: string) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 0;font-size:14px;line-height:1.45">
+<tr>${["Invoice", "Issued", "Due", "Amount"]
+    .map((h, i) => `<td style="padding:0 ${i === 3 ? "0" : "12px"} 8px 0;color:${C.muted};font-size:12px;text-transform:uppercase;letter-spacing:.06em;${i === 3 ? "text-align:right" : ""}">${h}</td>`)
+    .join("")}</tr>
+${lines
+  .map(
+    (l) =>
+      `<tr><td style="padding:10px 12px 10px 0;border-top:1px solid ${C.line};${l.current ? "font-weight:600" : ""}">${l.number}${l.current ? ` <span style="color:${C.muted};font-weight:400;font-size:12px">(this invoice)</span>` : ""}</td><td style="padding:10px 12px 10px 0;border-top:1px solid ${C.line};white-space:nowrap;color:${C.muted}">${l.issued}</td><td style="padding:10px 12px 10px 0;border-top:1px solid ${C.line};white-space:nowrap;${l.overdue ? `color:#b42318;font-weight:600` : `color:${C.muted}`}">${l.due}${l.overdue ? " · overdue" : ""}</td><td style="padding:10px 0;border-top:1px solid ${C.line};text-align:right;white-space:nowrap">${l.amount}</td></tr>`,
+  )
+  .join("")}
+<tr><td colspan="3" style="padding:12px 12px 0 0;border-top:2px solid ${C.ink};font-weight:700">Total owing</td><td style="padding:12px 0 0;border-top:2px solid ${C.ink};text-align:right;white-space:nowrap;font-weight:700;font-size:16px">${owing}</td></tr>
+</table>`;

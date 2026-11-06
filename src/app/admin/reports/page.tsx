@@ -69,9 +69,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       .limit(8),
     db
       .select({
-        unpaid: sql<number>`coalesce(sum(${salesOrders.totalCents}) filter (where ${salesOrders.paymentStatus} = 'unpaid'), 0)::int`,
+        unpaid: sql<number>`coalesce(sum(${salesOrders.totalCents} - ${salesOrders.creditAppliedCents}) filter (where ${salesOrders.paymentStatus} = 'unpaid'), 0)::int`,
         unpaidCount: sql<number>`(count(*) filter (where ${salesOrders.paymentStatus} = 'unpaid'))::int`,
-        overdue: sql<number>`coalesce(sum(${salesOrders.totalCents}) filter (where ${salesOrders.paymentStatus} = 'unpaid' and ${salesOrders.dueDate} < ${today}), 0)::int`,
+        overdue: sql<number>`coalesce(sum(${salesOrders.totalCents} - ${salesOrders.creditAppliedCents}) filter (where ${salesOrders.paymentStatus} = 'unpaid' and ${salesOrders.dueDate} < ${today}), 0)::int`,
         overdueCount: sql<number>`(count(*) filter (where ${salesOrders.paymentStatus} = 'unpaid' and ${salesOrders.dueDate} < ${today}))::int`,
       })
       .from(salesOrders)

@@ -6,9 +6,12 @@ import { after } from "next/server";
 import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { orderConfirmed } from "@/lib/notify";
+import { applyCreditToOrder, releaseOrderCredit } from "@/lib/credit";
+import { linkExchangeOrder } from "@/lib/customer-returns";
+import { finaliseInvoice, reopenInvoice } from "@/lib/invoices";
+import { orderConfirmed, sendInvoice } from "@/lib/notify";
 import { type FulfilmentStatus, orders, type PaymentMethod, salesOrderItems, salesOrders } from "@/lib/db/schema";
-import { parseDollars } from "@/lib/money";
+import { aud, parseDollars } from "@/lib/money";
 import { createStaffOrder, updateStaffOrder } from "@/lib/staff-orders";
 import { inputToMinutes, todayIn } from "@/lib/time";
 import { refundOrExpire } from "@/lib/payments";
@@ -48,6 +51,57 @@ export async function confirmSale(id: string) {
     }
     revalidate(id);
     return { message: "Order confirmed and sent to the planner" };
+  });
+}
+
+/** Makes the proforma the final tax invoice (locks the order), and with `email` sends it to the customer straight away. */
+export async function finaliseSaleInvoice(id: string, opts: { email: boolean }) {
+  return attempt(async () => {
+    const { db } = await load(id);
+    const so = await finaliseInvoice(db, id);
+    revalidate(id);
+    revalidatePath(`/portal/orders/${id}`);
+    if (!opts.email) return { message: `Invoice ${so.number} is final` };
+    const r = await sendInvoice(db, id);
+    revalidate(id);
+    if (!r.sent) throw new UserError(`Invoice ${so.number} is final, but it wasn't emailed: ${r.reason}`);
+    return { message: `Invoice ${so.number} is final and emailed to ${r.to}` };
+  });
+}
+
+/** Emails (or re-emails) the final invoice with the customer's statement of account. */
+export async function emailSaleInvoice(id: string) {
+  return attempt(async () => {
+    const { db, so } = await load(id);
+    const r = await sendInvoice(db, id);
+    if (!r.sent) throw new UserError(r.reason);
+    revalidate(id);
+    return { message: `Invoice ${so.number} emailed to ${r.to}` };
+  });
+}
+
+/** Turns a final invoice back into a proforma so the order can be corrected. */
+export async function reopenSaleInvoice(id: string) {
+  return attempt(async () => {
+    const { db, so } = await load(id);
+    await reopenInvoice(db, id);
+    revalidate(id);
+    revalidatePath(`/portal/orders/${id}`);
+    return { message: `Invoice ${so.number} is a proforma again` };
+  });
+}
+
+/** Pays (part of) an unpaid order with the customer's store credit. */
+export async function applyOrderCredit(id: string, amount: string) {
+  return attempt(async () => {
+    const user = await assertUser(STAFF);
+    const { db } = await load(id);
+    const cents = parseDollars(String(amount ?? "").trim());
+    if (!cents) throw new UserError("Enter how much credit to use.");
+    const used = await db.transaction(async (tx) => applyCreditToOrder(tx as unknown as DB, id, cents, user.id));
+    revalidate(id);
+    revalidatePath("/admin/customers");
+    return { message: `${aud(used)} store credit used on this order` };
   });
 }
 
@@ -136,13 +190,14 @@ export async function deleteSales(ids: string[]) {
         if (so.status !== "cancelled" && d?.status !== "delivered") {
           // Only reserved units go back; anything still waiting for stock was never taken.
           const items = await tx.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id));
-          for (const it of items) if (it.productId) await returnStock(tx as unknown as DB, it.productId, it.qty - it.backorderQty);
+          for (const it of items) if (it.productId) await returnStock(tx as unknown as DB, it.productId, it.qty - it.backorderQty, { number: so.number, note: "Order deleted", by: user.id });
           returned = items.map((it) => it.productId);
         }
         if (d) {
           dates.push(d.deliveryDate);
           await tx.delete(orders).where(eq(orders.id, d.id));
         }
+        if (so.status !== "cancelled") await releaseOrderCredit(tx as unknown as DB, so, 0, "Order deleted", user.id);
         await tx.delete(salesOrders).where(eq(salesOrders.id, so.id));
         await fillWaiting(tx as unknown as DB, returned);
       });
@@ -171,6 +226,10 @@ export type StaffOrderPayload = {
   lines: { productId: string; qty: number; unitPrice: string }[];
   emailCustomer: boolean;
   idempotencyKey: string;
+  /** New orders: store credit to put towards it, in cents. */
+  creditCents?: number;
+  /** New orders: the customer return this is the exchange for. */
+  exchangeReturnId?: string;
 };
 
 function parsePayload(p: StaffOrderPayload) {
@@ -200,7 +259,9 @@ export async function createOrderForCustomer(p: StaffOrderPayload) {
     const user = await assertUser(STAFF);
     const db = await getDb();
     const s = await getSettings(db);
-    const so = await createStaffOrder(db, user.id, { ...parsePayload(p), customerId: String(p.customerId ?? ""), method: p.method, idempotencyKey: String(p.idempotencyKey ?? "").slice(0, 80) }, todayIn(s.timezone));
+    const creditCents = Math.max(0, Math.round(Number(p.creditCents) || 0));
+    const so = await createStaffOrder(db, user.id, { ...parsePayload(p), customerId: String(p.customerId ?? ""), method: p.method, idempotencyKey: String(p.idempotencyKey ?? "").slice(0, 80), creditCents }, todayIn(s.timezone));
+    if (p.exchangeReturnId && /^[0-9a-f-]{36}$/i.test(p.exchangeReturnId)) await linkExchangeOrder(db, p.exchangeReturnId, so.id);
     if (so.deliveryOrderId) {
       const id = so.deliveryOrderId;
       after(async () => geocodeOrderIds(await getDb(), [id]));

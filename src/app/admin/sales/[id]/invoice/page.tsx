@@ -7,8 +7,9 @@ import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
+import { invoiceImages } from "@/lib/invoices";
 
-export const metadata: Metadata = { title: "Tax invoice" };
+export const metadata: Metadata = { title: "Invoice 发票" };
 
 export default async function AdminInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser(STAFF);
@@ -22,10 +23,11 @@ export default async function AdminInvoicePage({ params }: { params: Promise<{ i
     db.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id)),
     getSettings(db),
   ]);
-  const issued = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "long" }).format(so.createdAt);
+  // A final invoice shows its issue date; a proforma is dated the day it's looked at.
+  const issued = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "long" }).format(so.invoicedAt ?? new Date());
   return (
     <div className="mx-auto max-w-3xl text-leaf-950">
-      <InvoiceSheet so={so} customer={c} items={items} issued={issued} bankDetails={s.bankDetails} site={siteInfo(s)} />
+      <InvoiceSheet so={so} customer={c} items={items} issued={issued} bankDetails={s.bankDetails} site={siteInfo(s)} images={await invoiceImages(db, items)} />
     </div>
   );
 }

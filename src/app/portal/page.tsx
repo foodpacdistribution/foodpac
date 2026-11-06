@@ -42,7 +42,7 @@ export default async function PortalOverview() {
   const thisMonth = live.filter((o) => monthOf(o.createdAt) === month);
   const open = live.filter((o) => o.delivery?.stage !== "delivered");
   const unpaid = live.filter((o) => o.paymentStatus === "unpaid");
-  const owing = unpaid.reduce((t, o) => t + o.totalCents, 0);
+  const owing = unpaid.reduce((t, o) => t + o.totalCents - o.creditAppliedCents, 0);
   const overdue = unpaid.filter((o) => o.dueDate && o.dueDate < today);
   const onTheWay = live.filter((o) => o.delivery?.stage === "out_for_delivery");
   const next = live

@@ -65,3 +65,12 @@ describe("staff order messages", () => {
     expect(translate(zh, "Cup 8 oz: 3 to waiting orders, 7 in stock")).toBe("Cup 8 oz:3 件分给了等货的订单,库存 7");
   });
 });
+
+describe("purchasing and store credit messages", () => {
+  it("translates document messages and database refusals", () => {
+    expect(translate(zh, "PO-10001 confirmed by the supplier")).toBe("PO-10001 供应商已确认");
+    expect(translate(zh, "Not enough store credit: $150.00 available.")).toBe("客户余额不足：可用 $150.00。");
+    expect(translate(zh, "Not enough free stock of CUP8 to send back: 2 free, 5 to go. The rest is reserved for customer orders.")).toBe("CUP8 可用库存不足，无法退货：可用 2，需退 5。其余库存已被客户订单占用。");
+    expect(translate(zh, "Pending supplier confirmation")).toBe("等待供应商确认");
+  });
+});

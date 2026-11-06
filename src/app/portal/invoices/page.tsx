@@ -9,6 +9,9 @@ import { aud, PAYMENT_METHOD_LABEL, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
 import { PaymentPill, Pill } from "../badges";
+import { CreditHistory } from "@/components/credit-history";
+import { creditAccount, creditHistory } from "@/lib/credit";
+import { money } from "@/lib/purchasing/labels";
 import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Invoices" };
@@ -26,8 +29,12 @@ export default async function InvoicesPage() {
     .where(and(eq(salesOrders.customerId, c.id), ne(salesOrders.status, "cancelled")))
     .orderBy(desc(salesOrders.createdAt))
     .limit(200);
+  const [credit, creditRows] = await Promise.all([creditAccount(db, c.id), creditHistory(db, c.id, 100)]);
+  const fmt = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "medium" });
   const unpaid = rows.filter((r) => r.paymentStatus === "unpaid");
-  const owing = unpaid.reduce((t, r) => t + r.totalCents, 0);
+  // Store credit already used on an order comes off what's owed.
+  const due = (r: (typeof rows)[number]) => r.totalCents - r.creditAppliedCents;
+  const owing = unpaid.reduce((t, r) => t + due(r), 0);
   const overdue = unpaid.filter((r) => r.dueDate && r.dueDate < today);
 
   return (
@@ -35,13 +42,24 @@ export default async function InvoicesPage() {
       <h1 className="font-display text-2xl font-semibold tracking-tight"><T>{"Invoices & payments"}</T></h1>
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <Stat label={<T>{"Owing"}</T>} value={aud(owing)} hint={`${unpaid.length} unpaid invoice${unpaid.length === 1 ? "" : "s"}`} />
-        <Stat label={<T>{"Overdue"}</T>} value={aud(overdue.reduce((t, r) => t + r.totalCents, 0))} hint={overdue.length ? `${overdue.length} past due` : "Nothing overdue"} warn={overdue.length > 0} />
+        <Stat label={<T>{"Overdue"}</T>} value={aud(overdue.reduce((t, r) => t + due(r), 0))} hint={overdue.length ? `${overdue.length} past due` : "Nothing overdue"} warn={overdue.length > 0} />
         <Stat
           label={<T>{"Account terms"}</T>}
           value={<T>{PAYMENT_TERMS_LABEL[c.paymentTerms]}</T>}
           hint={c.creditLimitCents !== null ? `Credit available ${aud(Math.max(0, c.creditLimitCents - owing))}` : "No credit limit set"}
         />
       </div>
+      {(credit.balance > 0 || creditRows.length > 0) && (
+        <section className="mt-5 overflow-hidden rounded-2xl border border-leaf-950/10 bg-white">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4">
+            <h2 className="font-display text-lg font-semibold"><T>{"Store credit"}</T></h2>
+            <p className="text-sm text-leaf-900/70">
+              <T vars={{ amount: money(credit.balance) }}>{"{amount} available"}</T> · <T>{"We take it off your next order when you ask us to."}</T>
+            </p>
+          </div>
+          <CreditHistory staff={false} rows={creditRows.map((t) => ({ ...t, by: null, when: fmt.format(t.createdAt) }))} />
+        </section>
+      )}
       <div className="mt-5 overflow-x-auto rounded-2xl border border-leaf-950/10 bg-white">
         <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-leaf-50/60 text-left text-xs text-leaf-900/60">
@@ -60,7 +78,10 @@ export default async function InvoicesPage() {
                   <Link href={`/portal/orders/${r.id}/invoice`} className="font-semibold text-leaf-700 hover:underline">
                     {r.number}
                   </Link>
-                  <span className="block text-xs text-leaf-900/50">{<Tx>{prettyDate(r.createdAt.toISOString().slice(0, 10))}</Tx>}</span>
+                  <span className="block text-xs text-leaf-900/50">
+                    {<Tx>{prettyDate((r.invoicedAt ?? r.createdAt).toISOString().slice(0, 10))}</Tx>}
+                    {r.invoiceStatus === "proforma" && <>{" · "}<T>{"Proforma"}</T></>}
+                  </span>
                 </td>
                 <td className="px-2 py-3 text-leaf-900/70"><Tx>{PAYMENT_METHOD_LABEL[r.paymentMethod]}</Tx></td>
                 <td className="px-2 py-3 text-leaf-900/70">{r.dueDate ? prettyDate(r.dueDate) : "—"}</td>

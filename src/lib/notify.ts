@@ -3,21 +3,23 @@ import { asc, eq } from "drizzle-orm";
 import { type DB, getDb } from "./db";
 import { customers, salesOrderItems, salesOrders, users } from "./db/schema";
 import { prettyDate } from "./dates";
-import { esc, itemTable, layout, mailto, note, officeEmail, rows, sendEmail } from "./email";
+import { esc, itemTable, layout, mailto, note, officeEmail, rows, sendEmail, statementTable } from "./email";
+import { accountStatement } from "./invoices";
 import { aud, PAYMENT_METHOD_LABEL } from "./money";
 import { getSettings } from "./planning";
 import { siteInfo } from "@/app/(site)/site-info";
 import { siteUrl } from "./site-url";
-import { formatMinutesClock } from "./time";
+import { formatMinutesClock, todayIn } from "./time";
 
 // The emails the app sends, each built from the database at the moment it goes out.
-// All are called after the response (next/server `after`), so they never slow a page down.
+// All are called after the response (next/server `after`), so they never slow a page down,
+// except the invoice email: staff press "Email invoice" and need to know it went.
 
-/** The address a customer's emails go to: the business email, else their portal login. */
 /** The business details set in the back office, for email footers. */
 const business = async () => siteInfo(await getSettings(await getDb()));
 
-async function customerEmail(db: DB, customerId: string) {
+/** The address a customer's emails go to: the business email, else their portal login. */
+export async function customerEmail(db: DB, customerId: string) {
   const [c] = await db.select({ email: customers.email }).from(customers).where(eq(customers.id, customerId)).limit(1);
   if (c?.email) return c.email;
   const [u] = await db.select({ email: users.email }).from(users).where(eq(users.customerId, customerId)).limit(1);
@@ -53,6 +55,7 @@ export async function orderConfirmed(salesOrderId: string, opts: { office: boole
       ["Delivery", so.deliveryFeeCents ? aud(so.deliveryFeeCents) : "Free"],
       ["GST", aud(so.gstCents)],
       ["Total", `<strong style="font-size:16px">${aud(so.totalCents)}</strong>`],
+      ...(so.creditAppliedCents ? ([["Paid with store credit", `−${aud(so.creditAppliedCents)}`], ["Amount due", aud(so.totalCents - so.creditAppliedCents)]] as [string, string][]) : []),
     ]);
   const summary = rows([
     ["Order", `<strong>${esc(so.number)}</strong>`],
@@ -193,4 +196,113 @@ export async function passwordReset(to: string, name: string, link: string) {
     }),
     text: `Reset your Foodpac password (link works once, for the next hour):\n${link}\n\nDidn't ask for this? Ignore this email: your password stays the same.`,
   });
+}
+
+/**
+ * Emails a final invoice to the customer, with a statement of every invoice they still owe on.
+ * Returns the address it went to, or null if it couldn't be sent. Records when it went.
+ */
+export async function sendInvoice(db: DB, salesOrderId: string): Promise<{ sent: true; to: string } | { sent: false; reason: string }> {
+  const [row] = await db
+    .select({ so: salesOrders, customer: customers.name })
+    .from(salesOrders)
+    .innerJoin(customers, eq(customers.id, salesOrders.customerId))
+    .where(eq(salesOrders.id, salesOrderId))
+    .limit(1);
+  if (!row) return { sent: false, reason: "Order not found." };
+  const { so, customer } = row;
+  if (so.invoiceStatus !== "final" || !so.invoicedAt) return { sent: false, reason: "Finalise the invoice before emailing it." };
+  if (so.status === "cancelled") return { sent: false, reason: "This order is cancelled." };
+  const [items, s, to] = await Promise.all([
+    db.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id)).orderBy(asc(salesOrderItems.sku)),
+    getSettings(db),
+    customerEmail(db, so.customerId),
+  ]);
+  if (!to) return { sent: false, reason: "This customer has no email address. Add an accounts email on their customer page." };
+  const today = todayIn(s.timezone);
+  const statement = await accountStatement(db, so.customerId, today);
+  const day = (d: Date) => new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, day: "numeric", month: "short", year: "numeric" }).format(d);
+  const due = (d: string | null) => (d ? prettyDate(d, { day: "numeric", month: "short", year: "numeric" }) : "On receipt");
+  const base = siteUrl();
+  const link = `${base}/portal/orders/${so.id}/invoice`;
+  const paid = so.paymentStatus === "paid";
+  const site = siteInfo(s);
+  // Replies go to whoever handles accounts: the business email in Settings, else the office inbox.
+  const replyTo = site.email || officeEmail();
+
+  const summary = rows([
+    ["Invoice", `<strong>${esc(so.number)}</strong>`],
+    ["Issued", esc(day(so.invoicedAt))],
+    ...(paid ? ([["Status", "Paid, thank you"]] as [string, string][]) : ([["Due", esc(due(so.dueDate))]] as [string, string][])),
+    ["Delivery", `${esc(prettyDate(so.deliveryDate, { weekday: "short", day: "numeric", month: "short" }))} · ${esc(so.address)}`],
+  ]);
+  const lines =
+    itemTable(items.map((it) => ({ name: it.name, detail: `${it.sku} · ${it.packSize}`, qty: it.qty, price: aud(it.unitPriceCents), total: aud(it.lineCents) }))) +
+    rows([
+      ["Subtotal (ex GST)", aud(so.subtotalCents)],
+      ["Delivery", so.deliveryFeeCents ? aud(so.deliveryFeeCents) : "Free"],
+      ["GST", aud(so.gstCents)],
+      ["Total (incl. GST)", `<strong style="font-size:16px">${aud(so.totalCents)}</strong>`],
+      ...(so.creditAppliedCents ? ([["Paid with store credit", `−${aud(so.creditAppliedCents)}`]] as [string, string][]) : []),
+    ]);
+  const statementHtml = statement.invoices.length
+    ? `<h2 style="margin:28px 0 4px;font-size:17px;color:#113a27">Statement of account</h2>
+<p style="margin:0;font-size:13px;color:#5f7268">Open invoices for ${esc(customer)} as of ${esc(prettyDate(today, { day: "numeric", month: "long", year: "numeric" }))}${
+        statement.overdueCents ? ` · <strong style="color:#b42318">${aud(statement.overdueCents)} overdue</strong>` : ""
+      }</p>
+${statementTable(
+  statement.invoices.map((r) => ({
+    number: esc(r.number),
+    issued: esc(r.invoicedAt ? day(r.invoicedAt) : "—"),
+    due: esc(due(r.dueDate)),
+    amount: aud(r.totalCents),
+    overdue: r.overdue,
+    current: r.id === so.id,
+  })),
+  aud(statement.owingCents),
+)}`
+    : `<p style="margin:24px 0 0;font-size:14px">Your account is all paid up. Thank you.</p>`;
+  const bank =
+    !paid && so.paymentMethod !== "card" && s.bankDetails
+      ? note(`<strong>How to pay</strong><br>${esc(s.bankDetails).replace(/\n/g, "<br>")}<br>Please use <strong>${esc(so.number)}</strong> as the reference.`)
+      : "";
+
+  const text = [
+    `Tax invoice ${so.number} from ${site.name}`,
+    `Issued ${day(so.invoicedAt)}${paid ? " · Paid" : ` · Due ${due(so.dueDate)}`}`,
+    "",
+    ...items.map((it) => `${it.qty} × ${it.name} (${it.sku}) ${aud(it.lineCents)}`),
+    ...(so.deliveryFeeCents ? [`Delivery ${aud(so.deliveryFeeCents)}`] : []),
+    `GST ${aud(so.gstCents)}`,
+    `Total ${aud(so.totalCents)} incl. GST`,
+    "",
+    ...(statement.invoices.length
+      ? [
+          "Statement of account (open invoices):",
+          ...statement.invoices.map((r) => `${r.number}  due ${due(r.dueDate)}${r.overdue ? " (overdue)" : ""}  ${aud(r.totalCents)}`),
+          `Total owing ${aud(statement.owingCents)}`,
+        ]
+      : ["Your account is all paid up. Thank you."]),
+    ...(!paid && s.bankDetails && so.paymentMethod !== "card" ? ["", "How to pay:", s.bankDetails, `Reference: ${so.number}`] : []),
+    "",
+    `View or print the invoice: ${link}`,
+  ].join("\n");
+
+  const ok = await sendEmail({
+    to,
+    subject: `Tax invoice ${so.number} · ${aud(so.totalCents)}${paid ? " · paid" : ` · due ${due(so.dueDate)}`}`,
+    html: layout({
+      site,
+      preview: `${so.number} · ${aud(so.totalCents)}${statement.owingCents ? ` · ${aud(statement.owingCents)} owing on your account` : ""}`,
+      heading: `Tax invoice ${so.number}`,
+      body: `<p style="margin:0">Hi ${esc(customer)}, here is your invoice${statement.invoices.length > 1 ? " and a statement of your account" : ""}.</p>${summary}${lines}${statementHtml}${bank}`,
+      button: { label: "View or print the invoice", url: link },
+      footer: "Questions about this invoice? Reply to this email.",
+    }),
+    text,
+    ...(replyTo ? { replyTo } : {}),
+  });
+  if (!ok) return { sent: false, reason: "The email didn't go through. Check the email settings and try again." };
+  await db.update(salesOrders).set({ invoiceSentAt: new Date(), invoiceSentTo: to }).where(eq(salesOrders.id, so.id));
+  return { sent: true, to };
 }

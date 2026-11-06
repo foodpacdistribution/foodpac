@@ -110,6 +110,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
             <Row label={<T>{"Delivery"}</T>} value={so.deliveryFeeCents ? aud(so.deliveryFeeCents) : "Free"} />
             <Row label={<T>{"GST"}</T>} value={aud(so.gstCents)} />
             <Row label={<T>{"Total"}</T>} value={aud(so.totalCents)} strong />
+            {so.creditAppliedCents > 0 && <Row label={<T>{"Paid with store credit"}</T>} value={`−${aud(so.creditAppliedCents)}`} />}
           </dl>
         </section>
         <section className="space-y-4">
@@ -139,7 +140,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
               </p>
             )}
             <Link href={`/portal/orders/${so.id}/invoice`} className="mt-3 inline-flex text-sm font-semibold text-leaf-700 hover:underline">
-              <T>{"View tax invoice"}</T></Link>
+              {so.invoiceStatus === "final" ? <T>{"View tax invoice"}</T> : <T>{"View proforma invoice"}</T>}</Link>
           </div>
         </section>
       </div>

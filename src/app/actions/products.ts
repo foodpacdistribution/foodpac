@@ -11,6 +11,7 @@ import { checkProductRow, duplicateSkus, MAX_IMPORT_ROWS, type ProductImportRow,
 import { UserError } from "@/lib/planning";
 import { readUpload } from "@/lib/proofs";
 import { fillWaiting } from "@/lib/stock-allocation";
+import { changeStock, setStock, withStockContext } from "@/lib/stock-ledger";
 
 function revalidate() {
   revalidatePath("/admin/products");
@@ -19,7 +20,7 @@ function revalidate() {
 
 export async function saveProduct(_prev: unknown, form: FormData) {
   return attempt(async () => {
-    await assertUser(STAFF);
+    const user = await assertUser(STAFF);
     const db = await getDb();
     const get = (k: string) => String(form.get(k) ?? "").trim();
     const id = get("id") || null;
@@ -55,7 +56,16 @@ export async function saveProduct(_prev: unknown, form: FormData) {
     };
     const [clash] = await db.select({ id: products.id }).from(products).where(eq(products.sku, sku)).limit(1);
     if (clash && clash.id !== id) throw new UserError("Another product already uses that SKU.");
-    const productId = id ? (await db.update(products).set(values).where(eq(products.id, id)).returning({ id: products.id }))[0]?.id : (await db.insert(products).values(values).returning({ id: products.id }))[0].id;
+    // A new product's stock is its opening balance in the ledger; on an existing one, a different
+    // figure is a stock count, recorded as the difference.
+    const { stock, ...rest } = values;
+    const productId = await db.transaction(async (t) => {
+      const tx = t as unknown as DB;
+      if (!id) return (await tx.insert(products).values(values).returning({ id: products.id }))[0].id;
+      const [row] = await tx.update(products).set(rest).where(eq(products.id, id)).returning({ id: products.id });
+      if (row) await setStock(tx, row.id, stock, { type: "count", note: "Stock count on the product page", by: user.id });
+      return row?.id;
+    });
     // A higher stock count may be goods that waiting customers are owed.
     if (productId) await fillWaiting(db, [productId]);
     revalidate();
@@ -64,17 +74,14 @@ export async function saveProduct(_prev: unknown, form: FormData) {
 }
 
 /** Goods received (+) or written off / counted short (−). */
-export async function adjustStock(productId: string, delta: number) {
+export async function adjustStock(productId: string, delta: number, reason?: string) {
   return attempt(async () => {
-    await assertUser(STAFF);
+    const user = await assertUser(STAFF);
     if (!Number.isInteger(delta) || delta === 0) throw new UserError("Enter a whole number.");
     const db = await getDb();
+    const note = String(reason ?? "").trim().slice(0, 300) || (delta > 0 ? "Added by hand" : "Taken off by hand");
     const { p, filled } = await db.transaction(async (tx) => {
-      const [p] = await tx
-        .update(products)
-        .set({ stock: sql`greatest(0, ${products.stock} + ${delta})` })
-        .where(eq(products.id, productId))
-        .returning({ name: products.name });
+      const p = await changeStock(tx as unknown as DB, productId, delta, { type: "adjustment", note, by: user.id }, { floorZero: true });
       if (!p) throw new UserError("Product not found.");
       // Goods received go to customers waiting for them first.
       const filled = delta > 0 ? await fillWaiting(tx as unknown as DB, [productId]) : [];
@@ -146,7 +153,7 @@ export type ProductImportResult = { created: number; updated: number; errors: { 
  */
 export async function importProducts(rows: ProductImportRow[], opts: { pricesIncGst: boolean; gstColumnHeader?: string }) {
   return attempt<ProductImportResult>(async () => {
-    await assertUser(STAFF);
+    const user = await assertUser(STAFF);
     if (!Array.isArray(rows) || !rows.length) throw new UserError("The file has no rows.");
     if (rows.length > MAX_IMPORT_ROWS) throw new UserError(`Import at most ${MAX_IMPORT_ROWS} products at a time.`);
 
@@ -175,7 +182,7 @@ export async function importProducts(rows: ProductImportRow[], opts: { pricesInc
 
     const toCreate = values.filter((v) => !existing.has(v.sku));
     const toUpdate = values.filter((v) => existing.has(v.sku));
-    await db.transaction(async (tx) => {
+    await db.transaction(async (t) => withStockContext(t as unknown as DB, { type: "import", note: "Product import", by: user.id }, async (tx) => {
       for (let i = 0; i < toCreate.length; i += 200) {
         await tx.insert(products).values(
           toCreate.slice(i, i + 200).map((v) => ({
@@ -202,8 +209,8 @@ export async function importProducts(rows: ProductImportRow[], opts: { pricesInc
         if (row && set.stock !== undefined) restocked.push(row.id);
       }
       // Imported stock counts go to waiting customers first.
-      await fillWaiting(tx as unknown as DB, restocked);
-    });
+      await fillWaiting(tx, restocked);
+    }));
     revalidate();
     return { data: { created: toCreate.length, updated: toUpdate.length, errors: [] } };
   });

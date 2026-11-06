@@ -18,7 +18,7 @@ export default async function CustomersPage() {
       .select({
         customerId: salesOrders.customerId,
         spend90: sql<number>`coalesce(sum(${salesOrders.totalCents}) filter (where ${salesOrders.createdAt} > now() - interval '90 days'), 0)::int`,
-        unpaid: sql<number>`coalesce(sum(${salesOrders.totalCents}) filter (where ${salesOrders.paymentStatus} = 'unpaid'), 0)::int`,
+        unpaid: sql<number>`coalesce(sum(${salesOrders.totalCents} - ${salesOrders.creditAppliedCents}) filter (where ${salesOrders.paymentStatus} = 'unpaid'), 0)::int`,
         lastOrder: max(salesOrders.createdAt),
       })
       .from(salesOrders)

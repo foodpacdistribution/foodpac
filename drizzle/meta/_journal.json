@@ -134,6 +134,27 @@
       "when": 1793885365412,
       "tag": "0018_backorders",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793922832101,
+      "tag": "0019_invoices",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793923892527,
+      "tag": "0020_purchasing",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793925020094,
+      "tag": "0021_customer_returns_credit",
+      "breakpoints": true
     }
   ]
 }

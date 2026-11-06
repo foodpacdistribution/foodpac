@@ -1,7 +1,7 @@
 "use client";
 
 import { Building2, Camera, MapPin, Pencil, Plug, Plus, Trash2, UserPlus, Users } from "lucide-react";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { createStaffUser, deleteUser, saveDepot, saveSettings } from "@/app/actions/settings";
 import { FormError, KeptForm, Modal, SubmitButton, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, CardHeader, cx, Field, inputCls, PageHeader } from "@/components/ui";
@@ -11,7 +11,7 @@ import { useT } from "@/components/i18n";
 import { AddressInput } from "@/components/address-input";
 
 type Settings = typeof settingsTable.$inferSelect;
-type U = { id: string; name: string; email: string; role: string };
+type U = { id: string; name: string; email: string; role: string; saving?: boolean };
 type Depot = { id: string; name: string; address: string; located: boolean; active: boolean };
 
 const TIMEZONES = [
@@ -47,7 +47,14 @@ export function SettingsClient({
 }) {
   const tr = useT();
   const [state, form] = useKeptForm(saveSettings);
-  const [userState, userForm] = useKeptForm(createStaffUser);
+  // The new login shows in the list straight away while it saves; it disappears again if the save fails.
+  const [shownUsers, addShownUser] = useOptimistic(users, (list: U[], u: U) => [...list, u]);
+  const [userState, userForm] = useKeptForm(async (prev: Awaited<ReturnType<typeof createStaffUser>> | undefined, fd: FormData) => {
+    const name = String(fd.get("name") ?? "").trim();
+    const email = String(fd.get("email") ?? "").trim().toLowerCase();
+    if (name && email) addShownUser({ id: `saving-${email}`, name, email, role: String(fd.get("role")), saving: true });
+    return createStaffUser(prev, fd);
+  });
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -126,14 +133,15 @@ export function SettingsClient({
             <CardHeader title={<span className="flex items-center gap-2"><Users className="size-4 text-slate-400" /> {" "}{tr("Staff logins")}</span>} subtitle={tr("Sales staff only see the Sales Pipeline. Driver logins are managed on the Drivers page.")} />
             {notice && <p className="border-b border-line bg-slate-50 px-4 py-2 text-xs text-slate-600">{notice}</p>}
             <ul className="divide-y divide-line">
-              {users.map((u) => (
-                <li key={u.id} className="flex items-center gap-3 px-4 py-2.5">
+              {shownUsers.map((u) => (
+                <li key={u.id} className={cx("flex items-center gap-3 px-4 py-2.5", u.saving && "opacity-60")}>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-800">{u.name}</p>
                     <p className="truncate text-xs text-slate-500">{u.email}</p>
                   </div>
                   <Badge tone={u.role === "admin" ? "violet" : u.role === "dispatcher" ? "blue" : u.role === "sales" ? "green" : "slate"}>{tr(u.role)}</Badge>
-                  {u.id !== meId && u.role !== "driver" && (
+                  {u.saving && <span className="text-xs text-slate-400">{tr("Saving…")}</span>}
+                  {u.id !== meId && u.role !== "driver" && !u.saving && (
                     <button
                       className={btn("ghost", "icon", "text-slate-400 hover:text-red-600")}
                       disabled={pending}

@@ -8,7 +8,7 @@ import { Toast, type ToastMessage } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, inputCls, PageHeader, Stat } from "@/components/ui";
 import { toCsv } from "@/lib/product-import";
 import { prettyDate } from "@/lib/dates";
-import type { FulfilmentStatus, PaymentMethod, PaymentStatus, SalesStatus } from "@/lib/db/schema";
+import type { FulfilmentStatus, InvoiceStatus, PaymentMethod, PaymentStatus, SalesStatus } from "@/lib/db/schema";
 import { aud, FULFILMENT, PAYMENT_METHOD_LABEL, PAYMENT_STATUS, SALES_STATUS } from "@/lib/money";
 import type { PortalStage } from "@/lib/portal";
 import { Tx, useT } from "@/components/i18n";
@@ -34,6 +34,7 @@ type Row = {
   fulfilment: FulfilmentStatus;
   delivery: PortalStage | null;
   dueDate: string | null;
+  invoiceStatus: InvoiceStatus;
   /** Units on this order still waiting for stock. */
   waiting: number;
 };
@@ -133,6 +134,7 @@ export function SalesClient({
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {[
           ["open", "Open"],
+          ["invoice", "To invoice"],
           ["unpaid", "Unpaid"],
           ["all", "All"],
           ["cancelled", "Cancelled"],
@@ -203,6 +205,7 @@ export function SalesClient({
                     <span className="mt-1.5 flex flex-wrap gap-1">
                       <Badge tone={SALES_STATUS[r.status].tone}>{<Tx>{SALES_STATUS[r.status].label}</Tx>}</Badge>
                       {paymentBadge(r)}
+                      {r.status === "confirmed" && r.invoiceStatus === "proforma" && <Badge tone="amber">{tr("Proforma")}</Badge>}
                       {r.status === "confirmed" && <Badge tone={FULFILMENT[r.fulfilment].tone}>{<Tx>{FULFILMENT[r.fulfilment].label}</Tx>}</Badge>}
                       {r.delivery && <Badge tone={DELIVERY[r.delivery].tone}>{<Tx>{DELIVERY[r.delivery].label}</Tx>}</Badge>}
                       {r.waiting > 0 && r.status !== "cancelled" && <Badge tone="red">{tr("{n} waiting for stock", { n: r.waiting })}</Badge>}
@@ -250,6 +253,7 @@ export function SalesClient({
                     </td>
                     <td className="px-2 py-2.5">
                       {paymentBadge(r)}
+                      {r.status === "confirmed" && r.invoiceStatus === "proforma" && <Badge tone="amber" className="ml-1">{tr("Proforma")}</Badge>}
                       <p className="mt-0.5 text-[11px] text-slate-400">{tr(PAYMENT_METHOD_LABEL[r.paymentMethod])}</p>
                     </td>
                     <td className="px-2 py-2.5">{r.status === "confirmed" ? <Badge tone={FULFILMENT[r.fulfilment].tone}>{<Tx>{FULFILMENT[r.fulfilment].label}</Tx>}</Badge> : "—"}</td>

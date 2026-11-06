@@ -96,9 +96,10 @@ describe("orders staff enter", () => {
   });
 
   it("won't change card, cancelled or dispatched orders", () => {
-    expect(editBlocker({ status: "confirmed", paymentMethod: "card", fulfilment: "new" }, null)).toMatch(/Card/);
-    expect(editBlocker({ status: "cancelled", paymentMethod: "invoice", fulfilment: "new" }, null)).toMatch(/cancelled/);
-    expect(editBlocker({ status: "confirmed", paymentMethod: "invoice", fulfilment: "new" }, "dispatched")).toMatch(/out for delivery/);
-    expect(editBlocker({ status: "confirmed", paymentMethod: "invoice", fulfilment: "packed" }, "planned")).toBeNull();
+    expect(editBlocker({ status: "confirmed", paymentMethod: "card", fulfilment: "new", invoiceStatus: "proforma" }, null)).toMatch(/Card/);
+    expect(editBlocker({ status: "cancelled", paymentMethod: "invoice", fulfilment: "new", invoiceStatus: "proforma" }, null)).toMatch(/cancelled/);
+    expect(editBlocker({ status: "confirmed", paymentMethod: "invoice", fulfilment: "new", invoiceStatus: "proforma" }, "dispatched")).toMatch(/out for delivery/);
+    expect(editBlocker({ status: "confirmed", paymentMethod: "invoice", fulfilment: "packed", invoiceStatus: "proforma" }, "planned")).toBeNull();
+    expect(editBlocker({ status: "confirmed", paymentMethod: "invoice", fulfilment: "new", invoiceStatus: "final" }, null)).toMatch(/final/);
   });
 });

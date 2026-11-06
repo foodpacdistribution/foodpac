@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Boxes, Building2, Target, GalleryHorizontal, Inbox, LayoutDashboard, Map, Package, PackageCheck, Radio, Settings, ShoppingBag, TrendingUp, Truck, Zap } from "lucide-react";
+import { BadgeDollarSign, BarChart3, Boxes, Building2, ClipboardList, Factory, GalleryHorizontal, HandCoins, Inbox, LayoutDashboard, Map, Package, PackageCheck, PackagePlus, Radio, RotateCcw, Settings, ShoppingBag, Target, TrendingUp, Truck, Undo2, Wallet, Warehouse, Zap } from "lucide-react";
 import Link from "@/components/link";
 import { usePathname } from "next/navigation";
 import { LinkPending } from "@/components/client-ui";
@@ -15,6 +15,20 @@ const SECTIONS = [
     items: [
       { href: "/admin/sales", label: "Sales Orders", icon: ShoppingBag },
       { href: "/admin/products", label: "Products & Stock", icon: Boxes },
+      { href: "/admin/customer-returns", label: "Customer Returns", icon: RotateCcw },
+      { href: "/admin/customer-credit", label: "Store Credit", icon: BadgeDollarSign },
+    ],
+  },
+  {
+    title: "Purchasing",
+    items: [
+      { href: "/admin/purchase-orders", label: "Purchase Orders", icon: ClipboardList },
+      { href: "/admin/goods-receipts", label: "Goods Receipts", icon: PackagePlus },
+      { href: "/admin/purchase-returns", label: "Purchase Returns", icon: Undo2 },
+      { href: "/admin/inventory", label: "Inventory", icon: Warehouse },
+      { href: "/admin/supplier-payments", label: "Supplier Payments", icon: Wallet },
+      { href: "/admin/supplier-refunds", label: "Supplier Refunds", icon: HandCoins },
+      { href: "/admin/suppliers", label: "Suppliers", icon: Factory },
     ],
   },
   {

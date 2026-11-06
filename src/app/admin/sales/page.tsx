@@ -12,7 +12,7 @@ import { SalesClient } from "./sales-client";
 
 export const metadata: Metadata = { title: "Sales Orders" };
 
-const VIEWS = ["open", "unpaid", "all", "cancelled"] as const;
+const VIEWS = ["open", "invoice", "unpaid", "all", "cancelled"] as const;
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; from?: string; to?: string }> }) {
   const me = await requireUser(STAFF);
@@ -29,6 +29,9 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   const where = and(
     view === "open"
       ? and(ne(salesOrders.status, "cancelled"), from ? undefined : gte(salesOrders.deliveryDate, shiftDate(today, -1)))
+      : view === "invoice"
+        ? // Confirmed orders whose invoice is still a proforma, waiting to be finalised.
+          and(eq(salesOrders.status, "confirmed"), eq(salesOrders.invoiceStatus, "proforma"))
       : view === "unpaid"
         ? and(ne(salesOrders.status, "cancelled"), eq(salesOrders.paymentStatus, "unpaid"))
         : view === "cancelled"
@@ -52,7 +55,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
     .from(salesOrders)
     .innerJoin(customers, eq(customers.id, salesOrders.customerId))
     .where(where)
-    .orderBy(view === "open" ? sql`${salesOrders.deliveryDate} asc, ${salesOrders.createdAt} asc` : desc(salesOrders.createdAt))
+    .orderBy(view === "open" || view === "invoice" ? sql`${salesOrders.deliveryDate} asc, ${salesOrders.createdAt} asc` : desc(salesOrders.createdAt))
     .limit(300);
   const [delivery, [{ todaySales }]] = await Promise.all([
     deliveryStatuses(db, rows.map((r) => r.so.deliveryOrderId).filter((x): x is string => !!x)),
@@ -81,6 +84,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         fulfilment: so.fulfilment,
         delivery: so.deliveryOrderId ? (delivery.get(so.deliveryOrderId)?.stage ?? null) : null,
         dueDate: so.dueDate,
+        invoiceStatus: so.invoiceStatus,
         waiting,
       }))}
     />
