@@ -23,21 +23,42 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   const [user, s] = await Promise.all([requireUser(PIPELINE), getSettings(db)]);
   await restoreDeliveries(db, s.timezone);
   // Sidebar badges. They update with the page's live refresh, so new orders show up without reloading.
-  const [[{ n: newEnquiries }], [{ n: newSales }], [{ n: toShip }], followUps] = await Promise.all([
-    db.select({ n: count() }).from(enquiries).where(eq(enquiries.status, "new")),
-    // Shop orders waiting on the office: not yet confirmed, or confirmed and not yet picked.
-    db
-      .select({ n: count() })
-      .from(salesOrders)
-      .where(or(eq(salesOrders.status, "pending"), and(eq(salesOrders.status, "confirmed"), eq(salesOrders.fulfilment, "new")))),
-    // Deliveries from today on that aren't on any shipment yet.
-    db
-      .select({ n: count() })
-      .from(orders)
-      .where(and(eq(orders.status, "pending"), gte(orders.deliveryDate, todayIn(s.timezone)), ne(orders.source, "quick_route"))),
-    // Customers due a follow-up today (reminders set, or gone quiet).
-    dueFollowUpCount(db, user),
-  ]);
+  // Only badges: one that can't be counted is left off (and logged) rather than failing every page.
+  const n = (rows: { n: number }[]) => rows[0]?.n ?? 0;
+  const [newEnquiries, newSales, toShip, followUps] = await Promise.all(
+    (
+      [
+        ["enquiries", () => db.select({ n: count() }).from(enquiries).where(eq(enquiries.status, "new")).then(n)],
+        // Shop orders waiting on the office: not yet confirmed, or confirmed and not yet picked.
+        [
+          "sales",
+          () =>
+            db
+              .select({ n: count() })
+              .from(salesOrders)
+              .where(or(eq(salesOrders.status, "pending"), and(eq(salesOrders.status, "confirmed"), eq(salesOrders.fulfilment, "new"))))
+              .then(n),
+        ],
+        // Deliveries from today on that aren't on any shipment yet.
+        [
+          "shipments",
+          () =>
+            db
+              .select({ n: count() })
+              .from(orders)
+              .where(and(eq(orders.status, "pending"), gte(orders.deliveryDate, todayIn(s.timezone)), ne(orders.source, "quick_route")))
+              .then(n),
+        ],
+        // Customers due a follow-up today (reminders set, or gone quiet).
+        ["follow-ups", () => dueFollowUpCount(db, user)],
+      ] as const
+    ).map(([name, run]) =>
+      run().catch((err: unknown) => {
+        console.error(`[admin] couldn't count the ${name} badge:`, err);
+        return 0;
+      }),
+    ),
+  );
   const badges = { "/admin/enquiries": newEnquiries, "/admin/sales": newSales, "/admin/shipments": toShip, "/admin/pipeline": followUps };
 
   return (

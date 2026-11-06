@@ -11,6 +11,11 @@ import { todayIn } from "./time";
  * delivery to plan and ship, even if theirs was deleted. Addresses are located after the response.
  */
 export const restoreDeliveries = cache(async (db: DB, timezone: string) => {
-  const ids = await restoreMissingDeliveries(db, todayIn(timezone));
-  if (ids.length) after(async () => geocodeOrderIds(await getDb(), ids));
+  // A repair in passing: if it fails, the screen still shows (and the next page view tries again).
+  try {
+    const ids = await restoreMissingDeliveries(db, todayIn(timezone));
+    if (ids.length) after(async () => geocodeOrderIds(await getDb(), ids));
+  } catch (err) {
+    console.error("[admin] couldn't restore missing deliveries:", err);
+  }
 });
