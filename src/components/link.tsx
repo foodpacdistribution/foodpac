@@ -7,8 +7,8 @@ const AppLink = NextLink as unknown as ComponentType<Props & { unstable_dynamicO
 
 /**
  * next/link that starts loading the whole destination page as soon as the pointer rests on the
- * link or a finger touches it (needs experimental.dynamicOnHover). Every page is rendered next to
- * the database in Dublin, a long round trip from Australia, so the head start hides most of it.
+ * link or a finger touches it (needs experimental.dynamicOnHover), so the page's server round trip
+ * is mostly done by the time the click lands.
  * Links in view still prefetch just the loading skeleton, so nothing extra runs until there's intent.
  * Clicks are tagged "nav" so the shop's page transition can tell them from other updates.
  */

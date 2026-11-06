@@ -326,3 +326,47 @@ dialog::backdrop {
     display: none !important;
   }
 }
+
+/* Invoices print on A4: the sheet fills the printable area, the column headings repeat on each
+   page, and a line, the totals or the payment details never break across two pages. */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 12mm 14mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body:has(.invoice-sheet) .print-plain {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    background: #fff !important;
+  }
+  .invoice-page {
+    max-width: none !important;
+  }
+  .invoice-sheet {
+    width: auto !important;
+    max-width: none !important;
+    /* One printable A4 page tall (297mm less the margins), so a short invoice keeps its payment
+       details at the foot of the page, as on screen. A longer one simply flows onto more pages. */
+    min-height: 268mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    font-size: 10pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .invoice-sheet thead {
+    display: table-header-group;
+  }
+  .invoice-sheet tr,
+  .invoice-sheet .keep {
+    break-inside: avoid;
+  }
+}

@@ -6,6 +6,9 @@ import { QuickRouteLoader } from "./quick-route-loader";
 
 export const metadata: Metadata = { title: "Quick route" };
 
+// Route optimising (a server action on this page) can take longer than ordinary pages.
+export const maxDuration = 300;
+
 export default async function QuickRoutePage() {
   const user = await requireUser();
   const db = await getDb();

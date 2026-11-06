@@ -55,7 +55,8 @@ export function LiveRefresh({ scope, intervalMs = 12_000, notify }: { scope: "ad
       clearTimeout(timer);
       if (stopped || document.visibilityState !== "visible") return;
       try {
-        const res = await fetch(`/api/live?scope=${scope}`, { cache: "no-store" });
+        // A check that hangs would otherwise stop live updates until it gives up minutes later.
+        const res = await fetch(`/api/live?scope=${scope}`, { cache: "no-store", signal: AbortSignal.timeout(15_000) });
         if (res.status === 401) return; // signed out: nothing to keep fresh
         const now = (await res.json()) as Live;
         failures = 0;

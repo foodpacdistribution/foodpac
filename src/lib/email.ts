@@ -3,9 +3,9 @@ import { SITE, type SiteInfo } from "@/app/(site)/site-info";
 import { siteUrl } from "./site-url";
 
 // Email through Resend (https://resend.com). Set RESEND_API_KEY to turn it on; without it
-// nothing is sent and the app works as before. Until a domain is verified in Resend, mail can
-// only come from onboarding@resend.dev and go to the Resend account's own address, so office
-// notifications work straight away and customer emails start once EMAIL_FROM uses your domain.
+// nothing is sent and the app works as before. Mail comes from our own domain, which is verified
+// in Resend; EMAIL_FROM overrides it. (Resend's onboarding@resend.dev test sender only delivers to
+// the Resend account's own address, so it must never be the default: customers would get nothing.)
 
 const RESEND_URL = "https://api.resend.com/emails";
 
@@ -14,17 +14,28 @@ export const emailEnabled = () => !!process.env.RESEND_API_KEY;
 /** Where notifications for the office go (new orders, enquiries, sign-ups). */
 export const officeEmail = () => process.env.OFFICE_EMAIL?.trim() || null;
 
-const from = () => process.env.EMAIL_FROM?.trim() || "Foodpac Distribution <onboarding@resend.dev>";
+export const DEFAULT_FROM = "Foodpac Distribution <orders@foodpacdistribution.com.au>";
+const from = () => process.env.EMAIL_FROM?.trim() || DEFAULT_FROM;
 
 export type Email = { to: string | string[]; subject: string; html: string; text: string; replyTo?: string };
 
+/** Turns Resend's refusal into words staff can act on. */
+export function explainResendError(status: number, message: string) {
+  if (/only send testing emails/i.test(message)) return "Email is still in Resend's test mode, so it only reaches the Resend account's own address. Set EMAIL_FROM to an address on the verified domain.";
+  if (/domain is not verified|not verified/i.test(message)) return `The sending domain isn't verified in Resend (${message}).`;
+  if (status === 401 || status === 403) return `Resend refused the email: ${message || "check RESEND_API_KEY."}`;
+  if (status === 422) return `Resend couldn't send to that address: ${message}`;
+  if (status === 429) return "Resend is limiting how fast we send. Try again in a minute.";
+  return `Resend refused the email (${status})${message ? `: ${message}` : ""}.`;
+}
+
 /**
- * Sends one email. Never throws: an email is a courtesy and must not undo or block the order,
- * sign-up or message that triggered it. Returns whether Resend accepted it.
+ * Sends one email and says why if it didn't go. Never throws: an email is a courtesy and must
+ * not undo or block the order, sign-up or message that triggered it.
  */
-export async function sendEmail(msg: Email): Promise<boolean> {
+export async function sendEmailResult(msg: Email): Promise<{ ok: true; id: string | null } | { ok: false; error: string }> {
   const key = process.env.RESEND_API_KEY;
-  if (!key) return false;
+  if (!key) return { ok: false, error: "Email isn't set up (RESEND_API_KEY is missing)." };
   try {
     const res = await fetch(RESEND_URL, {
       method: "POST",
@@ -32,12 +43,30 @@ export async function sendEmail(msg: Email): Promise<boolean> {
       body: JSON.stringify({ from: from(), to: msg.to, subject: msg.subject, html: msg.html, text: msg.text, ...(msg.replyTo ? { reply_to: msg.replyTo } : {}) }),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) console.warn(`[email] Resend refused "${msg.subject}" (${res.status}): ${(await res.text()).slice(0, 300)}`);
-    return res.ok;
+    const body = await res.text();
+    if (!res.ok) {
+      let message = body.slice(0, 300);
+      try {
+        message = (JSON.parse(body) as { message?: string }).message ?? message;
+      } catch {}
+      console.warn(`[email] Resend refused "${msg.subject}" to ${String(msg.to)} (${res.status}): ${message}`);
+      return { ok: false, error: explainResendError(res.status, message) };
+    }
+    let id: string | null = null;
+    try {
+      id = (JSON.parse(body) as { id?: string }).id ?? null;
+    } catch {}
+    console.info(`[email] sent "${msg.subject}" to ${String(msg.to)} (${id ?? "no id"})`);
+    return { ok: true, id };
   } catch (err) {
     console.warn(`[email] couldn't send "${msg.subject}":`, (err as Error).message);
-    return false;
+    return { ok: false, error: (err as Error).name === "TimeoutError" ? "Resend didn't answer in time. Try again." : "Couldn't reach Resend. Try again." };
   }
+}
+
+/** Like sendEmailResult, for emails where only success matters. */
+export async function sendEmail(msg: Email): Promise<boolean> {
+  return (await sendEmailResult(msg)).ok;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +105,7 @@ ${opts.preview ? `<div style="display:none;max-height:0;overflow:hidden;opacity:
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
 <tr><td style="background:#ffffff;border-radius:18px 18px 0 0;padding:22px 32px 18px;border-bottom:3px solid ${C.orange}">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="vertical-align:middle"><a href="${esc(base)}" style="text-decoration:none"><img src="${esc(base)}/brand/foodpac-logo.png" width="150" height="54" alt="Foodpac Distribution" style="display:block;border:0;width:150px;height:auto"></a></td>
+<td style="vertical-align:middle"><a href="${esc(base)}" style="text-decoration:none"><img src="${esc(base)}/brand/foodpac-logo-email.png" width="150" height="54" alt="Foodpac Distribution" style="display:block;border:0;width:150px;height:auto"></a></td>
 <td style="vertical-align:middle;padding-left:14px"><span style="display:block;border-left:1px solid ${C.line};padding-left:14px;font-family:${FONT};font-size:10px;font-weight:600;letter-spacing:.22em;color:${C.green}">DISTRIBUTION</span></td>
 </tr></table>
 </td></tr>

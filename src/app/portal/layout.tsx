@@ -22,7 +22,7 @@ export default async function PortalLayout({ children }: { children: React.React
     : [{ n: 0 }];
 
   return (
-    <div className="min-h-dvh bg-cream text-leaf-950">
+    <div className="print-plain min-h-dvh bg-cream text-leaf-950">
       <header className="site-header no-print sticky top-0 z-30 border-b border-leaf-950/10 bg-cream/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-4">
           <Link href="/" className="flex min-w-0 items-center gap-2.5">
@@ -51,7 +51,7 @@ export default async function PortalLayout({ children }: { children: React.React
             <Clock className="size-4 shrink-0" /> {" "}<T>{"Thanks for registering. We're checking your account; prices and ordering open as soon as it's approved."}</T></p>
         </div>
       )}
-      <main className="mx-auto w-full max-w-5xl px-4 py-6">
+      <main className="print-plain mx-auto w-full max-w-5xl px-4 py-6">
         <ViewTransition>{children}</ViewTransition>
       </main>
       <LiveRefresh scope="customer" />

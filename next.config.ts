@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 2678400,
   },
   experimental: {
+    // Styles go inside the HTML instead of a separate stylesheet request, so a phone can paint the
+    // page as soon as the HTML arrives instead of waiting for the CSS behind the fonts and scripts.
+    // Tailwind keeps the CSS small, so this costs little per page.
+    inlineCss: true,
     // Delivery photos + signatures are sent with the "Delivered" action (photos are resized on the phone first).
     serverActions: { bodySizeLimit: "8mb" },
     // Revisiting a page within 30 s (tabs, back/forward) shows it instantly. Saves and live

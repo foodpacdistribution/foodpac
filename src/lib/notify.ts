@@ -3,11 +3,11 @@ import { asc, eq } from "drizzle-orm";
 import { type DB, getDb } from "./db";
 import { customers, salesOrderItems, salesOrders, users } from "./db/schema";
 import { prettyDate } from "./dates";
-import { esc, itemTable, layout, mailto, note, officeEmail, rows, sendEmail, statementTable } from "./email";
+import { esc, itemTable, layout, mailto, note, officeEmail, rows, sendEmail, sendEmailResult, statementTable } from "./email";
 import { accountStatement } from "./invoices";
 import { aud, PAYMENT_METHOD_LABEL } from "./money";
 import { getSettings } from "./planning";
-import { siteInfo } from "@/app/(site)/site-info";
+import { SITE, siteInfo } from "@/app/(site)/site-info";
 import { siteUrl } from "./site-url";
 import { formatMinutesClock, todayIn } from "./time";
 
@@ -15,8 +15,18 @@ import { formatMinutesClock, todayIn } from "./time";
 // All are called after the response (next/server `after`), so they never slow a page down,
 // except the invoice email: staff press "Email invoice" and need to know it went.
 
-/** The business details set in the back office, for email footers. */
-const business = async () => siteInfo(await getSettings(await getDb()));
+/**
+ * The business details set in the back office, for email footers. Only a footer: if the database
+ * can't answer, the email still goes with the built-in details rather than not at all.
+ */
+const business = async () => {
+  try {
+    return siteInfo(await getSettings(await getDb()));
+  } catch (err) {
+    console.warn("[email] couldn't read business details, using the defaults:", (err as Error).message);
+    return SITE;
+  }
+};
 
 /** The address a customer's emails go to: the business email, else their portal login. */
 export async function customerEmail(db: DB, customerId: string) {
@@ -288,7 +298,7 @@ ${statementTable(
     `View or print the invoice: ${link}`,
   ].join("\n");
 
-  const ok = await sendEmail({
+  const result = await sendEmailResult({
     to,
     subject: `Tax invoice ${so.number} · ${aud(so.totalCents)}${paid ? " · paid" : ` · due ${due(so.dueDate)}`}`,
     html: layout({
@@ -302,7 +312,7 @@ ${statementTable(
     text,
     ...(replyTo ? { replyTo } : {}),
   });
-  if (!ok) return { sent: false, reason: "The email didn't go through. Check the email settings and try again." };
+  if (!result.ok) return { sent: false, reason: result.error };
   await db.update(salesOrders).set({ invoiceSentAt: new Date(), invoiceSentTo: to }).where(eq(salesOrders.id, so.id));
   return { sent: true, to };
 }

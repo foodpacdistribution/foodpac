@@ -11,6 +11,7 @@ async function stripe<T>(path: string, params?: Record<string, string>, method: 
     method,
     headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: params ? new URLSearchParams(params) : undefined,
+    signal: AbortSignal.timeout(20_000),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(`Stripe: ${json?.error?.message ?? res.status}`);

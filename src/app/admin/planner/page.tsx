@@ -10,6 +10,9 @@ import { PlannerClient } from "./planner-client";
 
 export const metadata: Metadata = { title: "Route Planner" };
 
+// Route optimising (a server action on this page) can take longer than ordinary pages.
+export const maxDuration = 300;
+
 export default async function PlannerPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   await requireUser(STAFF);
   const sp = await searchParams;

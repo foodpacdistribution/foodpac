@@ -14,6 +14,10 @@ const description =
 
 // Icons (favicon.ico, icon.png, apple-icon.png) and the link-preview image (opengraph-image.png)
 // are picked up from files in this folder.
+// No page should take anywhere near this; if one ever hangs, it fails after a minute (and shows
+// the "Try again" screen) instead of leaving the browser waiting five.
+export const maxDuration = 60;
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
   title: { default: "Foodpac Distribution — Wholesale Food Packaging & Supplies, Brisbane", template: "%s · Foodpac Distribution" },

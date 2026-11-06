@@ -18,3 +18,13 @@ describe("password reset links", () => {
     expect(await verifyResetToken(await signSession({ sub: "user-1", role: "admin", name: "A", driverId: null }))).toBeNull();
   });
 });
+
+describe("Resend refusals", () => {
+  it("say what to fix", async () => {
+    const { explainResendError, DEFAULT_FROM } = await import("./email");
+    expect(DEFAULT_FROM).toMatch(/@foodpacdistribution\.com\.au>$/);
+    expect(explainResendError(403, "You can only send testing emails to your own email address (x@gmail.com).")).toMatch(/test mode/);
+    expect(explainResendError(403, "The foodpac.com domain is not verified.")).toMatch(/isn't verified/);
+    expect(explainResendError(422, "Invalid `to` field.")).toMatch(/couldn't send to that address/);
+  });
+});

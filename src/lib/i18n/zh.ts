@@ -2153,6 +2153,10 @@ export const ZH: Record<string, string> = {
   "Stock on hand when the ledger started": "启用流水时的库存",
   "Returned goods": "退货",
   "Exchange: towards replacement goods": "换货：用于换货商品",
+  "This page didn't load": "页面没有加载出来",
+  "It may be a brief connection problem. Nothing you saved has been lost.": "可能是网络暂时不稳定。已保存的内容不会丢失。",
+  "Try again": "重试",
+  "Reload page": "刷新页面",
 };
 
 /** Messages with a variable part. */

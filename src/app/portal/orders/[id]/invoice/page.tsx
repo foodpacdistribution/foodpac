@@ -9,7 +9,13 @@ import { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { invoiceImages } from "@/lib/invoices";
 
-export const metadata: Metadata = { title: "Invoice 发票" };
+/** The title is the PDF's file name when the invoice is saved from the print window. */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { title: "Invoice" };
+  const [so] = await (await getDb()).select({ number: salesOrders.number }).from(salesOrders).where(eq(salesOrders.id, id)).limit(1);
+  return { title: so ? `Invoice ${so.number}` : "Invoice" };
+}
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(["customer"]);

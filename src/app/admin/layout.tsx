@@ -19,9 +19,8 @@ import { T } from "@/components/i18n";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   // Pages check their own roles too; sales staff only get the pipeline.
-  const user = await requireUser(PIPELINE);
   const db = await getDb();
-  const s = await getSettings(db);
+  const [user, s] = await Promise.all([requireUser(PIPELINE), getSettings(db)]);
   await restoreDeliveries(db, s.timezone);
   // Sidebar badges. They update with the page's live refresh, so new orders show up without reloading.
   const [[{ n: newEnquiries }], [{ n: newSales }], [{ n: toShip }], followUps] = await Promise.all([
@@ -42,7 +41,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   const badges = { "/admin/enquiries": newEnquiries, "/admin/sales": newSales, "/admin/shipments": toShip, "/admin/pipeline": followUps };
 
   return (
-    <div className="min-h-dvh lg:pl-60">
+    <div className="print-plain min-h-dvh lg:pl-60">
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-navy-900 text-slate-300 lg:flex">
         <div className="px-4 pt-4 pb-2">
           <Logo badge className="h-11" />
@@ -93,7 +92,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
         <SideNav role={user.role} mobile badges={badges} />
       </header>
 
-      <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">{children}</main>
+      <main className="print-plain mx-auto w-full max-w-[1600px] p-4 sm:p-6">{children}</main>
       <AdminLive />
     </div>
   );

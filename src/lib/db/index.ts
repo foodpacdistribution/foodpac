@@ -1,20 +1,24 @@
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
+import { guardQueries, QUERY_TIMEOUT_MS } from "./query-timeout";
 import { databaseUrl } from "./url";
 
 export type DB = PgDatabase<PgQueryResultHKT, typeof schema>;
 
-const globalForDb = globalThis as unknown as { __dpDb?: Promise<DB> };
+const globalForDb = globalThis as unknown as { __dpDb?: Promise<DB>; __dpClient?: unknown };
 
 /**
  * DATABASE_URL set → real Postgres (Supabase, Neon, …); run `npm run db:migrate` first.
  * Otherwise → embedded PGlite in .data/pglite, migrated and seeded with demo data on first use.
  */
 export function getDb(): Promise<DB> {
-  globalForDb.__dpDb ??= init().catch((err) => {
-    globalForDb.__dpDb = undefined;
-    throw err;
-  });
+  if (!globalForDb.__dpDb) {
+    const pending: Promise<DB> = init().catch((err) => {
+      if (globalForDb.__dpDb === pending) globalForDb.__dpDb = undefined;
+      throw err;
+    });
+    globalForDb.__dpDb = pending;
+  }
   return globalForDb.__dpDb;
 }
 
@@ -23,8 +27,30 @@ async function init(): Promise<DB> {
   if (url) {
     const { drizzle } = await import("drizzle-orm/postgres-js");
     const postgres = (await import("postgres")).default;
-    // prepare: false keeps it compatible with transaction-mode poolers (Supabase :6543).
-    const db = drizzle(postgres(url, { prepare: false, max: 5 }), { schema }) as unknown as DB;
+    const client = postgres(transactionPoolerUrl(url), {
+      // prepare: false keeps it compatible with transaction-mode poolers (Supabase :6543).
+      prepare: false,
+      max: 5,
+      // Give connections back when idle, so instances that are quiet (or frozen between
+      // requests) don't sit on the pooler's limited slots and starve everyone else, and so a
+      // connection is rarely old enough to have been dropped by the network underneath.
+      idle_timeout: 20,
+      max_lifetime: 60 * 10,
+      // A pooler that can't hand out a connection should fail fast, not leave the page loading.
+      connect_timeout: 10,
+    });
+    globalForDb.__dpClient = client;
+    // A stuck query means this server's connections are dead. Drop them all (which fails the
+    // waiting queries now, so the page shows "Try again" instead of loading for minutes) and let
+    // the next request connect afresh.
+    const onStuck = () => {
+      if (globalForDb.__dpClient !== client) return; // already replaced
+      console.error(`Database query got no answer in ${QUERY_TIMEOUT_MS / 1000}s; dropping the connections and reconnecting.`);
+      globalForDb.__dpClient = undefined;
+      globalForDb.__dpDb = undefined;
+      client.end({ timeout: 0 }).catch(() => {});
+    };
+    const db = drizzle(guardQueries(client, onStuck), { schema }) as unknown as DB;
     await ensureSettingsRow(db);
     return db;
   }
@@ -44,6 +70,23 @@ async function init(): Promise<DB> {
   await seedDemo(db);
   await seedShopDemo(db);
   return db;
+}
+
+/**
+ * Supabase's pooler on :5432 is session mode: each app connection keeps a real database
+ * connection for as long as it's open, and a handful of server instances use them all up (every
+ * page then waits until it times out). The same pooler on :6543 is transaction mode, which shares
+ * them per query. The app is written for transaction mode, so use it.
+ */
+export function transactionPoolerUrl(url: string) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.endsWith(".pooler.supabase.com") && (u.port === "5432" || u.port === "")) {
+      u.port = "6543";
+      return u.toString();
+    }
+  } catch {}
+  return url;
 }
 
 async function ensureSettingsRow(db: DB) {

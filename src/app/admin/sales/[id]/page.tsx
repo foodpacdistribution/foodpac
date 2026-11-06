@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { ArrowLeft, ClipboardList, Pencil, Truck, Undo2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
+import { LinkPending } from "@/components/client-ui";
 import { notFound } from "next/navigation";
 import { Badge, btn, Card, CardHeader } from "@/components/ui";
 import { requireUser, STAFF } from "@/lib/auth/dal";
@@ -76,11 +77,13 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
           {so.status === "confirmed" && d?.status === "delivered" && (
             <Link href={`/admin/customer-returns/new?order=${so.id}`} className={btn("secondary")}>
               <Undo2 className="size-4" /> <T>{"Customer return"}</T>
+              <LinkPending />
             </Link>
           )}
           {canEdit && (
             <Link href={`/admin/sales/${so.id}/edit`} className={btn("secondary")}>
               <Pencil className="size-4" /> <T>{"Edit order"}</T>
+              <LinkPending />
             </Link>
           )}
         <SaleActions id={so.id} status={so.status} paymentStatus={so.paymentStatus} paymentMethod={so.paymentMethod} fulfilment={so.fulfilment} canCancel={canCancel} isAdmin={me.role === "admin"} />
