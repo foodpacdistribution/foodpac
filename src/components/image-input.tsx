@@ -15,12 +15,15 @@ export function ImageInput({
   maxSide,
   required,
   label = "Choose picture",
+  trimDarkBars,
   onPreview,
 }: {
   name: string;
   maxSide: number;
   required?: boolean;
   label?: string;
+  /** Cut black bands off the edges first (product photos). */
+  trimDarkBars?: boolean;
   onPreview: (url: string | null) => void;
 }) {
   const tr = useT();
@@ -41,7 +44,7 @@ export function ImageInput({
           const file = e.target.files?.[0];
           if (!file) return onPreview(null);
           setWorking(true);
-          const small = await resizeImage(file, maxSide);
+          const small = await resizeImage(file, maxSide, undefined, { trimDarkBars });
           // Swap the shrunk file into the input, so the form uploads that one.
           if (small !== file && ref.current) {
             const dt = new DataTransfer();

@@ -191,20 +191,48 @@ export async function accountApproved(customerId: string) {
   });
 }
 
-/** "Forgot password": a link to choose a new one, valid for an hour. */
-export async function passwordReset(to: string, name: string, link: string) {
+/**
+ * "Forgot password": a link to choose a new one, valid for an hour. `loginEmail` is set when the
+ * person typed their business email and the login uses a different one, so they learn which it is.
+ */
+export async function passwordReset(to: string, name: string, link: string, loginEmail?: string) {
+  const login = loginEmail && loginEmail !== to ? loginEmail : null;
   await sendEmail({
     to,
     subject: "Reset your Foodpac password",
     html: layout({
-        site: await business(),
+      site: await business(),
       preview: "Choose a new password. The link works once, for the next hour.",
       heading: `Hi ${name.split(" ")[0]}, reset your password`,
-      body: `<p style="margin:0">Someone (hopefully you) asked to reset the password for this email. The link works once, for the next hour.</p>`,
+      body: `<p style="margin:0">Someone (hopefully you) asked to reset the password for this email. The link works once, for the next hour.</p>${
+        login ? `<p style="margin:12px 0 0">You sign in with <strong>${esc(login)}</strong>.</p>` : ""
+      }`,
       button: { label: "Choose a new password", url: link },
       footer: "Didn't ask for this? Ignore this email: your password stays the same.",
     }),
-    text: `Reset your Foodpac password (link works once, for the next hour):\n${link}\n\nDidn't ask for this? Ignore this email: your password stays the same.`,
+    text: `Reset your Foodpac password (link works once, for the next hour):\n${link}\n${login ? `\nYou sign in with ${login}.\n` : ""}\nDidn't ask for this? Ignore this email: your password stays the same.`,
+  });
+}
+
+/** "Forgot password" for an email with no login: says so, instead of leaving them waiting for nothing. */
+export async function passwordResetNoAccount(to: string) {
+  const site = await business();
+  const base = siteUrl();
+  const contact = site.phone ? ` or call ${site.phone}` : "";
+  await sendEmail({
+    to,
+    subject: "Your Foodpac password reset request",
+    html: layout({
+      site,
+      preview: "We don't have a login with this email address.",
+      heading: "We couldn't find a login for this email",
+      body: `<p style="margin:0">Someone (hopefully you) asked to reset a Foodpac password for <strong>${esc(to)}</strong>, but no login uses this address.</p>
+<p style="margin:12px 0 0">If you have an account, try the email you sign in with, or reply to this email${esc(contact)} and we'll reset it for you. New to Foodpac? You can open a trade account online.</p>`,
+      button: { label: "Open a trade account", url: `${base}/register` },
+      footer: "Didn't ask for this? You can ignore this email.",
+    }),
+    text: `Someone asked to reset a Foodpac password for ${to}, but no login uses this address.\n\nIf you have an account, try the email you sign in with, or reply to this email${contact} and we'll reset it for you.\n\nNew to Foodpac? Open a trade account: ${base}/register\n\nDidn't ask for this? You can ignore this email.`,
+    ...(site.email ? { replyTo: site.email } : {}),
   });
 }
 

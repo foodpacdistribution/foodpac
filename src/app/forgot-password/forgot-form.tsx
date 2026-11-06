@@ -14,7 +14,7 @@ export function ForgotForm() {
       <div className="mt-6 rounded-2xl bg-white p-5 text-sm text-leaf-900/80 shadow-sm ring-1 ring-leaf-950/10">
         <MailCheck className="size-6 text-leaf-700" />
         <p className="mt-2 font-semibold text-leaf-950">{tr("Check your email")}</p>
-        <p className="mt-1">{tr("If that email has an account, we've sent a link to choose a new password. It works once, for the next hour.")}</p>
+        <p className="mt-1">{tr("We've sent an email to that address. If you have a login, it has a link to choose a new password (it works once, for the next hour). Nothing after a few minutes? Check your spam folder.")}</p>
       </div>
     );
   }

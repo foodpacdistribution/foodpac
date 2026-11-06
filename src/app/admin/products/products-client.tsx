@@ -426,7 +426,7 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
         </span>
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-slate-600">{tr("Photo")}</p>
-          <ImageInput name="image" maxSide={1600} label={p?.hasImage ? "Replace photo" : "Choose photo"} onPreview={(u) => setPhoto(u ?? p?.imageUrl ?? null)} />
+          <ImageInput name="image" maxSide={1600} trimDarkBars label={p?.hasImage ? "Replace photo" : "Choose photo"} onPreview={(u) => setPhoto(u ?? p?.imageUrl ?? null)} />
           <p className="text-[11px] text-slate-400">{tr("Square photos on a white background look best in the shop. Large photos are shrunk automatically.")}</p>
         </div>
       </div>

@@ -11,7 +11,8 @@ import { getDb } from "@/lib/db";
 import { getSettings } from "@/lib/planning";
 import { deliveryPromise } from "@/lib/shop";
 import { cartItems } from "@/lib/db/schema";
-import { CATEGORIES, categoryHref, SITE } from "./content";
+import { categoryHref, SITE } from "./content";
+import { categoryCounts, stockedCategories } from "./live-categories";
 import { siteInfo } from "./site-info";
 import { BackToTop } from "./back-to-top";
 import { CartBadge } from "./cart-badge";
@@ -23,7 +24,8 @@ import { T } from "@/components/i18n";
 
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const db = await getDb();
-  const [user, viewer, settings] = await Promise.all([getCurrentUser(), getCurrentCustomer(), getSettings(db)]);
+  const [user, viewer, settings, counts] = await Promise.all([getCurrentUser(), getCurrentCustomer(), getSettings(db), categoryCounts(db)]);
+  const ranges = stockedCategories(counts);
   const promise = deliveryPromise(settings);
   const site = siteInfo(settings);
   const [{ n: cartCount }] = viewer
@@ -95,7 +97,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           <CategoryNav
             items={[
               { href: "/products", label: "All products" },
-              ...CATEGORIES.map((c) => ({ href: categoryHref(c.title), label: c.title })),
+              ...ranges.map((c) => ({ href: categoryHref(c.title), label: c.title })),
               ...(viewer ? [{ href: "/portal/quick-order", label: "Quick order" }] : []),
               { href: "/#contact", label: "Contact" },
             ]}
@@ -144,7 +146,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           </div>
           <div className="space-y-2 text-sm">
             <p className="pb-1 text-xs font-semibold text-white"><T>{"Categories"}</T></p>
-            {CATEGORIES.map((c) => (
+            {ranges.map((c) => (
               <Link key={c.title} href={categoryHref(c.title)} className="block hover:text-white">
                 <T>{c.title}</T>
               </Link>

@@ -5,7 +5,7 @@ import { cx } from "@/components/ui";
 import { T } from "@/components/i18n";
 import { posterImageUrl } from "@/lib/poster-image";
 import type { PosterRow } from "@/lib/posters";
-import { CATEGORIES, categoryHref, categoryInfo, type Poster } from "./content";
+import { categoryHref, categoryInfo, type Poster, stockedCategories } from "./content";
 import { ProductCount, ProductImage } from "./shop-ui";
 
 type Photo = { id: string; sku: string; name: string; category: string; updatedAt: Date; hasImage: boolean };
@@ -55,15 +55,16 @@ export function PosterSlide({
           <p className="mt-5 max-w-md leading-relaxed text-white/75">
             <T>{poster.text}</T>
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link href={poster.cta.href} className={cx("group/cta inline-flex h-12 items-center gap-2 rounded-md px-6 text-sm font-semibold transition-colors", tone.primary)}>
               <T>{poster.cta.label}</T>
               <ArrowRight className="size-4 transition-transform group-hover/cta:translate-x-0.5" />
             </Link>
             {secondary && (
+              // A real button too: for a new trade customer, opening an account is the first step.
               <Link
                 href={secondary.href}
-                className="inline-flex h-12 items-center text-sm font-semibold text-white underline decoration-white/35 underline-offset-4 transition-colors hover:decoration-white"
+                className="inline-flex h-12 items-center rounded-md px-6 text-sm font-semibold text-white ring-1 ring-white/45 transition-colors ring-inset hover:bg-white/10 hover:ring-white"
               >
                 <T>{secondary.label}</T>
               </Link>
@@ -75,7 +76,7 @@ export function PosterSlide({
             {poster.art === "categories" && <RangeIndex counts={counts} />}
             {poster.art === "products" && <PhotoGrid photos={photos} categories={poster.categories ?? []} />}
             {poster.art === "delivery" && <DeliveryCard />}
-            {poster.art === "ranges" && <OneDocket />}
+            {poster.art === "ranges" && <OneDocket counts={counts} />}
           </div>
         )}
       </div>
@@ -83,11 +84,11 @@ export function PosterSlide({
   );
 }
 
-/** Every range with how many products it has, as a ruled list. */
+/** The ranges on sale with how many products each has, as a ruled list. */
 function RangeIndex({ counts }: { counts: { name: string; n: number }[] }) {
   return (
     <ul className="ml-auto max-w-md border-t border-white/15">
-      {CATEGORIES.map(({ title }) => (
+      {stockedCategories(counts).map(({ title }) => (
         <li key={title} className="border-b border-white/15">
           <Link href={categoryHref(title)} className="group flex items-baseline justify-between gap-4 py-3.5 text-white">
             <span className="font-display text-lg font-medium group-hover:underline group-hover:underline-offset-4">
@@ -189,7 +190,7 @@ function DeliveryCard() {
 }
 
 /** One delivery docket with a line for every range: the point of ordering everything from one place. */
-function OneDocket() {
+function OneDocket({ counts }: { counts: { name: string; n: number }[] }) {
   return (
     <div className="ml-auto w-full max-w-sm rounded-lg bg-cream p-6 text-leaf-950 shadow-xl shadow-black/25">
       <div className="flex items-baseline justify-between border-b-2 border-leaf-950 pb-2">
@@ -201,7 +202,7 @@ function OneDocket() {
         </p>
       </div>
       <ul className="divide-y divide-dashed divide-leaf-950/20 text-sm">
-        {CATEGORIES.map(({ title }) => (
+        {stockedCategories(counts).map(({ title }) => (
           <li key={title}>
             <Link href={categoryHref(title)} className="flex items-center justify-between gap-3 py-2.5 hover:underline hover:underline-offset-2">
               <T>{title}</T>

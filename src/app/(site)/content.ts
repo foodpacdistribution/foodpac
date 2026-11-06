@@ -106,3 +106,13 @@ export const categoryHref = (name: string) => `/categories/${categorySlug(name)}
 export function categoryInfo(name: string) {
   return CATEGORIES.find((c) => c.title === name) ?? { icon: Package, title: name, text: "" };
 }
+
+/**
+ * The ranges that have something in them, for menus and the home page, so shoppers aren't sent
+ * to "Coming soon" pages. While the catalogue is still empty, all of them (menus are never bare).
+ * Empty ranges keep their pages; they're just not offered.
+ */
+export function stockedCategories(counts: { name: string; n: number }[]) {
+  const live = CATEGORIES.filter((c) => (counts.find((x) => x.name === c.title)?.n ?? 0) > 0);
+  return live.length ? live : CATEGORIES;
+}

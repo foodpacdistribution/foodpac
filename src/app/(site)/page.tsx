@@ -6,10 +6,11 @@ import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { getDepots, getSettings } from "@/lib/planning";
 import { livePosters } from "@/lib/posters";
-import { listCatalog, listCategories, posterPhotos, recentlyBought } from "@/lib/shop";
+import { listCatalog, posterPhotos, recentlyBought } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
-import { CATEGORIES, categoryHref, POSTERS, SITE } from "./content";
+import { categoryHref, POSTERS, SITE } from "./content";
 import { HeroCarousel } from "./hero-carousel";
+import { categoryCounts, stockedCategories } from "./live-categories";
 import { PosterSlide, UploadedPosterSlide } from "./posters";
 import { Contact, HowItWorks } from "./sections";
 import { siteInfo } from "./site-info";
@@ -24,7 +25,7 @@ export default async function HomePage() {
   const db = await getDb();
   const [featured, counts, recent, [depot], photos, settings, uploaded] = await Promise.all([
     listCatalog(db, customer, { featured: true, limit: 8 }),
-    listCategories(db),
+    categoryCounts(db),
     customer ? recentlyBought(db, customer, 4) : Promise.resolve([]),
     getDepots(db),
     // Product photos for the posters that show some.
@@ -38,6 +39,9 @@ export default async function HomePage() {
   const site = siteInfo(settings);
   const popular = featured.length ? featured : await listCatalog(db, customer, { limit: 8 });
   const total = counts.reduce((t, c) => t + c.n, 0);
+  const ranges = stockedCategories(counts);
+  // A small number ("1 product") reads as an empty shop; the count only shows once it says something.
+  const showCount = total >= 20 && ranges.length >= 2;
 
   // Tells Google who the business is (name, logo, where, when, how to reach it): what it draws on
   // for the business panel beside the results. The address is the depot's unless one is set in content.ts.
@@ -65,7 +69,7 @@ export default async function HomePage() {
         hasOfferCatalog: {
           "@type": "OfferCatalog",
           name: "Products",
-          itemListElement: CATEGORIES.map((c) => ({ "@type": "OfferCatalog", name: c.title, url: `${base}${categoryHref(c.title)}` })),
+          itemListElement: ranges.map((c) => ({ "@type": "OfferCatalog", name: c.title, url: `${base}${categoryHref(c.title)}` })),
         },
       },
       {
@@ -101,7 +105,9 @@ export default async function HomePage() {
       <section className="border-b border-leaf-950/10 bg-white">
         <ul className="mx-auto grid max-w-6xl grid-cols-2 px-4 sm:px-6 lg:grid-cols-4">
           {[
-            { title: total > 0 ? <ProductCount n={total} /> : <T>{"Order online"}</T>, text: <T vars={{ n: CATEGORIES.length }}>{"Across {n} ranges"}</T> },
+            showCount
+              ? { title: <ProductCount n={total} />, text: <T vars={{ n: ranges.length }}>{"Across {n} ranges"}</T> }
+              : { title: <T>{"Order online"}</T>, text: <T>{"Any time, at your trade prices"}</T> },
             { title: <T>{"Weekday delivery runs"}</T>, text: <T>{SITE.serviceArea}</T> },
             { title: <T>{"Proof on every drop"}</T>, text: <T>{"Photo and signature at the door"}</T> },
             { title: <T>{"Your trade prices"}</T>, text: <T>{"One account, one invoice"}</T> },
@@ -126,7 +132,7 @@ export default async function HomePage() {
         <SectionHead title={<T>{"Shop by range"}</T>} link={{ href: "/products", label: "All products" }} />
         {/* A ruled index of the ranges, like the contents page of a printed catalogue. */}
         <div className="mt-5 grid border-t border-l border-leaf-950/15 bg-white sm:grid-cols-2 lg:grid-cols-3">
-          {CATEGORIES.map(({ title, text }) => (
+          {ranges.map(({ title, text }) => (
             <Link key={title} href={categoryHref(title)} className="group flex flex-col border-r border-b border-leaf-950/15 p-5 transition-colors hover:bg-leaf-50">
               <span className="flex items-baseline justify-between gap-3">
                 <span className="font-display text-lg font-semibold tracking-tight group-hover:underline group-hover:underline-offset-4">

@@ -1,7 +1,7 @@
 "use server";
 
 import { createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, getTableColumns, sql } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
@@ -12,9 +12,9 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { afterLogin, homeFor, SESSION_COOKIE, sessionCookieOptions, signResetToken, signSession, verifyResetToken, verifySession } from "@/lib/auth/session";
 import { clearAttempts, countAttempt, loginKeys } from "@/lib/auth/throttle";
 import { getDb } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { customers, users } from "@/lib/db/schema";
 import { emailEnabled } from "@/lib/email";
-import { passwordReset } from "@/lib/notify";
+import { passwordReset, passwordResetNoAccount } from "@/lib/notify";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n";
 import { UserError } from "@/lib/planning";
 
@@ -108,11 +108,25 @@ export async function requestPasswordReset(_prev: unknown, form: FormData) {
     const ip = h.get("x-forwarded-for")?.split(",")[0].trim() || null;
     const waitS = await countAttempt(db, [{ key: `reset:${email}`, max: 3 }, ...(ip ? [{ key: `reset-ip:${ip}`, max: 10 }] : [])]);
     if (waitS > 0) throw new UserError("Too many reset requests. Please try again in a few minutes.");
-    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    // The login email, else a customer's business email (people often type that one), whose portal
+    // login gets the link. The page says the same either way; the email tells them which it was.
+    let [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (!user) {
+      [user] = await db
+        .select(getTableColumns(users))
+        .from(users)
+        .innerJoin(customers, eq(customers.id, users.customerId))
+        .where(sql`lower(${customers.email}) = ${email}`)
+        .limit(1);
+    }
     if (user) {
       const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
       const link = `${origin}/reset-password?token=${encodeURIComponent(await signResetToken(user.id, passwordStamp(user.passwordHash)))}`;
-      after(() => passwordReset(user.email, user.name, link));
+      console.info(`[reset] sending a reset link for ${user.email} to ${email}`);
+      after(() => passwordReset(email, user.name, link, user.email));
+    } else {
+      console.info(`[reset] no login for ${email}; telling them so`);
+      after(() => passwordResetNoAccount(email));
     }
     return { message: "sent" };
   });
