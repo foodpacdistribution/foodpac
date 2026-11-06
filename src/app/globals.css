@@ -362,6 +362,13 @@ dialog::backdrop {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  /* The page margins do the spacing on paper; the on-screen padding inside the sheet would double it. */
+  .invoice-sheet > div:last-child {
+    padding: 0 !important;
+  }
+  .invoice-sheet > div:first-child {
+    margin-bottom: 6mm;
+  }
   .invoice-sheet thead {
     display: table-header-group;
   }
