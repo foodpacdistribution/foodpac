@@ -1805,6 +1805,7 @@ export const ZH: Record<string, string> = {
   "Create exchange order": "创建换货订单",
   "Cancel return": "取消退货",
   "Refunded by": "退款方式",
+  "Reconnecting…": "正在重新连接…",
   "Reference": "参考号",
   "Cancel this return? Nothing has come back yet, so stock and credit don't change.": "取消这张退货单？商品还没退回，库存和余额都不会变动。",
   "Customer return": "客户退货",
