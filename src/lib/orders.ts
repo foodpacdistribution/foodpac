@@ -4,7 +4,7 @@ import { parseTime, parseTimeWindow } from "./time";
 export const IMPORT_FIELDS = [
   { key: "orderNumber", label: "Order number", synonyms: ["order", "order no", "order number", "order id", "order #", "invoice", "reference", "ref", "so number"] },
   { key: "customerName", label: "Customer", synonyms: ["customer", "customer name", "name", "company", "business", "recipient", "client"] },
-  { key: "address", label: "Address *", synonyms: ["address", "delivery address", "street", "street address", "address line 1", "address1", "ship to"] },
+  { key: "address", label: "Address *", synonyms: ["address", "delivery address", "street", "street address", "address line 1", "address1", "ship to", "deliver to", "delivery to"] },
   { key: "suburb", label: "Suburb / city", synonyms: ["suburb", "city", "town", "locality"] },
   { key: "postcode", label: "Postcode", synonyms: ["postcode", "post code", "zip", "zip code", "postal code"] },
   { key: "phone", label: "Phone", synonyms: ["phone", "mobile", "contact", "contact number", "phone number", "tel"] },
@@ -52,7 +52,21 @@ export function parseDate(raw: string | undefined | null): string | null {
   if (m) return fmt(+m[1], +m[2], +m[3]);
   m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/.exec(s);
   if (m) return fmt(m[3].length === 2 ? 2000 + +m[3] : +m[3], +m[2], +m[1]);
+  // Month names, as order PDFs print them: "Nov 09, 2026", "9 November 2026", "09-Nov-26", "Mon, 9 Nov 2026".
+  const words = s.toLowerCase().replace(/^[a-z]+,\s*/, "").replace(/(\d)(st|nd|rd|th)\b/g, "$1");
+  const year = (y: string) => (y.length === 2 ? 2000 + +y : +y);
+  m = /^([a-z]{3,9})\.?[\s-]+(\d{1,2}),?[\s-]+(\d{2}|\d{4})$/.exec(words);
+  if (m && month(m[1])) return fmt(year(m[3]), month(m[1])!, +m[2]);
+  m = /^(\d{1,2})[\s-]+([a-z]{3,9})\.?,?[\s-]+(\d{2}|\d{4})$/.exec(words);
+  if (m && month(m[2])) return fmt(year(m[3]), month(m[2])!, +m[1]);
   return null;
+}
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+function month(name: string) {
+  const i = MONTHS.indexOf(name.slice(0, 3));
+  // "sept" and full names are fine; "novx" is not.
+  return i >= 0 && ("january february march april may june july august september october november december".split(" ")[i].startsWith(name) || name === "sept") ? i + 1 : null;
 }
 
 function fmt(y: number, mo: number, d: number) {

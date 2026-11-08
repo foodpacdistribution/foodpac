@@ -166,5 +166,5 @@ export function Toast({ toast, onDone }: { toast: ToastMessage | null; onDone: (
 export function FormError({ message }: { message?: string | null }) {
   const tr = useT();
   if (!message) return null;
-  return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">{tr(message)}</p>;
+  return <p className="whitespace-pre-line rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">{tr(message)}</p>;
 }

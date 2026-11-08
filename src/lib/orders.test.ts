@@ -16,6 +16,15 @@ describe("parseDate", () => {
     expect(parseDate("1/2/26")).toBe("2026-02-01");
     expect(parseDate("31/02/2026")).toBeNull();
   });
+
+  it("reads dates with month names, as order PDFs print them", () => {
+    expect(parseDate("Nov 09, 2026")).toBe("2026-11-09");
+    expect(parseDate("9 November 2026")).toBe("2026-11-09");
+    expect(parseDate("09-Nov-26")).toBe("2026-11-09");
+    expect(parseDate("Mon, 9 Nov 2026")).toBe("2026-11-09");
+    expect(parseDate("Feb 30, 2026")).toBeNull();
+    expect(parseDate("Novx 9 2026")).toBeNull();
+  });
 });
 
 describe("validateImportRow", () => {

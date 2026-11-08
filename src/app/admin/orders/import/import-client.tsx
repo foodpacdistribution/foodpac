@@ -34,6 +34,37 @@ function toSheet(name: string, matrix: unknown[][]): Sheet {
   return { name, headers: headers.map((h, i) => h || `Column ${i + 1}`), rows: data };
 }
 
+/**
+ * Stacks sheets under one header row. Columns are lined up by the order field each one
+ * matches ("SHIP TO" and "Delivery Address" are both the address), then by name.
+ */
+function mergeSheets(sheets: Sheet[]): Sheet {
+  if (sheets.length === 1) return sheets[0];
+  const fieldName = Object.fromEntries(IMPORT_FIELDS.map((f) => [f.key, f.label.replace(/\s*[*(].*$/, "")]));
+  const headers: string[] = [];
+  const key = (h: string) => h.trim().toLowerCase();
+  const indexOf = (h: string) => {
+    let i = headers.findIndex((x) => key(x) === key(h));
+    if (i < 0) i = headers.push(h) - 1;
+    return i;
+  };
+  const placed = sheets.map((s) => {
+    const byField = Object.entries(guessMapping(s.headers)).map(([f, col]) => [col, fieldName[f]] as const);
+    const names = s.headers.map((h, i) => byField.find(([col]) => col === i)?.[1] ?? h);
+    return { s, at: names.map(indexOf) };
+  });
+  const rows = placed.flatMap(({ s, at }) =>
+    s.rows.map((r) => {
+      const out = headers.map(() => "");
+      r.forEach((v, i) => {
+        if (!out[at[i]]) out[at[i]] = v;
+      });
+      return out;
+    }),
+  );
+  return { name: `${sheets.length} files`, headers, rows };
+}
+
 function loadTemplates(): Record<string, Mapping> {
   try {
     return JSON.parse(localStorage.getItem(TEMPLATE_KEY) ?? "{}");
@@ -59,6 +90,7 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
   const [usedTemplate, setUsedTemplate] = useState(false);
   const [date, setDate] = useState(defaultDate);
   const [paste, setPaste] = useState("");
+  const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [locate, setLocate] = useState<Locate | null>(null);
@@ -92,20 +124,44 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
     setMapping(saved ?? guessMapping(s.headers));
   }
 
-  async function onFile(file: File) {
-    setError(null);
-    try {
-      if (/\.xlsx$/i.test(file.name)) {
-        const { readSheet } = await import("read-excel-file/browser");
-        accept(toSheet(file.name, (await readSheet(file)) as unknown[][]));
-      } else if (/\.(csv|txt|tsv)$/i.test(file.name)) {
-        const text = await file.text();
-        accept(toSheet(file.name, Papa.parse<string[]>(text.trim(), { skipEmptyLines: true }).data));
-      } else {
-        setError("Upload a .xlsx or .csv file. For old .xls files, save as .xlsx first.");
+  /** One file → its rows, header row first. Throws a readable message for the user. */
+  async function readFile(file: File): Promise<unknown[][]> {
+    if (/\.xlsx$/i.test(file.name)) {
+      const { readSheet } = await import("read-excel-file/browser");
+      return (await readSheet(file)) as unknown[][];
+    }
+    if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") {
+      const [{ readPdfPages }, { pdfToMatrix, PdfReadError }] = await Promise.all([import("@/lib/pdf-read"), import("@/lib/pdf-table")]);
+      try {
+        return pdfToMatrix(await readPdfPages(file));
+      } catch (e) {
+        throw new Error(e instanceof PdfReadError ? tr(e.message) : `${tr("Couldn't read that file:")} ${(e as Error).message}`);
       }
-    } catch (e) {
-      setError(`Couldn't read that file: ${(e as Error).message}`);
+    }
+    if (/\.(csv|txt|tsv)$/i.test(file.name)) return Papa.parse<string[]>((await file.text()).trim(), { skipEmptyLines: true }).data;
+    throw new Error(tr("Upload a .xlsx, .csv or .pdf file. For old .xls files, save as .xlsx first."));
+  }
+
+  /** Several files (e.g. one delivery-order PDF per order) are combined into one list, matching columns by name. */
+  async function onFiles(files: File[]) {
+    if (!files.length) return;
+    setError(null);
+    setReading(true);
+    try {
+      const sheets: Sheet[] = [];
+      const failed: string[] = [];
+      for (const f of files) {
+        try {
+          sheets.push(toSheet(f.name, await readFile(f)));
+        } catch (e) {
+          failed.push(files.length > 1 ? `${f.name}: ${(e as Error).message}` : (e as Error).message);
+        }
+      }
+      if (!sheets.length) return setError(failed.join("\n"));
+      accept(mergeSheets(sheets));
+      if (failed.length) setError(`${tr("Some files were skipped:")}\n${failed.join("\n")}`);
+    } finally {
+      setReading(false);
     }
   }
 
@@ -183,20 +239,30 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
       ) : !sheet ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
-            <CardHeader title={tr("Upload a file")} subtitle={tr("Excel (.xlsx) or CSV with a header row")} />
+            <CardHeader title={tr("Upload a file")} subtitle={tr("Excel (.xlsx), CSV or PDF — several files at once is fine")} />
             <label
               className="m-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-line px-6 py-12 text-center hover:border-blue-400 hover:bg-blue-50/30"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
-                const f = e.dataTransfer.files[0];
-                if (f) onFile(f);
+                void onFiles([...e.dataTransfer.files]);
               }}
             >
-              <FileSpreadsheet className="size-10 text-slate-400" />
-              <span className="mt-3 text-sm font-medium text-slate-800">{tr("Drop a file here or click to choose")}</span>
+              {reading ? <Spinner className="size-10 text-slate-400" /> : <FileSpreadsheet className="size-10 text-slate-400" />}
+              <span className="mt-3 text-sm font-medium text-slate-800">{reading ? tr("Reading files…") : tr("Drop files here or click to choose")}</span>
               <span className="mt-1 text-xs text-slate-500">{tr("Order number, customer, address, suburb, postcode, time window…")}</span>
-              <input type="file" accept=".xlsx,.csv,.txt,.tsv" className="sr-only" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+              <span className="mt-1 text-xs text-slate-500">{tr("Delivery-order PDFs: select them all at once, one order per PDF is fine.")}</span>
+              <input
+                type="file"
+                multiple
+                accept=".xlsx,.csv,.txt,.tsv,.pdf,application/pdf"
+                className="sr-only"
+                disabled={reading}
+                onChange={(e) => {
+                  void onFiles([...(e.target.files ?? [])]);
+                  e.target.value = "";
+                }}
+              />
             </label>
           </Card>
           <Card>
