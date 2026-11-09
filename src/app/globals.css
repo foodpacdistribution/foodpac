@@ -132,6 +132,53 @@ body {
   font-size: 11px;
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
 }
+/* The driver's next stop: larger, with a ring in the route colour (set as --ring). */
+.stop-pin.is-next {
+  border-width: 3px;
+  box-shadow:
+    0 0 0 3px var(--ring),
+    0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+/* Live driver marker: a soft ring that keeps spreading out while GPS is coming in. */
+.veh-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  animation: veh-pulse 2.2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes veh-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .veh-pulse {
+    animation: none;
+    opacity: 0;
+  }
+}
+/* "11 min ago" under a driver whose position is old. */
+.veh-age {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  border-radius: 9999px;
+  background: rgb(15 23 42 / 0.85);
+  padding: 1px 7px;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+}
 
 dialog::backdrop {
   background: rgb(8 17 31 / 0.45);

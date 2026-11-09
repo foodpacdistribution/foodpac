@@ -9,9 +9,17 @@ export type MapStop = {
   title: string;
   lines: string[];
   navigateUrl?: string;
+  /** The driver's next stop: drawn larger with a ring. */
+  next?: boolean;
 };
 
-export type MapRoute = { id: string; color: string; path: [number, number][] };
+export type MapRoute = {
+  id: string;
+  color: string;
+  path: [number, number][];
+  /** Index into `path` the driver has got to: the part before it is drawn as already driven. */
+  doneUpTo?: number;
+};
 
 export type MapDepot = { id: string; lat: number; lng: number; name: string };
 
@@ -26,6 +34,10 @@ export type MapVehicle = {
   heading: number | null;
   title: string;
   lines: string[];
+  /** GPS accuracy of this position; a circle shows it when it is coarse. */
+  accuracyM?: number | null;
+  /** "11 min ago", shown under a stale marker. */
+  ageLabel?: string;
 };
 
 export type MapProps = {

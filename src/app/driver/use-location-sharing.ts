@@ -4,9 +4,31 @@ import { useEffect, useRef, useState } from "react";
 
 export type SharingStatus = "off" | "starting" | "on" | "denied" | "unavailable" | "stopped";
 
-type Fix = { lat: number; lng: number; accuracy: number | null; speed: number | null; heading: number | null; ts: number };
+export type Fix = { lat: number; lng: number; accuracy: number | null; speed: number | null; heading: number | null; ts: number };
 
-const SEND_EVERY_MS = 20_000;
+const SEND_EVERY_MS = 10_000;
+/** A new fix is only kept if the van moved this far, … */
+const MIN_MOVE_M = 15;
+/** … or this long has passed (so a parked van still shows as reporting), … */
+const MAX_GAP_MS = 30_000;
+/** … and fixes rougher than this are dropped while precise ones are coming in. */
+const MAX_ACCURACY_M = 200;
+
+function metres(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const r = Math.PI / 180;
+  const x = (b.lng - a.lng) * r * Math.cos(((a.lat + b.lat) / 2) * r);
+  const y = (b.lat - a.lat) * r;
+  return Math.hypot(x, y) * 6_371_000;
+}
+
+/** Keeps the fixes that add something: movement, time, or a much better reading of the same spot. */
+export function worthKeeping(f: Fix, prev: Fix | null) {
+  if (!prev) return true;
+  const gap = f.ts - prev.ts;
+  if (f.accuracy !== null && f.accuracy > MAX_ACCURACY_M && gap < 60_000) return false;
+  if (metres(prev, f) >= MIN_MOVE_M || gap >= MAX_GAP_MS) return true;
+  return f.accuracy !== null && prev.accuracy !== null && f.accuracy < prev.accuracy / 2;
+}
 const PREF_KEY = "dp.shareLocation";
 
 export function readSharePref() {
@@ -47,6 +69,7 @@ export function useLocationSharing(active: boolean) {
     }
     let stopped = false;
     let firstSent = false;
+    let kept: Fix | null = null;
     queueMicrotask(() => setStatus("starting"));
 
     const flush = async (final = false) => {
@@ -72,29 +95,38 @@ export function useLocationSharing(active: boolean) {
       }
     };
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        buffer.current.push({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy ?? null,
-          speed: pos.coords.speed ?? null,
-          heading: pos.coords.heading ?? null,
-          ts: pos.timestamp,
-        });
-        setStatus((s) => (s === "stopped" ? s : "on"));
-        // Send the first fix straight away so dispatch sees the driver immediately.
-        if (!firstSent) {
-          firstSent = true;
-          void flush();
-        }
-      },
-      (err) => setStatus(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable"),
-      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 30_000 },
-    );
+    const onFix = (pos: GeolocationPosition) => {
+      const fix: Fix = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy ?? null,
+        speed: pos.coords.speed ?? null,
+        heading: pos.coords.heading ?? null,
+        ts: pos.timestamp,
+      };
+      setStatus((s) => (s === "stopped" ? s : "on"));
+      if (!worthKeeping(fix, kept)) return;
+      kept = fix;
+      buffer.current.push(fix);
+      // Send the first fix (and the first after coming back to the app) straight away, so
+      // dispatch sees the driver immediately instead of at the next batch.
+      if (!firstSent) {
+        firstSent = true;
+        void flush();
+      }
+    };
+    const onError = (err: GeolocationPositionError) => setStatus(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable");
+    const watchId = navigator.geolocation.watchPosition(onFix, onError, { enableHighAccuracy: true, maximumAge: 5_000, timeout: 30_000 });
     const timer = setInterval(flush, SEND_EVERY_MS);
-    const onHide = () => document.visibilityState === "hidden" && void flush();
-    document.addEventListener("visibilitychange", onHide);
+    // Phones stop reporting while the app is in the background. Send what we have on the way out,
+    // and on the way back ask for a fresh fix at once rather than waiting for the next one.
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") return void flush();
+      firstSent = false;
+      kept = null;
+      navigator.geolocation.getCurrentPosition(onFix, () => {}, { enableHighAccuracy: true, maximumAge: 0, timeout: 15_000 });
+    };
+    document.addEventListener("visibilitychange", onVisibility);
 
     // Keep the screen on while sharing; a locked phone stops reporting location.
     let wakeLock: { release: () => Promise<void> } | null = null;
@@ -109,7 +141,7 @@ export function useLocationSharing(active: boolean) {
       stopped = true;
       navigator.geolocation.clearWatch(watchId);
       clearInterval(timer);
-      document.removeEventListener("visibilitychange", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
       document.removeEventListener("visibilitychange", relock);
       void wakeLock?.release().catch(() => {});
       setStatus("off");
