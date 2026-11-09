@@ -3,7 +3,8 @@
 import { BadgeDollarSign, BarChart3, Boxes, Building2, ClipboardList, Factory, GalleryHorizontal, HandCoins, Inbox, LayoutDashboard, Map, Package, PackageCheck, PackagePlus, Radio, RotateCcw, Settings, ShoppingBag, Target, TrendingUp, Truck, Undo2, Wallet, Warehouse, Zap, ChevronDown, Menu as MenuIcon, X } from "lucide-react";
 import Link from "@/components/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Drawer } from "@/components/drawer";
 import { LinkPending } from "@/components/client-ui";
 import { cx } from "@/components/ui";
 import type { Role } from "@/lib/db/schema";
@@ -127,6 +128,7 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
   const tr = useT();
   const [collapsed, toggle] = useCollapsed();
   const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
   const isActive = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname.startsWith(href));
   const count = (href: string) => badges[href] || 0;
   const sections = navFor(role);
@@ -135,7 +137,7 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
     queueMicrotask(() => setMenuOpen(false));
   }, [pathname]);
 
-  const list = (opts: { foldable: boolean; roomy?: boolean }) => (
+  const list = (opts: { foldable: boolean; roomy?: boolean; onNavigate?: () => void }) => (
     <div className="space-y-2">
       {sections.map((section) => {
         const hasActive = section.items.some((i) => isActive(i.href));
@@ -165,6 +167,7 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
                   <Link
                     key={href}
                     href={href}
+                    onClick={opts.onNavigate}
                     className={cx(
                       "flex items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors",
                       opts.roomy ? "py-2.5" : "py-1.5",
@@ -191,7 +194,12 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
     return (
       <>
         <div className="flex items-center gap-2 px-3 pb-2">
-          <button type="button" onClick={() => setMenuOpen(true)} className="flex h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-sm font-medium text-white">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-expanded={menuOpen}
+            className="flex h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-sm font-medium text-white transition-transform duration-150 active:scale-95 active:bg-white/15"
+          >
             <MenuIcon className="size-4" /> {tr("Menu")}
             {total > 0 && <span className="rounded-full bg-white/20 px-1.5 text-[10px] font-semibold tabular-nums">{total}</span>}
           </button>
@@ -201,20 +209,16 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
             </span>
           )}
         </div>
-        {menuOpen && (
-          <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal aria-label={tr("Menu")}>
-            <button type="button" aria-label={tr("Close")} className="absolute inset-0 bg-black/40" onClick={() => setMenuOpen(false)} />
-            <nav className="relative flex h-full w-[min(20rem,85vw)] flex-col overflow-y-auto bg-navy-900 px-3 pt-[max(env(safe-area-inset-top),0.75rem)] pb-6 text-slate-300 shadow-xl">
-              <div className="mb-2 flex items-center justify-between px-1">
-                <span className="text-sm font-semibold text-white">{tr("Menu")}</span>
-                <button type="button" onClick={() => setMenuOpen(false)} className="grid size-10 place-items-center rounded-lg text-slate-300 hover:bg-white/10" aria-label={tr("Close")}>
-                  <X className="size-5" />
-                </button>
-              </div>
-              {list({ foldable: false, roomy: true })}
-            </nav>
+        <Drawer open={menuOpen} onClose={closeMenu} label={tr("Menu")} className="bg-navy-900 px-3 pt-[max(env(safe-area-inset-top),0.75rem)] pb-6 text-slate-300">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <span className="text-sm font-semibold text-white">{tr("Menu")}</span>
+            <button type="button" onClick={closeMenu} className="grid size-10 place-items-center rounded-lg text-slate-300 transition-colors hover:bg-white/10 active:bg-white/15" aria-label={tr("Close")}>
+              <X className="size-5" />
+            </button>
           </div>
-        )}
+          {/* Closes on tap, before the next page has loaded, so the menu never seems stuck. */}
+          {list({ foldable: false, roomy: true, onNavigate: closeMenu })}
+        </Drawer>
       </>
     );
   }
