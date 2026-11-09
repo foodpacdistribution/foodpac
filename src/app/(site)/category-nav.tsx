@@ -74,7 +74,7 @@ export function CategoryNav({ items }: { items: Item[] }) {
   const { active, onClick } = useActive();
   const { nav, mark } = useIndicator(active, "underline");
   return (
-    <div ref={nav} className="relative mx-auto flex max-w-6xl gap-5 overflow-x-auto px-4 py-2.5 text-sm whitespace-nowrap text-leaf-900/75 [scrollbar-width:none] sm:px-6">
+    <div ref={nav} className="relative mx-auto flex max-w-6xl gap-5 overflow-x-auto px-4 py-0.5 text-sm whitespace-nowrap text-leaf-900/75 [scrollbar-width:none] sm:px-6">
       {items.map((it) => {
         const on = it.href === active;
         return (
@@ -84,7 +84,7 @@ export function CategoryNav({ items }: { items: Item[] }) {
             onClick={onClick(it.href)}
             data-active={on || undefined}
             aria-current={on ? "page" : undefined}
-            className={cx("relative transition-colors hover:text-leaf-700", on && "font-semibold text-leaf-950", it.href === "/products" && "font-medium text-leaf-950")}
+            className={cx("relative inline-flex h-10 items-center transition-colors hover:text-leaf-700", on && "font-semibold text-leaf-950", it.href === "/products" && "font-medium text-leaf-950")}
           >
             <T>{it.label}</T>
           </Link>

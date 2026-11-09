@@ -121,7 +121,7 @@ export function HeroCarousel({ slides, interval = 7000 }: { slides: CarouselSlid
                   aria-selected={i === index}
                   aria-label={tr(s.tab)}
                   onClick={() => go(i)}
-                  className="group/tab flex min-w-0 flex-1 cursor-pointer flex-col gap-2 py-2 text-left sm:max-w-44"
+                  className="group/tab flex min-h-11 min-w-0 flex-1 cursor-pointer flex-col justify-center gap-2 py-2 text-left sm:min-h-0 sm:max-w-44"
                 >
                   <span className="relative block h-0.5 w-full overflow-hidden bg-white/20 transition-colors group-hover/tab:bg-white/35">
                     {i === index &&

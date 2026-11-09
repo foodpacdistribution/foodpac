@@ -42,7 +42,7 @@ export function FavouriteButton({
 
   const look =
     variant === "icon"
-      ? "grid size-8 place-items-center rounded-md bg-white/90 ring-1 ring-leaf-950/10 hover:bg-white"
+      ? "grid size-10 place-items-center rounded-md bg-white/90 ring-1 ring-leaf-950/10 hover:bg-white"
       : "inline-flex h-11 items-center gap-2 rounded-md border border-leaf-950/20 bg-white px-4 text-sm font-semibold hover:border-leaf-950/40";
   const heart = (
     <Heart

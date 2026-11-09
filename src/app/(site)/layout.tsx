@@ -130,52 +130,52 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
               </li>
               {site.phone && (
                 <li>
-                  <a href={`tel:${site.phone.replace(/\s/g, "")}`} className="flex items-center gap-2 hover:text-white">
+                  <a href={`tel:${site.phone.replace(/\s/g, "")}`} className="flex items-center gap-2 py-2 hover:text-white sm:py-0">
                     <Phone className="size-3.5 text-leaf-100/50" /> {site.phone}
                   </a>
                 </li>
               )}
               {site.email && (
                 <li>
-                  <a href={`mailto:${site.email}`} className="flex items-center gap-2 hover:text-white">
+                  <a href={`mailto:${site.email}`} className="flex items-center gap-2 py-2 hover:text-white sm:py-0">
                     <Mail className="size-3.5 text-leaf-100/50" /> {site.email}
                   </a>
                 </li>
               )}
             </ul>
           </div>
-          <div className="space-y-2 text-sm">
+          <div className="space-y-0 text-sm sm:space-y-2">
             <p className="pb-1 text-xs font-semibold text-white"><T>{"Categories"}</T></p>
             {ranges.map((c) => (
-              <Link key={c.title} href={categoryHref(c.title)} className="block hover:text-white">
+              <Link key={c.title} href={categoryHref(c.title)} className="block py-2 hover:text-white sm:py-0">
                 <T>{c.title}</T>
               </Link>
             ))}
           </div>
-          <div className="space-y-2 text-sm">
+          <div className="space-y-0 text-sm sm:space-y-2">
             <p className="pb-1 text-xs font-semibold text-white"><T>{"Shop"}</T></p>
-            <Link href="/products" className="block hover:text-white">
+            <Link href="/products" className="block py-2 hover:text-white sm:py-0">
               <T>{"All products"}</T></Link>
-            <Link href="/#how-it-works" className="block hover:text-white">
+            <Link href="/#how-it-works" className="block py-2 hover:text-white sm:py-0">
               <T>{"How it works"}</T></Link>
-            <Link href="/#delivery" className="block hover:text-white">
+            <Link href="/#delivery" className="block py-2 hover:text-white sm:py-0">
               <T>{"Delivery"}</T></Link>
-            <Link href="/#contact" className="block hover:text-white">
+            <Link href="/#contact" className="block py-2 hover:text-white sm:py-0">
               <T>{"Contact us"}</T></Link>
           </div>
-          <div className="space-y-2 text-sm">
+          <div className="space-y-0 text-sm sm:space-y-2">
             <p className="pb-1 text-xs font-semibold text-white"><T>{"Account"}</T></p>
             {!viewer && (
-              <Link href="/register" className="block hover:text-white">
+              <Link href="/register" className="block py-2 hover:text-white sm:py-0">
                 <T>{"Open an account"}</T></Link>
             )}
-            <Link href="/portal" className="block hover:text-white">
+            <Link href="/portal" className="block py-2 hover:text-white sm:py-0">
               <T>{"My orders"}</T></Link>
             {viewer && (
-              <Link href="/portal/quick-order" className="block hover:text-white">
+              <Link href="/portal/quick-order" className="block py-2 hover:text-white sm:py-0">
                 <T>{"Quick order"}</T></Link>
             )}
-            <Link href="/login" className="block hover:text-white">
+            <Link href="/login" className="block py-2 hover:text-white sm:py-0">
               <T>{"Staff & driver login"}</T></Link>
           </div>
         </div>

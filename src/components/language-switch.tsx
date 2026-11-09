@@ -35,7 +35,7 @@ export function LanguageSwitch({ tone = "light", className }: { tone?: "light" |
             })
           }
           className={cx(
-            "rounded-full px-2.5 py-1 transition-colors",
+            "rounded-full px-2.5 py-1.5 transition-colors pointer-coarse:py-2",
             current === l.code ? (tone === "dark" ? "bg-white text-navy-900" : "bg-white text-leaf-950 shadow-sm") : "hover:opacity-100",
           )}
         >
