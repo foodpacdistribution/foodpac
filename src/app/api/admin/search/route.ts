@@ -1,15 +1,15 @@
 import { desc, eq, ilike, or } from "drizzle-orm";
 import { getCurrentUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { customers, orders, products, purchaseOrders, salesOrders, suppliers } from "@/lib/db/schema";
+import { customers, orders, products, purchaseOrders, quotes, salesOrders, suppliers } from "@/lib/db/schema";
 
-export type SearchHit = { kind: "sale" | "delivery" | "customer" | "product" | "purchase"; title: string; detail: string; href: string };
+export type SearchHit = { kind: "sale" | "quote" | "delivery" | "customer" | "product" | "purchase"; title: string; detail: string; href: string };
 
 const PER_KIND = 5;
 
 /**
- * The back office's search box: order numbers, customers (name, phone, email), products (name,
- * SKU, barcode), delivery orders and purchase orders, a few of each. Staff only.
+ * The back office's search box: order and quote numbers, customers (code, name, phone, email),
+ * products (name, SKU, barcode), delivery orders and purchase orders, a few of each. Staff only.
  */
 export async function GET(req: Request) {
   const user = await getCurrentUser();
@@ -20,7 +20,7 @@ export async function GET(req: Request) {
   const like = `%${raw.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
   const db = await getDb();
 
-  const [sales, deliveries, people, items, purchases] = await Promise.all([
+  const [sales, deliveries, people, items, purchases, quoted] = await Promise.all([
     db
       .select({ id: salesOrders.id, number: salesOrders.number, customer: customers.name, date: salesOrders.deliveryDate, status: salesOrders.status })
       .from(salesOrders)
@@ -35,9 +35,9 @@ export async function GET(req: Request) {
       .orderBy(desc(orders.deliveryDate))
       .limit(PER_KIND),
     db
-      .select({ id: customers.id, name: customers.name, phone: customers.phone, email: customers.email })
+      .select({ id: customers.id, code: customers.code, name: customers.name, phone: customers.phone, email: customers.email })
       .from(customers)
-      .where(or(ilike(customers.name, like), ilike(customers.phone, like), ilike(customers.email, like)))
+      .where(or(ilike(customers.code, like), ilike(customers.name, like), ilike(customers.phone, like), ilike(customers.email, like)))
       .orderBy(customers.name)
       .limit(PER_KIND),
     db
@@ -53,11 +53,19 @@ export async function GET(req: Request) {
       .where(or(ilike(purchaseOrders.poNumber, like), ilike(suppliers.name, like), ilike(purchaseOrders.supplierReference, like)))
       .orderBy(desc(purchaseOrders.orderDate))
       .limit(PER_KIND),
+    db
+      .select({ id: quotes.id, number: quotes.number, customer: customers.name, status: quotes.status, validUntil: quotes.validUntil })
+      .from(quotes)
+      .innerJoin(customers, eq(customers.id, quotes.customerId))
+      .where(or(ilike(quotes.number, like), ilike(customers.name, like), ilike(customers.code, like)))
+      .orderBy(desc(quotes.createdAt))
+      .limit(PER_KIND),
   ]);
 
   const hits: SearchHit[] = [
     ...sales.map((s) => ({ kind: "sale" as const, title: `${s.number} · ${s.customer}`, detail: `Sales order · ${s.status} · delivery ${s.date}`, href: `/admin/sales/${s.id}` })),
-    ...people.map((c) => ({ kind: "customer" as const, title: c.name, detail: ["Customer", c.phone, c.email].filter(Boolean).join(" · "), href: `/admin/customers/${c.id}` })),
+    ...quoted.map((q) => ({ kind: "quote" as const, title: `${q.number} · ${q.customer}`, detail: `Quote · ${q.status} · valid until ${q.validUntil}`, href: `/admin/quotes/${q.id}` })),
+    ...people.map((c) => ({ kind: "customer" as const, title: `${c.name} · ${c.code}`, detail: ["Customer", c.phone, c.email].filter(Boolean).join(" · "), href: `/admin/customers/${c.id}` })),
     ...deliveries.map((o) => ({
       kind: "delivery" as const,
       title: `${o.number} · ${o.customer || "—"}`,

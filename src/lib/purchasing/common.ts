@@ -51,6 +51,6 @@ export function isoDate(v: unknown, what: string) {
 export const text = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max) || null;
 
 /** The next document number, e.g. PO-10001, from that document's sequence. Both names are our own constants. */
-export const nextNumber = (prefix: "PO-" | "GRN-" | "PR-" | "SP-" | "SR-" | "CR-" | "CT-", seq: string): SQL<string> => sql<string>`${sql.raw(`'${prefix}'`)} || nextval('${sql.raw(seq)}')`;
+export const nextNumber = (prefix: "PO-" | "GRN-" | "PR-" | "SP-" | "SR-" | "CR-" | "CT-" | "QT-", seq: string): SQL<string> => sql<string>`${sql.raw(`'${prefix}'`)} || nextval('${sql.raw(seq)}')`;
 
 export const isUuid = (v: string) => /^[0-9a-f-]{36}$/i.test(v);

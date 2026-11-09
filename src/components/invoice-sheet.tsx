@@ -92,6 +92,7 @@ export function InvoiceSheet({
             <div>
               <p className={label}>Bill to</p>
               <p className="mt-1.5 text-[13px] font-semibold">{customer.name}</p>
+              <p className="text-leaf-900/65">Customer code {customer.code}</p>
               {customer.abn && <p className="text-leaf-900/65">ABN {customer.abn}</p>}
               {customer.address && <p className="text-leaf-900/65">{customer.address}</p>}
             </div>

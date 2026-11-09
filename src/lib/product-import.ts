@@ -47,11 +47,16 @@ export const MAX_IMPORT_ROWS = 5000;
 const norm = (s: string) => s.toLowerCase().replace(/[_\-.:#()（）/]+/g, " ").replace(/\s+/g, " ").trim();
 
 export function guessProductMapping(headers: string[]): ProductMapping {
-  const mapping: ProductMapping = {};
+  return guessMapping(PRODUCT_FIELDS, headers);
+}
+
+/** Which spreadsheet column holds each field, guessed from the column names. */
+export function guessMapping<K extends string>(fields: readonly { key: K; synonyms: readonly string[] }[], headers: string[]): Partial<Record<K, number>> {
+  const mapping: Partial<Record<K, number>> = {};
   const used = new Set<number>();
   // Exact matches first, then "header contains synonym" (long or non-Latin synonyms only, to avoid false hits).
   for (const pass of ["exact", "contains"] as const) {
-    for (const f of PRODUCT_FIELDS) {
+    for (const f of fields) {
       if (mapping[f.key] !== undefined) continue;
       const idx = headers.findIndex((h, i) => {
         if (used.has(i)) return false;

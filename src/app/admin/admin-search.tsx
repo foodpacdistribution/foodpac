@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, ClipboardList, CornerDownLeft, Package, Search, ShoppingBag, Truck, type LucideIcon } from "lucide-react";
+import { Building2, ClipboardList, CornerDownLeft, Package, Search, ShoppingBag, Truck, type LucideIcon, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SearchHit } from "@/app/api/admin/search/route";
@@ -11,7 +11,7 @@ import { navFor } from "./side-nav";
 
 type Result = { key: string; title: string; detail: string; href: string; icon: LucideIcon };
 
-const KIND_ICON: Record<SearchHit["kind"], LucideIcon> = { sale: ShoppingBag, delivery: Truck, customer: Building2, product: Package, purchase: ClipboardList };
+const KIND_ICON: Record<SearchHit["kind"], LucideIcon> = { sale: ShoppingBag, quote: FileText, delivery: Truck, customer: Building2, product: Package, purchase: ClipboardList };
 
 const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 

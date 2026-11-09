@@ -2,7 +2,6 @@
 
 import { AlertTriangle, ArrowLeft, CheckCircle2, Download, FileSpreadsheet, Upload } from "lucide-react";
 import Link from "@/components/link";
-import Papa from "papaparse";
 import { useMemo, useState, useTransition } from "react";
 import { importProducts, type ProductImportResult } from "@/app/actions/products";
 import { FormError } from "@/components/client-ui";
@@ -21,25 +20,7 @@ import {
   toCsv,
 } from "@/lib/product-import";
 import { Tx, useT } from "@/components/i18n";
-
-type Sheet = { name: string; headers: string[]; rows: string[][] };
-
-function cell(v: unknown) {
-  return v === null || v === undefined ? "" : String(v).trim();
-}
-
-function toSheet(name: string, matrix: unknown[][]): Sheet {
-  const rows = matrix.map((r) => r.map(cell)).filter((r) => r.some((c) => c !== ""));
-  const [headers = [], ...data] = rows;
-  return { name, headers: headers.map((h, i) => h || `Column ${i + 1}`), rows: data };
-}
-
-function download(name: string, csv: string) {
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: name });
-  a.click();
-  URL.revokeObjectURL(url);
-}
+import { downloadCsv as download, readSpreadsheet, type Sheet } from "@/lib/spreadsheet";
 
 const TEMPLATE = toCsv([
   TEMPLATE_HEADERS,
@@ -61,21 +42,13 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
     setError(null);
     setResult(null);
     try {
-      let s: Sheet;
-      if (/\.xlsx$/i.test(file.name)) {
-        const { readSheet } = await import("read-excel-file/browser");
-        s = toSheet(file.name, (await readSheet(file)) as unknown[][]);
-      } else if (/\.(csv|txt|tsv)$/i.test(file.name)) {
-        s = toSheet(file.name, Papa.parse<string[]>((await file.text()).replace(/^﻿/, "").trim(), { skipEmptyLines: true }).data);
-      } else {
-        return setError("Upload a .xlsx or .csv file. For old .xls files, save as .xlsx first.");
-      }
+      const s = await readSpreadsheet(file);
       if (!s.rows.length) return setError("That file has no product rows under the header row.");
       if (s.rows.length > MAX_IMPORT_ROWS) return setError(`That file has ${s.rows.length} rows. Import at most ${MAX_IMPORT_ROWS} at a time.`);
       setSheet(s);
       setMapping(guessProductMapping(s.headers));
     } catch (e) {
-      setError(`Couldn't read that file: ${(e as Error).message}`);
+      setError(/^Upload a/.test((e as Error).message) ? (e as Error).message : `Couldn't read that file: ${(e as Error).message}`);
     }
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, Check, Minus, Plus, Search, Trash2, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, FileText, Minus, Plus, Search, Trash2, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { createOrderForCustomer, type StaffOrderPayload, updateOrderForCustomer } from "@/app/actions/sales";
@@ -14,7 +14,7 @@ import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { defaultDeliveryFee, orderTotals, waitingFor } from "@/lib/order-totals";
 import { minutesToInput } from "@/lib/time";
 
-export type FormCustomer = { id: string; name: string; phone: string | null; email: string | null; address: string | null; paymentTerms: PaymentTerms; approved: boolean };
+export type FormCustomer = { id: string; code: string; name: string; phone: string | null; email: string | null; address: string | null; paymentTerms: PaymentTerms; approved: boolean };
 export type FormProduct = { id: string; sku: string; name: string; packSize: string; unit: string; priceCents: number; gst: boolean; stock: number; minQty: number; active: boolean; waiting: number };
 
 type Line = { key: string; productId: string; qty: string; price: string; priceTouched: boolean };
@@ -31,6 +31,8 @@ export type OrderFormProps = {
   initialCustomerId?: string;
   /** New order: replacement goods for this customer return (its credit is used). */
   exchangeReturnId?: string;
+  /** New order: made from this accepted quote (its customer, lines, prices and delivery fee). */
+  quote?: { id: string; number: string; customerId: string; deliveryFeeCents: number; lines: { productId: string; qty: number; unitPriceCents: number }[] };
   fees: { deliveryFeeCents: number; freeDeliveryOverCents: number };
   today: string;
   idempotencyKey?: string;
@@ -66,14 +68,19 @@ export function OrderForm(p: OrderFormProps) {
   const tr = useT();
   const router = useRouter();
   const o = p.order;
-  // Opened for a given customer (e.g. an exchange from a customer return): start with them chosen.
-  const start0 = !o && p.initialCustomerId ? (p.customers.find((x) => x.id === p.initialCustomerId) ?? null) : null;
+  const fromQuote = !o ? p.quote : undefined;
+  // Opened for a given customer (an exchange from a customer return, or an accepted quote): start with them chosen.
+  const startId = fromQuote?.customerId ?? p.initialCustomerId;
+  const start0 = !o && startId ? (p.customers.find((x) => x.id === startId) ?? null) : null;
   const [customerId, setCustomerId] = useState(o?.customerId ?? start0?.id ?? "");
   const customer = p.customers.find((c) => c.id === customerId) ?? null;
   const priceFor = (cid: string, productId: string) => p.prices[cid]?.[productId] ?? p.products.find((x) => x.id === productId)?.priceCents ?? 0;
 
   const [lines, setLines] = useState<Line[]>(
-    () => o?.lines.map((l) => ({ key: nextKey(), productId: l.productId, qty: String(l.qty), price: dollars(l.unitPriceCents), priceTouched: true })) ?? [],
+    () =>
+      (o ?? fromQuote)?.lines
+        .filter((l) => p.products.some((x) => x.id === l.productId))
+        .map((l) => ({ key: nextKey(), productId: l.productId, qty: String(l.qty), price: dollars(l.unitPriceCents), priceTouched: true })) ?? [],
   );
   const [delivery, setDelivery] = useState({
     deliveryDate: o?.deliveryDate ?? p.defaultDate,
@@ -83,10 +90,10 @@ export function OrderForm(p: OrderFormProps) {
     instructions: o?.instructions ?? "",
     windowStart: minutesToInput(o?.windowStartMin ?? null),
     windowEnd: minutesToInput(o?.windowEndMin ?? null),
-    notes: o?.notes ?? "",
+    notes: o?.notes ?? (fromQuote ? `From quote ${fromQuote.number}` : ""),
   });
   const [method, setMethod] = useState<PaymentMethod>(start0?.paymentTerms === "prepay" ? "bank_transfer" : "invoice");
-  const [fee, setFee] = useState<string | null>(o ? dollars(o.deliveryFeeCents) : null);
+  const [fee, setFee] = useState<string | null>(o ? dollars(o.deliveryFeeCents) : fromQuote ? dollars(fromQuote.deliveryFeeCents) : null);
   const [emailCustomer, setEmailCustomer] = useState(true);
   // Store credit towards a new order: on by default for an exchange.
   const [useCredit, setUseCredit] = useState(!!p.exchangeReturnId);
@@ -141,6 +148,7 @@ export function OrderForm(p: OrderFormProps) {
       idempotencyKey: p.idempotencyKey ?? "",
       creditCents,
       exchangeReturnId: p.exchangeReturnId,
+      quoteId: fromQuote?.id,
     };
     start(async () => {
       if (p.mode === "new") {
@@ -162,6 +170,12 @@ export function OrderForm(p: OrderFormProps) {
         <ArrowLeft className="size-4" /> {o ? tr("Order {number}", { number: o.number }) : tr("Sales orders")}
       </Link>
       <h1 className="mb-5 text-xl font-semibold tracking-tight text-slate-900">{o ? tr("Edit order {number}", { number: o.number }) : tr("New order")}</h1>
+      {fromQuote && (
+        <p className="mb-4 flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900 ring-1 ring-blue-200">
+          <FileText className="mt-0.5 size-4 shrink-0" />
+          {tr("From quote {number}: the quoted products and prices are filled in. Choose the delivery date, check stock, then place the order. The quote is marked accepted.", { number: fromQuote.number })}
+        </p>
+      )}
 
       <div className="grid items-start gap-4 lg:grid-cols-[1.6fr_1fr]">
         <div className="space-y-4">
@@ -171,13 +185,15 @@ export function OrderForm(p: OrderFormProps) {
               {customer ? (
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-900">{customer.name}</p>
+                    <p className="font-semibold text-slate-900">
+                      {customer.name} <span className="font-mono text-xs font-normal text-slate-500">{customer.code}</span>
+                    </p>
                     <p className="text-xs text-slate-500">
                       {[customer.phone, customer.email].filter(Boolean).join(" · ") || tr("No contact details")} · {tr(PAYMENT_TERMS_LABEL[customer.paymentTerms])}
                     </p>
                     {!customer.approved && <Badge tone="amber" className="mt-1.5">{tr("Not yet approved for the shop")}</Badge>}
                   </div>
-                  {p.mode === "new" && (
+                  {p.mode === "new" && !fromQuote && (
                     <button className={btn("ghost", "sm")} onClick={() => setCustomerId("")}>
                       {tr("Change")}
                     </button>
@@ -391,18 +407,18 @@ export function OrderForm(p: OrderFormProps) {
   );
 }
 
-function CustomerPicker({ customers, onPick }: { customers: FormCustomer[]; onPick: (c: FormCustomer) => void }) {
+export function CustomerPicker({ customers, onPick }: { customers: FormCustomer[]; onPick: (c: FormCustomer) => void }) {
   const tr = useT();
   const [q, setQ] = useState("");
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return (s ? customers.filter((c) => [c.name, c.phone, c.email].some((v) => v?.toLowerCase().includes(s))) : customers).slice(0, 8);
+    return (s ? customers.filter((c) => [c.code, c.name, c.phone, c.email].some((v) => v?.toLowerCase().includes(s))) : customers).slice(0, 8);
   }, [customers, q]);
   return (
     <div>
       <div className="relative">
         <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-slate-400" />
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search customers by name, phone or email")} className={cx(inputCls, "pl-9")} />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search customers by code, name, phone or email")} className={cx(inputCls, "pl-9")} />
       </div>
       <ul className="mt-2 divide-y divide-line rounded-lg border border-line">
         {shown.length === 0 && <li className="px-3 py-2.5 text-sm text-slate-500">{tr("No customers match. Add them on the Customers page first.")}</li>}
@@ -411,7 +427,9 @@ function CustomerPicker({ customers, onPick }: { customers: FormCustomer[]; onPi
             <button type="button" onClick={() => onPick(c)} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50">
               <UserRound className="size-4 shrink-0 text-slate-400" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-slate-900">{c.name}</span>
+                <span className="block truncate text-sm font-medium text-slate-900">
+                  {c.name} <span className="font-mono text-xs font-normal text-slate-400">{c.code}</span>
+                </span>
                 <span className="block truncate text-xs text-slate-500">{[c.phone, c.address].filter(Boolean).join(" · ")}</span>
               </span>
             </button>
@@ -422,7 +440,7 @@ function CustomerPicker({ customers, onPick }: { customers: FormCustomer[]; onPi
   );
 }
 
-function ProductPicker({ products, onPick }: { products: FormProduct[]; onPick: (p: FormProduct) => void }) {
+export function ProductPicker({ products, onPick }: { products: FormProduct[]; onPick: (p: FormProduct) => void }) {
   const tr = useT();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);

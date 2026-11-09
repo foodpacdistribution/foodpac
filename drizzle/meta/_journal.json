@@ -162,6 +162,13 @@
       "when": 1794183248532,
       "tag": "0022_db_timeouts",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794202856603,
+      "tag": "0023_quotes_customer_codes",
+      "breakpoints": true
     }
   ]
 }

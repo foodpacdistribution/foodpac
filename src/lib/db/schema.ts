@@ -96,9 +96,17 @@ export const drivers = pgTable("drivers", {
   createdAt: createdAt(),
 });
 
+/** Numbers for customer codes the app makes up (C10001, C10002, …). */
+export const customerCodeNo = pgSequence("customer_code_no", { startWith: 10001 });
+
 /** A business we deliver to. Orders are linked to it so its staff can follow them in the customer portal. */
 export const customers = pgTable("customers", {
   id: id(),
+  /**
+   * The customer's account code: kept from the old system when imported, otherwise the database
+   * gives the next C-number. Unique, ignoring case (customers_code_key).
+   */
+  code: text("code").notNull().default(sql`'C' || nextval('customer_code_no')`),
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
@@ -122,7 +130,7 @@ export const customers = pgTable("customers", {
   /** Last time someone marked a follow-up done; quiet-customer reminders wait a full quiet spell after it. */
   contactedAt: timestamp("contacted_at", { withTimezone: true }),
   createdAt: createdAt(),
-});
+}, (t) => [uniqueIndex("customers_code_key").on(sql`lower(${t.code})`)]);
 
 export type PaymentTerms = "prepay" | "net7" | "net14" | "net30";
 
@@ -670,6 +678,78 @@ export const salesOrderItems = pgTable(
     backorderQty: integer("backorder_qty").notNull().default(0),
   },
   (t) => [index("sales_order_items_order_idx").on(t.salesOrderId), index("sales_order_items_product_idx").on(t.productId)],
+);
+
+/** draft = still being worked on; sent = with the customer; accepted = became a sales order; declined = they said no. */
+export type QuoteStatus = "draft" | "sent" | "accepted" | "declined";
+
+export const quoteNo = pgSequence("quote_no", { startWith: 10001 });
+
+/**
+ * A quotation for one customer: products, quantities and the prices offered, valid until a date.
+ * Nothing is reserved or delivered; once the customer says yes it becomes a sales order (opened in
+ * the order form with these lines and prices) and links to it.
+ */
+export const quotes = pgTable(
+  "quotes",
+  {
+    id: id(),
+    number: text("number").notNull().unique(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
+    status: text("status").$type<QuoteStatus>().notNull().default("draft"),
+    validUntil: date("valid_until", { mode: "string" }).notNull(),
+    subtotalCents: integer("subtotal_cents").notNull(),
+    deliveryFeeCents: integer("delivery_fee_cents").notNull(),
+    gstCents: integer("gst_cents").notNull(),
+    totalCents: integer("total_cents").notNull(),
+    /** Printed on the quote (terms, lead times…). */
+    notes: text("notes"),
+    /** Office only. */
+    internalNote: text("internal_note"),
+    /** The sales order it became. */
+    salesOrderId: uuid("sales_order_id").references(() => salesOrders.id, {
+      onDelete: "set null",
+    }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    sentTo: text("sent_to"),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("quotes_customer_idx").on(t.customerId),
+    index("quotes_created_idx").on(t.createdAt),
+  ],
+);
+
+export const quoteItems = pgTable(
+  "quote_items",
+  {
+    id: id(),
+    quoteId: uuid("quote_id")
+      .notNull()
+      .references(() => quotes.id, { onDelete: "cascade" }),
+    productId: uuid("product_id").references(() => products.id, {
+      onDelete: "set null",
+    }),
+    sku: text("sku").notNull(),
+    name: text("name").notNull(),
+    packSize: text("pack_size").notNull(),
+    unit: text("unit").notNull(),
+    unitPriceCents: integer("unit_price_cents").notNull(),
+    qty: integer("qty").notNull(),
+    gst: boolean("gst").notNull(),
+    lineCents: integer("line_cents").notNull(),
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [index("quote_items_quote_idx").on(t.quoteId)],
 );
 
 // ---------------------------------------------------------------------------

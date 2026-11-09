@@ -15,7 +15,7 @@ export async function orderFormData(db: DB, opts: { customerId?: string } = {}) 
   const today = todayIn(s.timezone);
   const [custRows, productRows, priceRows, waiting, creditRows] = await Promise.all([
     db
-      .select({ id: customers.id, name: customers.name, phone: customers.phone, email: customers.email, address: customers.address, paymentTerms: customers.paymentTerms, approved: customers.approved, active: customers.active })
+      .select({ id: customers.id, code: customers.code, name: customers.name, phone: customers.phone, email: customers.email, address: customers.address, paymentTerms: customers.paymentTerms, approved: customers.approved, active: customers.active })
       .from(customers)
       .orderBy(asc(customers.name)),
     db

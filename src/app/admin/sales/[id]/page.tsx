@@ -11,7 +11,7 @@ import { getDb } from "@/lib/db";
 import { emailEnabled } from "@/lib/email";
 import { finaliseBlocker, reopenBlocker } from "@/lib/invoices";
 import { customerEmail } from "@/lib/notify";
-import { customerReturns, customers, orders, salesOrderItems, salesOrders, users } from "@/lib/db/schema";
+import { customerReturns, customers, orders, quotes, salesOrderItems, salesOrders, users } from "@/lib/db/schema";
 import { creditBalance } from "@/lib/credit";
 import { CUSTOMER_RETURN_STATUS } from "@/lib/customer-return-labels";
 import { aud, FULFILMENT, PAYMENT_METHOD_LABEL, PAYMENT_STATUS, PAYMENT_TERMS_LABEL, SALES_STATUS } from "@/lib/money";
@@ -31,7 +31,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
   const db = await getDb();
   const [so] = await db.select().from(salesOrders).where(eq(salesOrders.id, id)).limit(1);
   if (!so) notFound();
-  const [[c], items, s, [d], [by], emailTo, credit, returns] = await Promise.all([
+  const [[c], items, s, [d], [by], emailTo, credit, returns, [fromQuote]] = await Promise.all([
     db.select().from(customers).where(eq(customers.id, so.customerId)).limit(1),
     db.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id)),
     getSettings(db),
@@ -40,6 +40,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
     customerEmail(db, so.customerId),
     creditBalance(db, so.customerId),
     db.select().from(customerReturns).where(eq(customerReturns.salesOrderId, so.id)),
+    db.select({ id: quotes.id, number: quotes.number }).from(quotes).where(eq(quotes.salesOrderId, so.id)).limit(1),
   ]);
   const dueCents = so.totalCents - so.creditAppliedCents;
   const canEdit = !editBlocker(so, d?.status ?? null);
@@ -58,7 +59,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-slate-900"><T>{"Order"}</T>{" "}{so.number}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {c.name} {" "}<T>{"· placed"}</T>{" "}{fmt.format(so.createdAt)}
+            {c.name} <span className="font-mono text-xs">{c.code}</span> {" "}<T>{"· placed"}</T>{" "}{fmt.format(so.createdAt)}
             {enteredBy && (
               <>
                 {" "}
@@ -70,6 +71,13 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
             <Badge tone={SALES_STATUS[so.status].tone}>{<Tx>{SALES_STATUS[so.status].label}</Tx>}</Badge>
             <Badge tone={PAYMENT_STATUS[so.paymentStatus].tone}>{<Tx>{PAYMENT_STATUS[so.paymentStatus].label}</Tx>}</Badge>
             {so.status === "confirmed" && <Badge tone={FULFILMENT[so.fulfilment].tone}><T>{"Warehouse:"}</T>{" "}{<Tx>{FULFILMENT[so.fulfilment].label}</Tx>}</Badge>}
+            {fromQuote && (
+              <Link href={`/admin/quotes/${fromQuote.id}`}>
+                <Badge tone="blue">
+                  <T vars={{ number: fromQuote.number }}>{"From quote {number}"}</T>
+                </Badge>
+              </Link>
+            )}
             {so.status !== "cancelled" && waiting > 0 && <Badge tone="red"><T vars={{ n: waiting }}>{"{n} waiting for stock"}</T></Badge>}
           </div>
         </div>

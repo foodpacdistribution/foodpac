@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, KeyRound, Mail, MapPin, Package, Pencil, Phone, Plus, Search, Tags } from "lucide-react";
+import { Building2, FileText, KeyRound, Mail, MapPin, Package, Pencil, Phone, Plus, Search, Tags, Upload } from "lucide-react";
 import Link from "@/components/link";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { deleteCustomer, removeCustomerLogin, saveCustomer } from "@/app/actions/customers";
@@ -14,6 +14,7 @@ import { AddressInput } from "@/components/address-input";
 
 type Customer = {
   id: string;
+  code: string;
   name: string;
   phone: string | null;
   email: string | null;
@@ -54,7 +55,7 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
           (filter === "portal" && !!c.login) ||
           (filter === "unpaid" && c.unpaidCents > 0) ||
           (filter === "inactive" && !c.active)) &&
-        (!s || [c.name, c.phone, c.email, c.address, c.abn, c.login?.email].some((v) => v?.toLowerCase().includes(s))),
+        (!s || [c.code, c.name, c.phone, c.email, c.address, c.abn, c.login?.email].some((v) => v?.toLowerCase().includes(s))),
     );
   }, [customers, deferredQ, filter]);
   const counts = {
@@ -71,15 +72,21 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
         title={tr("Customers")}
         subtitle={tr("Give a customer a portal login and they can follow their own orders, see the delivery photo and signature.")}
         actions={
-          <button className={btn("primary")} onClick={() => setEditing("new")}>
-            <Plus className="size-4" /> {" "}{tr("Add customer")}</button>
+          <>
+            <Link href="/admin/customers/import" className={btn("secondary")}>
+              <Upload className="size-4" /> {tr("Import")}
+            </Link>
+            <button className={btn("primary")} onClick={() => setEditing("new")}>
+              <Plus className="size-4" /> {tr("Add customer")}
+            </button>
+          </>
         }
       />
       {customers.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-72">
             <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-slate-400" />
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search name, phone, email, address")} className={cx(inputCls, "pl-9")} />
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search code, name, phone, email, address")} className={cx(inputCls, "pl-9")} />
           </div>
           <div className="flex flex-wrap gap-1">
             {FILTERS.map(([f, label]) =>
@@ -108,6 +115,7 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-slate-900">{c.name}</p>
+                  <p className="font-mono text-[11px] text-slate-500">{c.code}</p>
                   <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
                     <Package className="size-3.5" /> {tr(c.orderCount === 1 ? "{n} linked order" : "{n} linked orders", { n: c.orderCount })}
                   </p>
@@ -162,8 +170,14 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
                   <dd className="font-semibold text-slate-900">{c.lastOrderAt ? tr(new Date(c.lastOrderAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })) : "—"}</dd>
                 </div>
               </dl>
-              <Link href={`/admin/customers/${c.id}`} className={cx(btn("secondary", "sm"), "mt-3")}>
-                <Tags className="size-3.5" /> {" "}{tr("Price list")}</Link>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href={`/admin/customers/${c.id}`} className={btn("secondary", "sm")}>
+                  <Tags className="size-3.5" /> {tr("Price list")}
+                </Link>
+                <Link href={`/admin/quotes/new?customer=${c.id}`} className={btn("secondary", "sm")}>
+                  <FileText className="size-3.5" /> {tr("New quote")}
+                </Link>
+              </div>
             </Card>
           ))}
         </div>
@@ -193,9 +207,14 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
   return (
     <KeptForm form={form} className="space-y-4">
       {customer && <input type="hidden" name="id" value={customer.id} />}
-      <Field label={tr("Business name")} hint={tr("Orders with this exact customer name are linked to this customer.")}>
-        <input name="name" required defaultValue={customer?.name} className={inputCls} />
-      </Field>
+      <div className="grid gap-3 sm:grid-cols-[1fr_2fr]">
+        <Field label={tr("Customer code")} hint={customer ? undefined : tr("Leave blank to get the next code.")}>
+          <input name="code" defaultValue={customer?.code ?? ""} placeholder={customer ? undefined : tr("Automatic")} autoComplete="off" className={cx(inputCls, "font-mono")} />
+        </Field>
+        <Field label={tr("Business name")} hint={tr("Orders with this exact customer name are linked to this customer.")}>
+          <input name="name" required defaultValue={customer?.name} className={inputCls} />
+        </Field>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={tr("Phone")} hint={tr("Also used to match orders.")}>
           <input name="phone" type="tel" defaultValue={customer?.phone ?? ""} className={inputCls} />

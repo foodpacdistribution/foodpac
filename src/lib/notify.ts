@@ -1,7 +1,7 @@
 import "server-only";
 import { asc, eq } from "drizzle-orm";
 import { type DB, getDb } from "./db";
-import { customers, salesOrderItems, salesOrders, users } from "./db/schema";
+import { customers, quoteItems, quotes, salesOrderItems, salesOrders, users } from "./db/schema";
 import { prettyDate } from "./dates";
 import { esc, itemTable, layout, mailto, note, officeEmail, rows, sendEmail, sendEmailResult, statementTable } from "./email";
 import { accountStatement } from "./invoices";
@@ -342,5 +342,76 @@ ${statementTable(
   });
   if (!result.ok) return { sent: false, reason: result.error };
   await db.update(salesOrders).set({ invoiceSentAt: new Date(), invoiceSentTo: to }).where(eq(salesOrders.id, so.id));
+  return { sent: true, to };
+}
+
+/**
+ * Emails a quote to the customer: every line, the totals, until when it's valid and the notes.
+ * The email is the quote (customers don't need a login to read it); they reply to accept.
+ * A draft becomes "sent".
+ */
+export async function sendQuote(db: DB, quoteId: string): Promise<{ sent: true; to: string } | { sent: false; reason: string }> {
+  const [row] = await db
+    .select({ q: quotes, customer: customers.name, code: customers.code })
+    .from(quotes)
+    .innerJoin(customers, eq(customers.id, quotes.customerId))
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  if (!row) return { sent: false, reason: "Quote not found." };
+  const { q, customer, code } = row;
+  const [items, s, to] = await Promise.all([
+    db.select().from(quoteItems).where(eq(quoteItems.quoteId, q.id)).orderBy(asc(quoteItems.position)),
+    getSettings(db),
+    customerEmail(db, q.customerId),
+  ]);
+  if (!to) return { sent: false, reason: "This customer has no email address. Add one on their customer details." };
+  const site = siteInfo(s);
+  const replyTo = site.email || officeEmail();
+  const valid = prettyDate(q.validUntil, { day: "numeric", month: "long", year: "numeric" });
+  const summary = rows([
+    ["Quote", `<strong>${esc(q.number)}</strong>`],
+    ["For", `${esc(customer)} (${esc(code)})`],
+    ["Valid until", esc(valid)],
+  ]);
+  const lines =
+    itemTable(items.map((it) => ({ name: it.name, detail: [it.sku, it.packSize, !it.gst && "GST free"].filter(Boolean).join(" · "), qty: it.qty, price: aud(it.unitPriceCents), total: aud(it.lineCents) }))) +
+    rows([
+      ["Subtotal (ex GST)", aud(q.subtotalCents)],
+      ["Delivery", q.deliveryFeeCents ? aud(q.deliveryFeeCents) : "Free"],
+      ["GST", aud(q.gstCents)],
+      ["Total (incl. GST)", `<strong style="font-size:16px">${aud(q.totalCents)}</strong>`],
+    ]);
+  const notes = q.notes ? note(esc(q.notes).replace(/\n/g, "<br>")) : "";
+  const text = [
+    `Quote ${q.number} from ${site.name}`,
+    `For ${customer} (${code}) · valid until ${valid}`,
+    "",
+    ...items.map((it) => `${it.qty} × ${it.name} (${it.sku}) @ ${aud(it.unitPriceCents)} = ${aud(it.lineCents)}`),
+    ...(q.deliveryFeeCents ? [`Delivery ${aud(q.deliveryFeeCents)}`] : []),
+    `GST ${aud(q.gstCents)}`,
+    `Total ${aud(q.totalCents)} incl. GST`,
+    ...(q.notes ? ["", q.notes] : []),
+    "",
+    `To go ahead, reply to this email quoting ${q.number}.`,
+  ].join("\n");
+
+  const result = await sendEmailResult({
+    to,
+    subject: `Quote ${q.number} from ${site.name} · ${aud(q.totalCents)}`,
+    html: layout({
+      site,
+      preview: `${q.number} · ${aud(q.totalCents)} · valid until ${valid}`,
+      heading: `Quote ${q.number}`,
+      body: `<p style="margin:0">Hi ${esc(customer)}, here is the quote you asked for.</p>${summary}${lines}${notes}<p style="margin:24px 0 0;font-size:14px">To go ahead, just reply to this email quoting <strong>${esc(q.number)}</strong> and we'll book in your delivery.</p>`,
+      footer: "Questions about this quote? Reply to this email.",
+    }),
+    text,
+    ...(replyTo ? { replyTo } : {}),
+  });
+  if (!result.ok) return { sent: false, reason: result.error };
+  await db
+    .update(quotes)
+    .set({ sentAt: new Date(), sentTo: to, ...(q.status === "draft" ? { status: "sent" as const } : {}) })
+    .where(eq(quotes.id, q.id));
   return { sent: true, to };
 }

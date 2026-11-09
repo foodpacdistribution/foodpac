@@ -6,7 +6,9 @@ import { after } from "next/server";
 import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { hashPassword } from "@/lib/auth/password";
-import { linkOrdersToCustomer } from "@/lib/customers";
+import { codeTaken, syncCustomerCodes } from "@/lib/customer-code";
+import { cleanCode, type CustomerImportRow, MAX_CUSTOMER_ROWS } from "@/lib/customer-import";
+import { applyCustomerImport, type CustomerImportResult, linkOrdersToCustomer } from "@/lib/customers";
 import { getDb } from "@/lib/db";
 import { accountApproved } from "@/lib/notify";
 import { customers, type PaymentTerms, salesOrders, users } from "@/lib/db/schema";
@@ -22,7 +24,15 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
     const id = get("id") || null;
     const name = get("name");
     if (!name) throw new UserError("Business name is required.");
+    // Blank: a new customer gets the next C-number; an existing one keeps its code.
+    let code: string | undefined;
+    try {
+      code = get("code") ? cleanCode(get("code")) : undefined;
+    } catch (e) {
+      throw new UserError(`${(e as Error).message}.`);
+    }
     const values = {
+      ...(code ? { code } : {}),
       name,
       phone: get("phone") || null,
       email: get("email").toLowerCase() || null,
@@ -67,8 +77,9 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
         await tx.insert(users).values({ email: loginEmail, name: loginName, role: "customer", customerId, passwordHash: await hashPassword(password) });
       }
       return customerId!;
-    });
+    }).catch((err) => codeTaken(err, code));
 
+    if (code) await syncCustomerCodes(db);
     await linkOrdersToCustomer(db, { id: customerId, name, phone: values.phone });
     // Registration promises an email once the account can order.
     if (before && !before.approved && values.approved) after(() => accountApproved(customerId));
@@ -100,5 +111,30 @@ export async function deleteCustomer(id: string) {
     if (!c) throw new UserError("Customer not found.");
     revalidatePath("/admin/customers");
     return { message: `${c.name} deleted` };
+  });
+}
+
+export type { CustomerImportResult };
+
+/**
+ * Adds and updates customers from a spreadsheet (see applyCustomerImport). Nothing is saved if
+ * any row has a problem.
+ */
+export async function importCustomers(rows: CustomerImportRow[]) {
+  return attempt<CustomerImportResult>(async () => {
+    await assertUser(STAFF);
+    if (!Array.isArray(rows) || !rows.length) throw new UserError("The file has no rows.");
+    if (rows.length > MAX_CUSTOMER_ROWS) throw new UserError(`Import at most ${MAX_CUSTOMER_ROWS} customers at a time.`);
+    const db = await getDb();
+    const { result, created } = await applyCustomerImport(db, rows);
+    if (result.errors.length) return { data: result };
+    // Delivery orders already in the system find their customer by name or phone.
+    after(async () => {
+      const db = await getDb();
+      for (const c of created) await linkOrdersToCustomer(db, c);
+    });
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin/pipeline");
+    return { data: result };
   });
 }

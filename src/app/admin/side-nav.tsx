@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeDollarSign, BarChart3, Boxes, Building2, ClipboardList, Factory, GalleryHorizontal, HandCoins, Inbox, LayoutDashboard, Map, Package, PackageCheck, PackagePlus, Radio, RotateCcw, Settings, ShoppingBag, Target, TrendingUp, Truck, Undo2, Wallet, Warehouse, Zap, ChevronDown, Menu as MenuIcon, X } from "lucide-react";
+import { BadgeDollarSign, BarChart3, Boxes, Building2, ClipboardList, Factory, FileText, GalleryHorizontal, HandCoins, Inbox, LayoutDashboard, Map, Package, PackageCheck, PackagePlus, Radio, RotateCcw, Settings, ShoppingBag, Target, TrendingUp, Truck, Undo2, Wallet, Warehouse, Zap, ChevronDown, Menu as MenuIcon, X } from "lucide-react";
 import Link from "@/components/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -15,6 +15,7 @@ const SECTIONS = [
   {
     title: "Shop",
     items: [
+      { href: "/admin/quotes", label: "Quotations", icon: FileText },
       { href: "/admin/sales", label: "Sales Orders", icon: ShoppingBag },
       { href: "/admin/products", label: "Products & Stock", icon: Boxes },
       { href: "/admin/customer-returns", label: "Customer Returns", icon: RotateCcw },

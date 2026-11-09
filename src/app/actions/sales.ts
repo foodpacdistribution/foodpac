@@ -12,6 +12,7 @@ import { finaliseInvoice, reopenInvoice } from "@/lib/invoices";
 import { orderConfirmed, sendInvoice } from "@/lib/notify";
 import { type FulfilmentStatus, orders, type PaymentMethod, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { aud, parseDollars } from "@/lib/money";
+import { linkQuoteToOrder, quoteForOrder } from "@/lib/quotes";
 import { createStaffOrder, updateStaffOrder } from "@/lib/staff-orders";
 import { inputToMinutes, todayIn } from "@/lib/time";
 import { refundOrExpire } from "@/lib/payments";
@@ -230,6 +231,8 @@ export type StaffOrderPayload = {
   creditCents?: number;
   /** New orders: the customer return this is the exchange for. */
   exchangeReturnId?: string;
+  /** New orders: the quote the customer accepted. */
+  quoteId?: string;
 };
 
 function parsePayload(p: StaffOrderPayload) {
@@ -260,7 +263,16 @@ export async function createOrderForCustomer(p: StaffOrderPayload) {
     const db = await getDb();
     const s = await getSettings(db);
     const creditCents = Math.max(0, Math.round(Number(p.creditCents) || 0));
-    const so = await createStaffOrder(db, user.id, { ...parsePayload(p), customerId: String(p.customerId ?? ""), method: p.method, idempotencyKey: String(p.idempotencyKey ?? "").slice(0, 80), creditCents }, todayIn(s.timezone));
+    const customerId = String(p.customerId ?? "");
+    const idempotencyKey = String(p.idempotencyKey ?? "").slice(0, 80);
+    const quoteId = p.quoteId && /^[0-9a-f-]{36}$/i.test(p.quoteId) ? p.quoteId : null;
+    if (quoteId) await quoteForOrder(db, quoteId, customerId, idempotencyKey);
+    const so = await createStaffOrder(db, user.id, { ...parsePayload(p), customerId, method: p.method, idempotencyKey, creditCents }, todayIn(s.timezone));
+    if (quoteId) {
+      await linkQuoteToOrder(db, quoteId, so.id);
+      revalidatePath("/admin/quotes");
+      revalidatePath(`/admin/quotes/${quoteId}`);
+    }
     if (p.exchangeReturnId && /^[0-9a-f-]{36}$/i.test(p.exchangeReturnId)) await linkExchangeOrder(db, p.exchangeReturnId, so.id);
     if (so.deliveryOrderId) {
       const id = so.deliveryOrderId;
