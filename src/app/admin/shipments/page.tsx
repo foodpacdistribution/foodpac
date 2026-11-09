@@ -6,7 +6,7 @@ import { restoreDeliveries } from "@/lib/deliveries";
 import { drivers } from "@/lib/db/schema";
 import { getDepots, getPlanView, getSettings } from "@/lib/planning";
 import { readyToShip } from "@/lib/shipments";
-import { todayIn } from "@/lib/time";
+import { nowSecondsIn, todayIn } from "@/lib/time";
 import { ShipmentsClient } from "./shipments-client";
 
 export const metadata: Metadata = { title: "Shipments" };
@@ -51,8 +51,10 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
         stops: r.stops.map((st) => ({
           orderId: st.orderId,
           seq: st.seq,
-          etaS: st.etaS,
           lateS: st.lateS,
+          // When the driver confirmed it (signature / photo); nothing until then. Seconds are dropped
+          // (not rounded) so it reads the same minute as the invoice's "Delivered … at".
+          doneS: st.completedAt && st.status !== "pending" ? Math.floor(nowSecondsIn(s.timezone, new Date(st.completedAt)) / 60) * 60 : null,
           status: st.status,
           orderNumber: st.order.orderNumber,
           customerName: st.order.customerName,

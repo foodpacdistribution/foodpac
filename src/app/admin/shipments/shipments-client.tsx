@@ -41,7 +41,7 @@ type Shipment = {
   distanceM: number;
   overtimeS: number;
   overCapacity: number;
-  stops: { orderId: string; seq: number; etaS: number; lateS: number; status: string; orderNumber: string; customerName: string; address: string; demand: number }[];
+  stops: { orderId: string; seq: number; doneS: number | null; lateS: number; status: string; orderNumber: string; customerName: string; address: string; demand: number }[];
 };
 
 const window_ = (a: number | null, b: number | null) => (a === null && b === null ? null : `${a !== null ? formatMinutesClock(a) : "any"}–${b !== null ? formatMinutesClock(b) : "close"}`);
@@ -339,7 +339,10 @@ function ShipmentCard({
               </span>
               <span className="block truncate text-xs text-slate-500">{x.address}</span>
             </span>
-            <span className={cx("text-xs tabular-nums", x.lateS > 0 ? "font-semibold text-amber-700" : "text-slate-500")}>{formatClock(x.etaS)}</span>
+            {/* The time it was actually delivered (or reported failed); stops still to come show none. */}
+            <span className={cx("w-16 text-right text-xs tabular-nums", x.status === "failed" ? "font-medium text-red-600" : "font-medium text-emerald-700")}>
+              {x.doneS !== null ? formatClock(x.doneS) : ""}
+            </span>
             <span className="w-10 text-right text-xs tabular-nums text-slate-500">×{x.demand}</span>
             {editable && (
               <button

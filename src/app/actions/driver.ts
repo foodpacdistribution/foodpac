@@ -75,6 +75,8 @@ async function finishStop(stopId: string, outcome: Outcome) {
         lat: at?.lat ?? null,
         lng: at?.lng ?? null,
         accuracyM: at?.accuracy ?? null,
+        // Same instant as the stop's completion, so the shipment list and the invoice agree.
+        createdAt: now,
       })
       .returning({ id: deliveryEvents.id });
     for (const kind of ["photo", "signature"] as const) {
