@@ -2,7 +2,7 @@
 
 import { Camera, Check, Eraser, PenLine, Undo2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { btn, cx, inputCls, Spinner } from "@/components/ui";
+import { btn, cx, Spinner } from "@/components/ui";
 import { useT } from "@/components/i18n";
 
 /** Resizes a camera photo on the phone so uploads stay small (~100–300 KB). */
@@ -162,20 +162,20 @@ async function renderProof(strokes: Stroke[], lines: [string, string]) {
 
 /**
  * Customer signature. Tapping opens a full-screen pad (more room, works sideways); the
- * finished signature is stamped with the signer's name, order, time and GPS before upload.
+ * finished signature is stamped with the order, time and GPS (and the receiver's name, if the
+ * driver entered one) before upload. The customer only signs: no name to type.
  */
 export function SignaturePad({
   onChange,
   required,
   signer,
-  onSignerChange,
   reference,
   accuracyM,
 }: {
   onChange: (f: File | null) => void;
   required?: boolean;
+  /** "Received by", if entered: added to the stamp. */
   signer: string;
-  onSignerChange: (name: string) => void;
   reference: string;
   accuracyM: number | null;
 }) {
@@ -185,7 +185,7 @@ export function SignaturePad({
   const [strokes, setStrokes] = useState<Stroke[] | null>(null);
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
-  // The stamp names the signer, so re-stamp when the name is corrected after signing.
+  // The stamp names the receiver when one was entered, so re-stamp if it changes after signing.
   const stamp = useRef({ tr, reference, accuracyM });
   useEffect(() => {
     stamp.current = { tr, reference, accuracyM };
@@ -196,7 +196,7 @@ export function SignaturePad({
     const t = setTimeout(async () => {
       const { tr: t_, reference: ref, accuracyM: acc } = stamp.current;
       const file = await renderProof(strokes, [
-        t_("Signed by {name}", { name: signer.trim() }),
+        signer.trim() ? t_("Signed by {name}", { name: signer.trim() }) : t_("Customer signature"),
         [ref, stampTime(), acc !== null ? `GPS ±${Math.round(acc)} m` : t_("GPS not available")].join("  ·  "),
       ]);
       if (stale || !file) return;
@@ -241,8 +241,6 @@ export function SignaturePad({
       )}
       {open && (
         <SignatureScreen
-          signer={signer}
-          onSignerChange={onSignerChange}
           reference={reference}
           onCancel={() => setOpen(false)}
           onDone={(s) => {
@@ -256,14 +254,10 @@ export function SignaturePad({
 }
 
 function SignatureScreen({
-  signer,
-  onSignerChange,
   reference,
   onCancel,
   onDone,
 }: {
-  signer: string;
-  onSignerChange: (name: string) => void;
   reference: string;
   onCancel: () => void;
   onDone: (strokes: Stroke[]) => void;
@@ -339,7 +333,6 @@ function SignatureScreen({
     setError(null);
     const st = inkStats(strokes.current);
     if (!strokes.current.length || st.len < 60 || st.maxX - st.minX < 40) return setError(tr("That's too short for a signature. Please sign again."));
-    if (!signer.trim()) return setError(tr("Enter the name of the person signing."));
     onDone(strokes.current.map((s) => [...s]));
   };
 
@@ -359,14 +352,6 @@ function SignatureScreen({
             <p className="text-sm font-semibold">{tr("Customer signature")}</p>
             <p className="truncate text-xs text-slate-500">{reference}</p>
           </div>
-          <input
-            value={signer}
-            onChange={(e) => (onSignerChange(e.target.value), setError(null))}
-            placeholder={tr("Name of person signing")}
-            aria-label={tr("Name of person signing")}
-            autoComplete="off"
-            className={cx(inputCls, "h-10 basis-full text-base sm:basis-auto sm:w-64")}
-          />
         </div>
         <div className="relative min-h-0 flex-1 bg-slate-50 p-3">
           <canvas

@@ -50,6 +50,5 @@ export async function readOutcome(
   if (rules.requirePhoto && !photo) throw new UserError("A delivery photo is required.");
   if (rules.requireSignature && !signature) throw new UserError("The customer's signature is required.");
   if (rules.proofRequired && !photo && !signature) throw new UserError("Take a photo or get a signature to confirm the delivery.");
-  if (signature && !recipient) throw new UserError("Enter the name of the person who signed.");
   return { type, recipient, note, photo, signature, at };
 }

@@ -83,13 +83,13 @@ export function OutcomeForm<T>({
       {kind === "delivered" ? (
         <>
           <PhotoCapture value={photo} onChange={setPhoto} required={requirePhoto} />
-          <Field label={tr(signature || requireSignature ? "Received by *" : "Received by (optional)")}>
+          {/* The signature is enough; a name is only kept if the driver chooses to add one. */}
+          <Field label={tr("Received by (optional)")}>
             <input
               name="recipient"
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
               autoComplete="off"
-              required={!!signature || requireSignature}
               className={cx(inputCls, "h-11 text-base")}
             />
           </Field>
@@ -97,7 +97,6 @@ export function OutcomeForm<T>({
             onChange={setSignature}
             required={requireSignature}
             signer={recipient}
-            onSignerChange={setRecipient}
             reference={reference}
             accuracyM={fix ? fix.accuracy : null}
           />
