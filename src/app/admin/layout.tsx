@@ -14,6 +14,7 @@ import { getSettings } from "@/lib/planning";
 import { dueFollowUpCount } from "@/lib/pipeline";
 import { todayIn } from "@/lib/time";
 import { AdminLive } from "./admin-live";
+import { AdminSearch } from "./admin-search";
 import { SideNav } from "./side-nav";
 import { T } from "@/components/i18n";
 
@@ -68,6 +69,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           <Logo badge className="h-11" />
           <p className="mt-2 truncate px-1 text-[11px] text-slate-400"><T>{"Back office ·"}</T>{" "}{s.companyName}</p>
         </div>
+        <AdminSearch role={user.role} variant="sidebar" />
         <SideNav role={user.role} badges={badges} />
         <Link href="/" target="_blank" className="mx-3 mb-2 flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-slate-400 hover:bg-white/5 hover:text-white">
           <ExternalLink className="size-3.5" /> {" "}<T>{"View website"}</T></Link>
@@ -99,6 +101,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
             <Logo badge className="h-9" />
           </Link>
           <div className="flex items-center gap-1.5">
+            <AdminSearch role={user.role} variant="icon" />
             <LanguageSwitch tone="dark" />
             <Link href="/account" aria-label="Profile & password" className="grid size-8 place-items-center rounded-full bg-navy-700 text-xs font-semibold text-white">
               {initials(user.name)}

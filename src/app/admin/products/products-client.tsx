@@ -42,10 +42,21 @@ const waitingQty = (p: Product) => p.waiting.reduce((n, w) => n + w.qty, 0);
 type ActionResult = { ok: boolean; message?: string; error?: string };
 const toastFor = (r: ActionResult): ToastMessage => ({ id: Date.now(), text: r.ok ? (r.message ?? "Updated") : (r.error ?? "Something went wrong"), tone: r.ok ? "ok" : "warn" });
 
-export function ProductsClient({ products, categories, isAdmin }: { products: Product[]; categories: string[]; isAdmin: boolean }) {
+export function ProductsClient({
+  products,
+  categories,
+  isAdmin,
+  initialQuery = "",
+}: {
+  products: Product[];
+  categories: string[];
+  isAdmin: boolean;
+  /** From ?q= (e.g. a back-office search result). */
+  initialQuery?: string;
+}) {
   const tr = useT();
   const [editing, setEditing] = useState<Product | "new" | null>(null);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQuery);
   const [filter, setFilter] = useState<"all" | "low" | "waiting" | "inactive">("all");
   const [showWaiting, setShowWaiting] = useState<Product | null>(null);
   const [category, setCategory] = useState("");

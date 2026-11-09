@@ -1,6 +1,14 @@
 // English → 中文 for the language switch. Keys are the exact English text shown in the app.
 // Missing keys simply show in English. Generated from the translation sheets; edit freely.
 export const ZH: Record<string, string> = {
+  "Menu": "菜单",
+  "Close": "关闭",
+  "Search…": "搜索…",
+  "Order number, customer, phone, product or page…": "订单号、客户、电话、产品或页面…",
+  "Go to a page…": "前往页面…",
+  "Type at least 2 letters.": "请至少输入 2 个字。",
+  "Nothing found.": "没有找到结果。",
+  "↑ ↓ to move · Enter to open · Esc to close": "↑ ↓ 选择 · Enter 打开 · Esc 关闭",
   " (back at depot if returning)": "(如需返回则为回到仓库的时间)",
   " (optional)": "(可选)",
   " to cart": "加入购物车",

@@ -10,7 +10,7 @@ import { ProductsClient } from "./products-client";
 
 export const metadata: Metadata = { title: "Products & Stock" };
 
-export default async function ProductsPage() {
+export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const me = await requireUser(STAFF);
   const db = await getDb();
   const rows = await db
@@ -48,6 +48,7 @@ export default async function ProductsPage() {
       }))}
       categories={categories}
       isAdmin={me.role === "admin"}
+      initialQuery={((await searchParams).q ?? "").slice(0, 100)}
     />
   );
 }
