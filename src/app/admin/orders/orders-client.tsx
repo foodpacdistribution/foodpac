@@ -254,7 +254,61 @@ export function OrdersClient(props: {
             )}
           </EmptyState>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per delivery instead of a wide table. */}
+          <ul className="divide-y divide-line md:hidden">
+            {orders.map((o) => {
+              const driver = o.driverId ? driverById.get(o.driverId) : null;
+              const geoS = GEOCODE_STATUS[o.geocodeStatus];
+              const toggle = () => {
+                const next = new Set(selected);
+                if (next.has(o.id)) next.delete(o.id);
+                else next.add(o.id);
+                setSelected(next);
+              };
+              return (
+                <li key={o.id} className={cx("flex gap-3 px-4 py-3", selected.has(o.id) && "bg-blue-50/40")}>
+                  <input type="checkbox" className="mt-1 size-4 shrink-0" checked={selected.has(o.id)} onChange={toggle} aria-label={`Select ${o.orderNumber}`} />
+                  <button type="button" onClick={() => (o.status === "delivered" || o.status === "failed" ? setRecord(o) : setEditing(o))} className="min-w-0 flex-1 text-left">
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5 font-medium break-all text-slate-900">
+                        {o.orderNumber}
+                        {o.priority > 0 && <Zap className="size-3.5 shrink-0 fill-amber-400 text-amber-500" />}
+                      </span>
+                      <Badge tone={ORDER_STATUS[o.status].tone} className="shrink-0">
+                        {<Tx>{ORDER_STATUS[o.status].label}</Tx>}
+                      </Badge>
+                    </span>
+                    <span className="mt-0.5 block truncate text-sm text-slate-700">{o.customerName || "—"}</span>
+                    <span className="block truncate text-sm text-slate-500">
+                      {[o.address, o.suburb, o.postcode].filter((x, i) => i === 0 || (x && !o.address.includes(x))).join(", ")}
+                    </span>
+                    {o.geocodeStatus !== "ok" && (
+                      <Badge tone={geoS.tone} className="mt-1">
+                        {<Tx>{geoS.label}</Tx>}
+                      </Badge>
+                    )}
+                    <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                      <span>
+                        {o.windowStartMin === null && o.windowEndMin === null
+                          ? tr("Any time")
+                          : `${o.windowStartMin !== null ? formatMinutesClock(o.windowStartMin) : "…"} – ${o.windowEndMin !== null ? formatMinutesClock(o.windowEndMin) : "…"}`}
+                      </span>
+                      <span>
+                        {tr("Qty")} {o.demand}
+                      </span>
+                      {driver && (
+                        <span className="flex items-center gap-1">
+                          <ColorDot color={driver.color} /> {driver.name}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[960px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -369,6 +423,7 @@ export function OrdersClient(props: {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
 
