@@ -5,8 +5,8 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { DB } from "./db";
 import { schema } from "./db";
-import { customers, products, salesOrders, settings, users } from "./db/schema";
-import { accountStatement, finaliseInvoice, reopenInvoice } from "./invoices";
+import { customers, deliveryEvents, deliveryProofs, products, salesOrders, settings, users } from "./db/schema";
+import { accountStatement, finaliseInvoice, invoiceDelivery, reopenInvoice } from "./invoices";
 import { sendInvoice } from "./notify";
 import { cancelOrder } from "./shop";
 import { createStaffOrder, updateStaffOrder } from "./staff-orders";
@@ -117,5 +117,28 @@ describe("emailing the final invoice", () => {
     await finaliseInvoice(db, so.id);
     expect((await sendInvoice(db, so.id)).sent).toBe(false);
     expect((await get(so.id)).invoiceSentAt).toBeNull();
+  });
+});
+
+describe("proof of delivery on the invoice", () => {
+  it("is empty until delivered, then shows who signed, when, and the signature", async () => {
+    const so = await get((await place(1)).id);
+    expect(so.deliveryOrderId).toBeTruthy();
+    expect(await invoiceDelivery(db, so, "Australia/Brisbane")).toBeNull();
+
+    const [ev] = await db
+      .insert(deliveryEvents)
+      .values({ orderId: so.deliveryOrderId!, type: "delivered", recipient: "Mei", createdAt: new Date("2026-11-12T00:42:00Z") })
+      .returning();
+    const [sig] = await db
+      .insert(deliveryProofs)
+      .values({ orderId: so.deliveryOrderId!, eventId: ev.id, kind: "signature", mime: "image/png", bytes: 3, data: new Uint8Array([1, 2, 3]), sha256: "x" })
+      .returning({ id: deliveryProofs.id });
+
+    expect(await invoiceDelivery(db, so, "Australia/Brisbane")).toEqual({
+      at: "12 November 2026 at 10:42 am",
+      recipient: "Mei",
+      signatureUrl: `/api/proofs/${sig.id}`,
+    });
   });
 });

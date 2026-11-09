@@ -19,6 +19,7 @@ export function InvoiceSheet({
   bankDetails,
   site,
   images = {},
+  delivery = null,
 }: {
   so: typeof salesOrders.$inferSelect;
   customer: typeof customers.$inferSelect;
@@ -29,6 +30,8 @@ export function InvoiceSheet({
   site: SiteInfo;
   /** productId → photo URL, for lines whose product has one. */
   images?: Record<string, string>;
+  /** Once delivered: when, who received it, and their signature (already formatted for display). */
+  delivery?: { at: string; recipient: string | null; signatureUrl: string | null } | null;
 }) {
   const proforma = so.invoiceStatus === "proforma";
   const title = so.status === "cancelled" ? "Cancelled invoice" : proforma ? "Proforma invoice" : "Tax invoice";
@@ -191,6 +194,36 @@ export function InvoiceSheet({
               )}
             </dl>
           </div>
+
+          {delivery && (
+            <section className="keep mt-8 flex justify-end">
+              <div className="w-[80mm] max-w-full px-3">
+                <p className={label}>Proof of delivery</p>
+                {delivery.signatureUrl ? (
+                  <>
+                    {/* The saved signature carries a stamp strip at the bottom (order, time, GPS); show just the signature. */}
+                    <div className="mt-2 aspect-[1000/320] w-full overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- private proof image, served with the viewer's session */}
+                      <img src={delivery.signatureUrl} alt={`Signature${delivery.recipient ? ` of ${delivery.recipient}` : ""}`} className="w-full" />
+                    </div>
+                    <div className="border-t border-leaf-950/40" />
+                  </>
+                ) : (
+                  <div className="mt-6 border-t border-leaf-950/15" />
+                )}
+                <p className="mt-1.5 text-[11.5px] text-leaf-900/70">
+                  {delivery.recipient ? (
+                    <>
+                      Received by <span className="font-semibold text-leaf-950">{delivery.recipient}</span> ·{" "}
+                    </>
+                  ) : delivery.signatureUrl ? (
+                    "Signed by the customer · "
+                  ) : null}
+                  Delivered {delivery.at}
+                </p>
+              </div>
+            </section>
+          )}
 
           {/* Payment details sit at the foot of the first page (mt-auto), on screen and on paper; on a long invoice they follow the totals. */}
           <footer className="keep mt-auto pt-10 text-[11.5px] leading-relaxed text-leaf-900/70">

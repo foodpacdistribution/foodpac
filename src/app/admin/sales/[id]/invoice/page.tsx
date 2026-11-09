@@ -7,7 +7,7 @@ import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
-import { invoiceImages } from "@/lib/invoices";
+import { invoiceDelivery, invoiceImages } from "@/lib/invoices";
 
 /** The title is the PDF's file name when the invoice is saved from the print window. */
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -33,7 +33,7 @@ export default async function AdminInvoicePage({ params }: { params: Promise<{ i
   const issued = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "long" }).format(so.invoicedAt ?? new Date());
   return (
     <div className="text-leaf-950">
-      <InvoiceSheet so={so} customer={c} items={items} issued={issued} bankDetails={s.bankDetails} site={siteInfo(s)} images={await invoiceImages(db, items)} />
+      <InvoiceSheet so={so} customer={c} items={items} issued={issued} bankDetails={s.bankDetails} site={siteInfo(s)} images={await invoiceImages(db, items)} delivery={await invoiceDelivery(db, so, s.timezone)} />
     </div>
   );
 }

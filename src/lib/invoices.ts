@@ -1,7 +1,7 @@
 import "server-only";
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { DB } from "./db";
-import { products, salesOrders } from "./db/schema";
+import { deliveryEvents, deliveryProofs, products, salesOrders } from "./db/schema";
 import { productImageUrl } from "./product-image";
 import { UserError } from "./planning";
 
@@ -90,4 +90,38 @@ export async function invoiceImages(db: DB, items: { productId: string | null }[
     .from(products)
     .where(inArray(products.id, ids));
   return Object.fromEntries(rows.filter((r) => r.hasImage).map((r) => [r.id, productImageUrl(r)])) as Record<string, string>;
+}
+
+export type DeliveryProof = { at: Date; recipient: string | null; signatureId: string | null };
+
+/**
+ * The signed delivery for an order's invoice: when it was delivered, who took it and the id of
+ * their signature (served by /api/proofs/[id]). Null until the order has been delivered.
+ */
+export async function deliveryProof(db: DB, so: Pick<SO, "deliveryOrderId">): Promise<DeliveryProof | null> {
+  if (!so.deliveryOrderId) return null;
+  const [event] = await db
+    .select({ id: deliveryEvents.id, at: deliveryEvents.createdAt, recipient: deliveryEvents.recipient })
+    .from(deliveryEvents)
+    .where(and(eq(deliveryEvents.orderId, so.deliveryOrderId), eq(deliveryEvents.type, "delivered")))
+    .orderBy(desc(deliveryEvents.createdAt))
+    .limit(1);
+  if (!event) return null;
+  const [sig] = await db
+    .select({ id: deliveryProofs.id })
+    .from(deliveryProofs)
+    .where(and(eq(deliveryProofs.eventId, event.id), eq(deliveryProofs.kind, "signature")))
+    .limit(1);
+  return { at: event.at, recipient: event.recipient, signatureId: sig?.id ?? null };
+}
+
+/** The proof of delivery as the invoice shows it: time in the business's timezone, signature URL. */
+export async function invoiceDelivery(db: DB, so: Pick<SO, "deliveryOrderId">, timeZone: string) {
+  const proof = await deliveryProof(db, so);
+  if (!proof) return null;
+  return {
+    at: new Intl.DateTimeFormat("en-AU", { timeZone, dateStyle: "long", timeStyle: "short" }).format(proof.at),
+    recipient: proof.recipient,
+    signatureUrl: proof.signatureId ? `/api/proofs/${proof.signatureId}` : null,
+  };
 }
