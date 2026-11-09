@@ -8,6 +8,8 @@ import { btn, Spinner } from "./ui";
 /** Quiet automatic retries before the error is shown: most failures are a dropped connection that the next request fixes. */
 const RETRY_DELAYS_MS = [1_000, 3_000, 6_000];
 /** Automatic retries across all error screens in the last minute, so a page that is really broken can't loop. */
+/** A hiccup that recovers this fast shows nothing at all; only a longer wait says "Reconnecting…". */
+const QUIET_MS = 3_000;
 let recentRetries: number[] = [];
 
 /**
@@ -21,6 +23,11 @@ export function PageError({ error, retry, tone = "staff" }: { error: unknown; re
   const tr = useT();
   const [pending, start] = useTransition();
   const [auto, setAuto] = useState(true);
+  const [showWait, setShowWait] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShowWait(true), QUIET_MS);
+    return () => clearTimeout(t);
+  }, []);
   const retryRef = useRef(retry);
   useEffect(() => {
     retryRef.current = retry;
@@ -58,8 +65,12 @@ export function PageError({ error, retry, tone = "staff" }: { error: unknown; re
 
   if (auto)
     return (
-      <div role="status" className="mx-auto my-16 flex items-center justify-center gap-2 text-sm text-slate-500">
-        <Spinner className="size-4" /> {tr("Reconnecting…")}
+      <div role="status" aria-busy className="mx-auto my-16 flex min-h-5 items-center justify-center gap-2 text-sm text-slate-500">
+        {showWait && (
+          <>
+            <Spinner className="size-4" /> {tr("Reconnecting…")}
+          </>
+        )}
       </div>
     );
 
