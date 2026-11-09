@@ -70,7 +70,10 @@ export function AddressInput({
       setLoading(true);
       try {
         const sp = new URLSearchParams({ q, session: session.current });
-        if (nearLat !== null && nearLng !== null) sp.set("lat", nearLat.toFixed(3)), sp.set("lng", nearLng.toFixed(3));
+        if (nearLat !== null && nearLng !== null) {
+          sp.set("lat", nearLat.toFixed(3));
+          sp.set("lng", nearLng.toFixed(3));
+        }
         const res = await fetch(`/api/places?${sp}`, { signal: ctl.signal });
         const body = res.ok ? ((await res.json()) as { suggestions: Suggestion[] }) : { suggestions: [] };
         setItems(body.suggestions);
@@ -142,10 +145,16 @@ export function AddressInput({
         onFocus={() => items.length && setOpen(true)}
         onKeyDown={(e) => {
           if (!showList || !items.length) return;
-          if (e.key === "ArrowDown") (e.preventDefault(), setActive((a) => (a + 1) % items.length));
-          else if (e.key === "ArrowUp") (e.preventDefault(), setActive((a) => (a <= 0 ? items.length - 1 : a - 1)));
-          else if (e.key === "Enter" && active >= 0) (e.preventDefault(), pick(items[active]));
-          else if (e.key === "Escape") setOpen(false);
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setActive((a) => (a + 1) % items.length);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActive((a) => (a <= 0 ? items.length - 1 : a - 1));
+          } else if (e.key === "Enter" && active >= 0) {
+            e.preventDefault();
+            pick(items[active]);
+          } else if (e.key === "Escape") setOpen(false);
         }}
         className={cx(inputClassName ?? cx(inputCls, "h-11 text-base"), "pr-9")}
       />

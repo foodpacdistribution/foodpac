@@ -117,7 +117,10 @@ describe("exactOrder", () => {
   const cost = (d: number[][], order: number[], endNode: number | null) => {
     let t = 0;
     let at = 0;
-    for (const s of order) (t += d[at][s + 1]), (at = s + 1);
+    for (const s of order) {
+      t += d[at][s + 1];
+      at = s + 1;
+    }
     return t + (endNode !== null ? d[at][endNode] : 0);
   };
   const bruteBest = (d: number[][], n: number, endNode: number | null) => {
