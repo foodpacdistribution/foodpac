@@ -8,7 +8,8 @@ import { databaseUrl } from "@/lib/db/url";
 import { LoginBody, LoginBodyFromUrl } from "./login-body";
 import { T, Tx } from "@/components/i18n";
 
-export const metadata: Metadata = { title: "Sign in" };
+// A sign-in form has nothing to show in search results.
+export const metadata: Metadata = { title: "Sign in", robots: { index: false, follow: true } };
 
 // Static: nothing here depends on the request, so the page is served straight from the edge.
 export default function LoginPage() {

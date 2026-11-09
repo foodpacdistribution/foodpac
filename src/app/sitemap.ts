@@ -14,22 +14,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: base, changeFrequency: "weekly", priority: 1 },
     { url: `${base}/products`, changeFrequency: "daily", priority: 0.9 },
     { url: `${base}/register`, changeFrequency: "yearly", priority: 0.5 },
-    ...CATEGORIES.map((c) => ({ url: `${base}${categoryHref(c.title)}`, changeFrequency: "weekly" as const, priority: 0.8 })),
   ];
+  const category = (name: string) => ({ url: `${base}${categoryHref(name)}`, changeFrequency: "weekly" as const, priority: 0.8 });
   try {
     const rows = await (await getDb())
       .select({ sku: products.sku, category: products.category, at: products.updatedAt })
       .from(products)
       .where(eq(products.active, true));
-    // Categories added in the back office beyond the standard six.
-    const extra = [...new Set(rows.map((p) => p.category))].filter((c) => c && !CATEGORIES.some((x) => x.title === c));
+    // Only ranges with something on sale: an empty category page is thin content. The standard six
+    // come first in their usual order, then any added in the back office.
+    const stocked = new Set(rows.map((p) => p.category).filter(Boolean));
+    const extra = [...stocked].filter((c) => !CATEGORIES.some((x) => x.title === c));
     return [
       ...pages,
-      ...extra.map((c) => ({ url: `${base}${categoryHref(c)}`, changeFrequency: "weekly" as const, priority: 0.7 })),
+      ...CATEGORIES.filter((c) => stocked.has(c.title)).map((c) => category(c.title)),
+      ...extra.map((c) => ({ ...category(c), priority: 0.7 })),
       ...rows.map((p) => ({ url: `${base}/products/${encodeURIComponent(p.sku)}`, lastModified: p.at, changeFrequency: "weekly" as const, priority: 0.6 })),
     ];
   } catch {
-    // No database reachable (e.g. during a build without one): list the fixed pages only.
-    return pages;
+    // No database reachable (e.g. during a build without one): list the fixed pages and standard ranges.
+    return [...pages, ...CATEGORIES.map((c) => category(c.title))];
   }
 }

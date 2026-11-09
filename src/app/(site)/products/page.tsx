@@ -17,10 +17,12 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   // Searches and filtered or sorted lists repeat other pages: keep them out of the index.
   if (sp.q || sp.sort || sp.stock) return { title: "Products", robots: { index: false, follow: true } };
   if (sp.category) return { title: sp.category, alternates: { canonical: categoryHref(sp.category) } };
+  const description = `Takeaway packaging, cups, bags, cutlery, cleaning supplies and dry goods at trade prices, delivered across ${SITE.serviceArea}.`;
   return {
     title: "All products",
-    description: `Takeaway packaging, cups, bags, cutlery, cleaning supplies and dry goods at trade prices, delivered across ${SITE.serviceArea}.`,
+    description,
     alternates: { canonical: "/products" },
+    openGraph: { title: "All products · Foodpac Distribution", description, url: "/products" },
   };
 }
 

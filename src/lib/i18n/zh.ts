@@ -1,6 +1,9 @@
 // English → 中文 for the language switch. Keys are the exact English text shown in the app.
 // Missing keys simply show in English. Generated from the translation sheets; edit freely.
 export const ZH: Record<string, string> = {
+  "We couldn't find that page": "找不到这个页面",
+  "The link may be old or mistyped. Everything we stock is in the shop.": "链接可能已过期或输入有误。我们所有的商品都在商城里。",
+  "Home page": "首页",
   "{n} address(es) could not be found.": "有 {n} 个地址找不到。",
   "{n} could only be placed approximately.": "有 {n} 个只能定位到大致位置。",
   "Click \"Approximate\" or \"Not found\" on each to check its pin on the map and confirm it.": "请点击每个订单上的“大致位置”或“未找到”,在地图上核对定位并确认。",

@@ -5,7 +5,14 @@ import { homeFor } from "@/lib/auth/session";
 import { RegisterForm } from "./register-form";
 import { T } from "@/components/i18n";
 
-export const metadata: Metadata = { title: "Open a trade account" };
+const registerDescription =
+  "Open a free trade account for your café, restaurant or takeaway: your own trade prices, order online any time, and planned weekday delivery across South East Queensland.";
+export const metadata: Metadata = {
+  title: "Open a trade account",
+  description: registerDescription,
+  alternates: { canonical: "/register" },
+  openGraph: { title: "Open a trade account · Foodpac Distribution", description: registerDescription, url: "/register" },
+};
 
 export default async function RegisterPage() {
   const user = await getCurrentUser();

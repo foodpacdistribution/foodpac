@@ -24,10 +24,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const name = await categoryFor((await params).slug);
   if (!name) return {};
   const blurb = categoryInfo(name).text || `${name} for cafés, restaurants and takeaway shops.`;
+  const description = `${blurb} Trade prices and delivery across ${SITE.serviceArea} from ${SITE.name}.`;
+  // A range with nothing on sale yet is an empty page: keep it out of search until it has products.
+  const stocked = (await listCategories(await getDb())).some((c) => c.name === name && c.n > 0);
   return {
     title: `${name} – wholesale supply`,
-    description: `${blurb} Trade prices and delivery across ${SITE.serviceArea} from ${SITE.name}.`,
+    description,
     alternates: { canonical: categoryHref(name) },
+    openGraph: { title: `${name} – wholesale supply · ${SITE.name}`, description, url: categoryHref(name) },
+    ...(stocked ? {} : { robots: { index: false, follow: true } }),
   };
 }
 
