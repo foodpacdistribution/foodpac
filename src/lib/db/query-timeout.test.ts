@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
-import { guardQueries } from "./query-timeout";
+import { guardQueries, PoolActivity } from "./query-timeout";
 
 // A "database" that lets the client sign in and then never answers a query: what a connection
 // that died while the server was idle looks like from the app's side.
@@ -74,3 +74,49 @@ describe("guardQueries", () => {
     expect(stuck).toBe(0);
   });
 });
+
+describe("PoolActivity", () => {
+  it("is stale only after a quiet spell with nothing in flight", () => {
+    let now = 0;
+    const a = new PoolActivity(() => now);
+    now = 14_000;
+    expect(a.stale(15_000)).toBe(false);
+    now = 16_000;
+    expect(a.stale(15_000)).toBe(true);
+    a.start(); // a long query or transaction
+    now = 60_000;
+    expect(a.stale(15_000)).toBe(false);
+    a.end();
+    now = 70_000;
+    expect(a.stale(15_000)).toBe(false);
+    now = 80_000;
+    expect(a.stale(15_000)).toBe(true);
+    a.touch();
+    expect(a.stale(15_000)).toBe(false);
+  });
+
+  it("counts queries and transactions run through the guard", async () => {
+    const { db, activity } = await setupTracked();
+    // Drizzle queries run when awaited; this one is then in flight on a connection that never answers.
+    const settled = db.execute(sql`select 1`).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    expect(activity.busy).toBe(1);
+    expect(await settled).toBeInstanceOf(Error);
+    expect(activity.busy).toBe(0);
+  });
+});
+
+async function setupTracked() {
+  const { server, port } = await silentDatabase();
+  const client = postgres({ host: "127.0.0.1", port, user: "u", database: "d", fetch_types: false, prepare: false, max: 2 });
+  const activity = new PoolActivity();
+  const db = drizzle(guardQueries(client, () => void client.end({ timeout: 0 }).catch(() => {}), 200, activity));
+  cleanup = async () => {
+    await client.end({ timeout: 0 }).catch(() => {});
+    await new Promise((r) => server.close(r));
+  };
+  return { db, activity };
+}
