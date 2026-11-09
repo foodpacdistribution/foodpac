@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
-import { guardQueries, PoolActivity } from "./query-timeout";
+import { guardQueries, PoolActivity, Slots } from "./query-timeout";
 
 // A "database" that lets the client sign in and then never answers a query: what a connection
 // that died while the server was idle looks like from the app's side.
@@ -120,3 +120,26 @@ async function setupTracked() {
   };
   return { db, activity };
 }
+
+describe("Slots", () => {
+  it("never lets more than `max` through at once, and serves the rest in order", async () => {
+    const slots = new Slots(3);
+    let running = 0;
+    let peak = 0;
+    const order: number[] = [];
+    await Promise.all(
+      Array.from({ length: 10 }, async (_, i) => {
+        await slots.acquire();
+        running += 1;
+        peak = Math.max(peak, running);
+        order.push(i);
+        await new Promise((r) => setTimeout(r, 5));
+        running -= 1;
+        slots.release();
+      }),
+    );
+    expect(peak).toBe(3);
+    expect(order).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(slots.inUse).toBe(0);
+  });
+});

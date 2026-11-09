@@ -10,6 +10,9 @@ const SEND_EVERY_MS = 20_000;
 const PREF_KEY = "dp.shareLocation";
 
 export function readSharePref() {
+  // Also runs while the page renders on the server, where there is no storage (and newer Node
+  // logs a warning for touching it): same default as before.
+  if (typeof window === "undefined") return true;
   try {
     return localStorage.getItem(PREF_KEY) !== "off";
   } catch {

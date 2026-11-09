@@ -1,6 +1,9 @@
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
-import { guardQueries, PoolActivity, QUERY_TIMEOUT_MS } from "./query-timeout";
+import { guardQueries, PoolActivity, QUERY_TIMEOUT_MS, Slots } from "./query-timeout";
+
+/** Connections per server instance. No more queries than this run at once (see Slots). */
+const POOL_MAX = 10;
 import { databaseUrl } from "./url";
 
 export type DB = PgDatabase<PgQueryResultHKT, typeof schema>;
@@ -49,7 +52,7 @@ async function init(): Promise<DB> {
     const client = postgres(transactionPoolerUrl(url), {
       // prepare: false keeps it compatible with transaction-mode poolers (Supabase :6543).
       prepare: false,
-      max: 5,
+      max: POOL_MAX,
       // Give connections back when idle, so instances that are quiet (or frozen between
       // requests) don't sit on the pooler's limited slots and starve everyone else, and so a
       // connection is rarely old enough to have been dropped by the network underneath.
@@ -71,7 +74,8 @@ async function init(): Promise<DB> {
       dropPool();
       void endAbandonedTransactions(postgres, transactionPoolerUrl(url));
     };
-    const db = drizzle(guardQueries(client, onStuck, QUERY_TIMEOUT_MS, activity), { schema }) as unknown as DB;
+    // Never more queries in flight than connections, so none is pipelined (Supavisor can lose those).
+    const db = drizzle(guardQueries(client, onStuck, QUERY_TIMEOUT_MS, activity, new Slots(POOL_MAX)), { schema }) as unknown as DB;
     // Once per server instance, not on every reconnect.
     if (!globalForDb.__dpSettingsRow) {
       await ensureSettingsRow(db);
