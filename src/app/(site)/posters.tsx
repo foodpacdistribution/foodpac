@@ -5,10 +5,11 @@ import { cx } from "@/components/ui";
 import { T } from "@/components/i18n";
 import { posterImageUrl } from "@/lib/poster-image";
 import type { PosterRow } from "@/lib/posters";
-import { categoryHref, categoryInfo, type Poster, stockedCategories } from "./content";
+import { categoryHref, categoryInfo, linksToStock, type Poster, stockedCategories } from "./content";
 import { ProductCount, ProductImage } from "./shop-ui";
 
 type Photo = { id: string; sku: string; name: string; category: string; updatedAt: Date; hasImage: boolean };
+
 
 const TONES: Record<Poster["tone"], { bg: string; accent: string; primary: string }> = {
   leaf: { bg: "bg-leaf-900", accent: "text-cream/60", primary: "bg-tomato text-white hover:bg-tomato-dark" },
@@ -33,7 +34,9 @@ export function PosterSlide({
 }) {
   const tone = TONES[poster.tone];
   const Heading = first ? "h1" : "h2";
-  const secondary = signedIn ? poster.secondary?.customer : poster.secondary?.guest;
+  const offered = signedIn ? poster.secondary?.customer : poster.secondary?.guest;
+  const secondary = offered && linksToStock(offered.href, counts) ? offered : undefined;
+  const cta = linksToStock(poster.cta.href, counts) ? poster.cta : { label: "Shop all products", href: "/products" };
 
   return (
     <div className={cx("relative h-full overflow-hidden", tone.bg)}>
@@ -56,8 +59,8 @@ export function PosterSlide({
             <T>{poster.text}</T>
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link href={poster.cta.href} className={cx("group/cta inline-flex h-12 items-center gap-2 rounded-md px-6 text-sm font-semibold transition-colors", tone.primary)}>
-              <T>{poster.cta.label}</T>
+            <Link href={cta.href} className={cx("group/cta inline-flex h-12 items-center gap-2 rounded-md px-6 text-sm font-semibold transition-colors", tone.primary)}>
+              <T>{cta.label}</T>
               <ArrowRight className="size-4 transition-transform group-hover/cta:translate-x-0.5" />
             </Link>
             {secondary && (
@@ -74,7 +77,7 @@ export function PosterSlide({
         {!poster.image && (
           <div className="hero-art hidden lg:block">
             {poster.art === "categories" && <RangeIndex counts={counts} />}
-            {poster.art === "products" && <PhotoGrid photos={photos} categories={poster.categories ?? []} />}
+            {poster.art === "products" && <PhotoGrid photos={photos} categories={inStock(poster.categories ?? [], counts)} />}
             {poster.art === "delivery" && <DeliveryCard />}
             {poster.art === "ranges" && <OneDocket counts={counts} />}
           </div>
@@ -106,6 +109,12 @@ function RangeIndex({ counts }: { counts: { name: string; n: number }[] }) {
 }
 
 /** Three product photos in a tidy grid: one tall on the left, two stacked on the right. */
+/** The poster's categories that have products; all of them while the shop is still empty. */
+function inStock(categories: string[], counts: { name: string; n: number }[]) {
+  const live = categories.filter((c) => counts.some((x) => x.name === c && x.n > 0));
+  return live.length ? live : categories;
+}
+
 function PhotoGrid({ photos, categories }: { photos: Photo[]; categories: string[] }) {
   const spots = [0, 1, 2].map((i) => ({ photo: photos[i], category: categories[i % Math.max(categories.length, 1)] ?? "" }));
   return (

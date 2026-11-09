@@ -103,6 +103,12 @@ export const categorySlug = (name: string) =>
   name.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 export const categoryHref = (name: string) => `/categories/${categorySlug(name)}`;
 
+/** False for a link to a category with nothing on sale, so the posters never send people to an empty page. */
+export function linksToStock(href: string, counts: { name: string; n: number }[]) {
+  const m = /^\/categories\/([^/?#]+)/.exec(href);
+  return !m || counts.some((c) => c.n > 0 && categorySlug(c.name) === decodeURIComponent(m[1]));
+}
+
 export function categoryInfo(name: string) {
   return CATEGORIES.find((c) => c.title === name) ?? { icon: Package, title: name, text: "" };
 }
