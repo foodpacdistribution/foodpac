@@ -48,11 +48,11 @@ function vehicleIcon(v: { color: string; initials: string; stale: boolean; headi
   });
 }
 
-function FitBounds({ points, fitKey }: { points: [number, number][]; fitKey: string }) {
+function FitBounds({ points, fitKey, singleZoom = 13 }: { points: [number, number][]; fitKey: string; singleZoom?: number }) {
   const map = useMap();
   useEffect(() => {
     if (points.length === 0) return;
-    if (points.length === 1) map.setView(points[0], 13);
+    if (points.length === 1) map.setView(points[0], singleZoom);
     else map.fitBounds(L.latLngBounds(points), { padding: [36, 36], maxZoom: 15 });
     // Refit only when the set of things shown changes, not on every re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -106,6 +106,7 @@ export default function MapInner({
   onMoveStop,
   className,
   fitOnce,
+  singleZoom,
 }: MapProps) {
   const focusStops = focusRouteId ? stops.filter((s) => s.routeId === focusRouteId) : stops;
   const fitPoints = useMemo<[number, number][]>(
@@ -123,7 +124,7 @@ export default function MapInner({
   return (
     <MapContainer center={center} zoom={11} scrollWheelZoom className={className} style={{ height: "100%", width: "100%" }}>
       <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
-      <FitBounds points={fitPoints} fitKey={fitKey} />
+      <FitBounds points={fitPoints} fitKey={fitKey} singleZoom={singleZoom} />
       <InvalidateOnResize />
       {routes.map((r) => {
         const dim = !!focusRouteId && focusRouteId !== r.id;

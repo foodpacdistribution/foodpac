@@ -139,6 +139,27 @@ export async function geocodeOrders(ids: string[]) {
 }
 
 /**
+ * Staff have looked at the pin (and dragged it onto the right building if needed): the order's
+ * location is now verified. Used for addresses the geocoder can only place approximately
+ * (shopping centres, "shop 5/7 …") or not at all, which would otherwise need attention forever.
+ */
+export async function confirmOrderLocation(id: string, lat: number, lng: number) {
+  return attempt(async () => {
+    await assertUser(STAFF);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw new UserError("That location isn't valid.");
+    const db = await getDb();
+    const [o] = await db
+      .update(orders)
+      .set({ lat, lng, geocodeStatus: "ok", updatedAt: new Date() })
+      .where(eq(orders.id, id))
+      .returning({ id: orders.id });
+    if (!o) throw new UserError("Order not found.");
+    revalidateAll();
+    return { message: "Location confirmed" };
+  });
+}
+
+/**
  * Deletes orders. Delivered or failed ones carry the proof of delivery, so only admins can
  * delete those (e.g. test data), and only when they explicitly include them.
  */

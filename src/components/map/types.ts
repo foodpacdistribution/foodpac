@@ -55,4 +55,6 @@ export type MapProps = {
   className?: string;
   /** Keep the current view when data refreshes (live tracking). */
   fitOnce?: boolean;
+  /** Zoom used when there is only one thing to show (default 13; ~18 shows the building). */
+  singleZoom?: number;
 };

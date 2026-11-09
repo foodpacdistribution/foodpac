@@ -75,6 +75,12 @@ function fmt(y: number, mo: number, d: number) {
   return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+/**
+ * Orders whose address still needs a person: not verified, and not finished yet (a delivered or
+ * failed order has nothing left to fix).
+ */
+export const needsAttention = (o: { geocodeStatus: string; status: string }) => o.geocodeStatus !== "ok" && o.status !== "delivered" && o.status !== "failed";
+
 export function validateImportRow(raw: ImportRow, defaultDate: string, index: number) {
   const t = (k: ImportField) => (raw[k] ?? "").toString().trim();
   const address = t("address");

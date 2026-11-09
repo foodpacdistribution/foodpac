@@ -11,13 +11,13 @@ const MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID ?? "DEMO_MAP_ID";
 
 type Selected = { lat: number; lng: number; title: string; lines: string[]; navigateUrl?: string } | null;
 
-function FitBounds({ points, fitKey }: { points: google.maps.LatLngLiteral[]; fitKey: string }) {
+function FitBounds({ points, fitKey, singleZoom = 13 }: { points: google.maps.LatLngLiteral[]; fitKey: string; singleZoom?: number }) {
   const map = useMap();
   useEffect(() => {
     if (!map || points.length === 0) return;
     if (points.length === 1) {
       map.setCenter(points[0]);
-      map.setZoom(13);
+      map.setZoom(singleZoom);
       return;
     }
     const bounds = new google.maps.LatLngBounds();
@@ -102,6 +102,7 @@ export default function GoogleMapInner({
   onMoveStop,
   className,
   fitOnce,
+  singleZoom,
 }: MapProps) {
   const [selected, setSelected] = useState<Selected>(null);
   const focusStops = focusRouteId ? stops.filter((s) => s.routeId === focusRouteId) : stops;
@@ -132,7 +133,7 @@ export default function GoogleMapInner({
         clickableIcons={false}
         onClick={() => setSelected(null)}
       >
-        <FitBounds points={fitPoints} fitKey={fitKey} />
+        <FitBounds points={fitPoints} fitKey={fitKey} singleZoom={singleZoom} />
 
         {routes.map((r) => {
           const dim = !!focusRouteId && focusRouteId !== r.id;

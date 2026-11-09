@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { stripUnit } from "./geo/geocode";
-import { geocodeQuery, guessMapping, multiStopNavigation, navigationUrls, parseDate, validateImportRow } from "./orders";
+import { geocodeQuery, guessMapping, multiStopNavigation, navigationUrls, needsAttention, parseDate, validateImportRow } from "./orders";
 
 describe("guessMapping", () => {
   it("maps common spreadsheet headers", () => {
@@ -74,5 +74,18 @@ describe("address helpers", () => {
     expect(stripUnit("Unit 3, 12 Smith St")).toBe("12 Smith St");
     expect(stripUnit("3/12 Smith St")).toBe("12 Smith St");
     expect(stripUnit("12 Smith St")).toBe("12 Smith St");
+  });
+});
+
+describe("needsAttention", () => {
+  it("flags unverified addresses on orders still to deliver", () => {
+    expect(needsAttention({ geocodeStatus: "approximate", status: "dispatched" })).toBe(true);
+    expect(needsAttention({ geocodeStatus: "failed", status: "pending" })).toBe(true);
+    expect(needsAttention({ geocodeStatus: "pending", status: "planned" })).toBe(true);
+  });
+  it("leaves verified addresses and finished orders alone", () => {
+    expect(needsAttention({ geocodeStatus: "ok", status: "pending" })).toBe(false);
+    expect(needsAttention({ geocodeStatus: "approximate", status: "delivered" })).toBe(false);
+    expect(needsAttention({ geocodeStatus: "failed", status: "failed" })).toBe(false);
   });
 });

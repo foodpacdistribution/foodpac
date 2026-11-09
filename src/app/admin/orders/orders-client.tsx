@@ -4,7 +4,8 @@ import { AlertTriangle, FileImage, MapPinCheck, Package, Pencil, Pin, Plus, Sear
 import Link from "@/components/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { addDemoOrders, deleteOrders, geocodeOrders, rescheduleOrders, saveOrder } from "@/app/actions/orders";
+import { addDemoOrders, confirmOrderLocation, deleteOrders, geocodeOrders, rescheduleOrders, saveOrder } from "@/app/actions/orders";
+import { DeliveryMap } from "@/components/map";
 import { FormError, Modal, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { DateNav } from "@/components/date-nav";
 import { shiftDate } from "@/lib/dates";
@@ -39,6 +40,8 @@ export function OrdersClient(props: {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<Order | "new" | null>(null);
+  // An order whose map pin is being checked (approximate or not-found address).
+  const [locating, setLocating] = useState<Order | null>(null);
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [geo, setGeo] = useState<{ done: number; total: number } | null>(null);
   const [rescheduleTo, setRescheduleTo] = useState(shiftDate(date, 1));
@@ -65,6 +68,7 @@ export function OrdersClient(props: {
   async function runGeocode(ids: string[]) {
     setGeo({ done: 0, total: ids.length });
     let failed = 0;
+    let approx = 0;
     for (let i = 0; i < ids.length; i += 5) {
       const r = await geocodeOrders(ids.slice(i, i + 5));
       if (!r.ok) {
@@ -72,10 +76,25 @@ export function OrdersClient(props: {
         break;
       }
       failed += (r.data ?? []).filter((x) => x && x.status === "failed").length;
+      approx += (r.data ?? []).filter((x) => x && x.status === "approximate").length;
       setGeo({ done: Math.min(ids.length, i + 5), total: ids.length });
     }
     setGeo(null);
-    setNotice({ tone: failed ? "error" : "ok", text: failed ? `${failed} address(es) could not be found — edit them and try again.` : "All addresses checked." });
+    // Say what is still left to do: a re-check can only match an address, a person confirms the pin.
+    setNotice(
+      failed || approx
+        ? {
+            tone: "error",
+            text: [
+              failed ? tr("{n} address(es) could not be found.", { n: failed }) : "",
+              approx ? tr("{n} could only be placed approximately.", { n: approx }) : "",
+              tr('Click "Approximate" or "Not found" on each to check its pin on the map and confirm it.'),
+            ]
+              .filter(Boolean)
+              .join(" "),
+          }
+        : { tone: "ok", text: "All addresses verified." },
+    );
     router.refresh();
   }
 
@@ -283,11 +302,6 @@ export function OrdersClient(props: {
                     <span className="block truncate text-sm text-slate-500">
                       {[o.address, o.suburb, o.postcode].filter((x, i) => i === 0 || (x && !o.address.includes(x))).join(", ")}
                     </span>
-                    {o.geocodeStatus !== "ok" && (
-                      <Badge tone={geoS.tone} className="mt-1">
-                        {<Tx>{geoS.label}</Tx>}
-                      </Badge>
-                    )}
                     <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
                       <span>
                         {o.windowStartMin === null && o.windowEndMin === null
@@ -304,6 +318,13 @@ export function OrdersClient(props: {
                       )}
                     </span>
                   </button>
+                  {o.geocodeStatus !== "ok" && (
+                    <button type="button" onClick={() => setLocating(o)} className="self-start" aria-label={tr("Check the pin on the map")}>
+                      <Badge tone={geoS.tone}>
+                        {<Tx>{geoS.label}</Tx>} <MapPinCheck className="size-3" />
+                      </Badge>
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -370,9 +391,11 @@ export function OrdersClient(props: {
                           {[o.address, o.suburb, o.postcode].filter((x, i) => i === 0 || (x && !o.address.includes(x))).join(", ")}
                         </div>
                         {o.geocodeStatus !== "ok" && (
-                          <Badge tone={geoS.tone} className="mt-1">
-                            {<Tx>{geoS.label}</Tx>}
-                          </Badge>
+                          <button type="button" onClick={() => setLocating(o)} title={tr("Check the pin on the map")} className="mt-1 flex items-center gap-1">
+                            <Badge tone={geoS.tone}>
+                              {<Tx>{geoS.label}</Tx>} <MapPinCheck className="size-3" />
+                            </Badge>
+                          </button>
                         )}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-slate-700">
@@ -444,6 +467,21 @@ export function OrdersClient(props: {
         )}
       </Modal>
 
+      <Modal open={locating !== null} onClose={() => setLocating(null)} title={locating ? `${tr("Check location")} · ${locating.orderNumber}` : ""} wide>
+        {locating && (
+          <LocationCheck
+            key={locating.id}
+            order={locating}
+            near={orders.find((o) => o.lat !== null && o.lng !== null) ?? null}
+            onCancel={() => setLocating(null)}
+            onDone={(msg) => {
+              setLocating(null);
+              setNotice({ tone: "ok", text: msg });
+              router.refresh();
+            }}
+          />
+        )}
+      </Modal>
       <Modal open={record !== null} onClose={() => setRecord(null)} title={record ? `${tr("Delivery record")} · ${record.orderNumber}` : ""}>
         {record && <DeliveryRecord key={record.id} orderId={record.id} />}
       </Modal>
@@ -647,5 +685,77 @@ function OrderForm({
         <SubmitButton pendingText={tr("Saving & locating…")}>{order ? tr("Save changes") : tr("Add order")}</SubmitButton>
       </div>
     </KeptForm>
+  );
+}
+
+/**
+ * Shows an order's pin close up so staff can check it: confirm it as it is, or drag it onto the
+ * right building first. Addresses that weren't found start next to another order of the day.
+ */
+function LocationCheck({ order, near, onCancel, onDone }: { order: Order; near: Order | null; onCancel: () => void; onDone: (msg: string) => void }) {
+  const tr = useT();
+  const start =
+    order.lat !== null && order.lng !== null
+      ? { lat: order.lat, lng: order.lng }
+      : near?.lat != null && near.lng != null
+        ? { lat: near.lat, lng: near.lng }
+        : { lat: -27.4698, lng: 153.0251 };
+  const [pos, setPos] = useState(start);
+  const [moved, setMoved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const located = order.lat !== null && order.lng !== null;
+  const address = [order.address, order.suburb, order.postcode].filter((x, i) => i === 0 || (x && !order.address.includes(x))).join(", ");
+
+  return (
+    <div className="space-y-3">
+      <div className="text-sm">
+        <p className="font-medium text-slate-900">{order.customerName || order.orderNumber}</p>
+        <p className="text-slate-600">{address}</p>
+        {order.geocodeLabel && (
+          <p className="mt-1 text-xs text-slate-500">
+            {tr("Located as:")} <span className="text-slate-700">{order.geocodeLabel}</span>
+          </p>
+        )}
+      </div>
+      <div className="h-80 overflow-hidden rounded-xl border border-line">
+        <DeliveryMap
+          singleZoom={located ? 18 : 13}
+          routes={[]}
+          stops={[{ id: order.id, routeId: null, lat: pos.lat, lng: pos.lng, label: "", color: "#2563eb", status: "pending", next: true, title: order.customerName || order.orderNumber, lines: [address] }]}
+          onMoveStop={(_id, lat, lng) => {
+            setPos({ lat, lng });
+            setMoved(true);
+          }}
+        />
+      </div>
+      <p className="text-xs text-slate-500">
+        {moved
+          ? tr("Pin moved. Save it as this order's delivery location.")
+          : located
+            ? tr("If the pin isn't on the right building, drag it there (Satellite helps). Otherwise confirm it.")
+            : tr("This address wasn't found. Drag the pin to the delivery address, then save.")}
+      </p>
+      <FormError message={error} />
+      <div className="flex justify-end gap-2">
+        <button type="button" className={btn("secondary")} onClick={onCancel}>
+          {tr("Cancel")}
+        </button>
+        <button
+          type="button"
+          className={btn("primary")}
+          disabled={pending || (!located && !moved)}
+          onClick={() =>
+            startTransition(async () => {
+              const r = await confirmOrderLocation(order.id, pos.lat, pos.lng);
+              if (r.ok) onDone(r.message ?? "Location confirmed");
+              else setError(r.error ?? "Failed");
+            })
+          }
+        >
+          {pending ? <Spinner className="size-4" /> : <MapPinCheck className="size-4" />} {moved || !located ? tr("Save this location") : tr("Location is right")}
+        </button>
+      </div>
+    </div>
   );
 }

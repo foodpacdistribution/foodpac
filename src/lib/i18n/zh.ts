@@ -1,6 +1,18 @@
 // English → 中文 for the language switch. Keys are the exact English text shown in the app.
 // Missing keys simply show in English. Generated from the translation sheets; edit freely.
 export const ZH: Record<string, string> = {
+  "{n} address(es) could not be found.": "有 {n} 个地址找不到。",
+  "{n} could only be placed approximately.": "有 {n} 个只能定位到大致位置。",
+  "Click \"Approximate\" or \"Not found\" on each to check its pin on the map and confirm it.": "请点击每个订单上的“大致位置”或“未找到”,在地图上核对定位并确认。",
+  "All addresses verified.": "所有地址都已核实。",
+  "Check the pin on the map": "在地图上核对定位",
+  "Check location": "核对位置",
+  "Pin moved. Save it as this order's delivery location.": "定位已移动。保存为此订单的送货位置。",
+  "If the pin isn't on the right building, drag it there (Satellite helps). Otherwise confirm it.": "如果定位不在正确的建筑上,请把它拖过去(可切换卫星图查看)。位置正确就直接确认。",
+  "This address wasn't found. Drag the pin to the delivery address, then save.": "没有找到这个地址。请把定位拖到送货地址,然后保存。",
+  "Save this location": "保存此位置",
+  "Location is right": "位置正确",
+  "Location confirmed": "位置已确认",
   "Menu": "菜单",
   "Close": "关闭",
   "Search…": "搜索…",

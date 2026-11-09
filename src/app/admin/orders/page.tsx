@@ -8,6 +8,7 @@ import { getSettings } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
 import { OrdersClient } from "./orders-client";
 import { databaseUrl } from "@/lib/db/url";
+import { needsAttention } from "@/lib/orders";
 
 export const metadata: Metadata = { title: "Orders" };
 
@@ -30,7 +31,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
 
   const filtered = rows.filter((o) => {
     if (!status) return true;
-    if (status === "attention") return o.geocodeStatus !== "ok";
+    if (status === "attention") return needsAttention(o);
     return o.status === status;
   });
 
@@ -45,7 +46,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       defaultServiceMin={s.defaultServiceMin}
       counts={{
         all: rows.length,
-        attention: rows.filter((o) => o.geocodeStatus !== "ok").length,
+        attention: rows.filter(needsAttention).length,
         pending: rows.filter((o) => o.status === "pending").length,
         planned: rows.filter((o) => o.status === "planned").length,
         dispatched: rows.filter((o) => o.status === "dispatched").length,

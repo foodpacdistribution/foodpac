@@ -21,6 +21,7 @@ import { databaseUrl } from "@/lib/db/url";
 import { T, Tx } from "@/components/i18n";
 import { intlLocale } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
+import { needsAttention } from "@/lib/orders";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -82,7 +83,7 @@ export default async function DashboardPage() {
   const failed = count("failed");
   const outForDelivery = view.routes.filter((r) => r.dispatchedAt).reduce((a, r) => a + r.stops.filter((x) => x.status === "pending").length, 0);
   const activeDrivers = view.routes.filter((r) => r.status === "in_progress").length;
-  const notLocated = dayOrders.filter((o) => o.geocodeStatus !== "ok" && o.status !== "delivered").length;
+  const notLocated = dayOrders.filter(needsAttention).length;
 
   // Projected finish = planned finish pushed back by how late the driver is for their next stop right now.
   const routeRows = view.routes.map((r) => {
