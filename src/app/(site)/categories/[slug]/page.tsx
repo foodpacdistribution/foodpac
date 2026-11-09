@@ -6,6 +6,7 @@ import { listCategories } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
 import { CATEGORIES, categoryHref, categoryInfo, categorySlug, SITE } from "../../content";
 import ProductsPage from "../../products/page";
+import { getT, languageAlternates } from "@/lib/i18n/server";
 
 // Each category has its own address, title and description, which is what search engines list
 // (and pick sitelinks from). Filters and sorting still go through /products.
@@ -23,15 +24,18 @@ async function categoryFor(slug: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const name = await categoryFor((await params).slug);
   if (!name) return {};
-  const blurb = categoryInfo(name).text || `${name} for cafés, restaurants and takeaway shops.`;
-  const description = `${blurb} Trade prices and delivery across ${SITE.serviceArea} from ${SITE.name}.`;
+  const tr = await getT();
+  const blurb = categoryInfo(name).text ? tr(categoryInfo(name).text) : tr("{name} for cafés, restaurants and takeaway shops.", { name: tr(name) });
+  const description = `${blurb} ${tr("Trade prices and delivery across {area} from {name}.", { area: tr(SITE.serviceArea), name: SITE.name })}`;
+  const title = tr("{name} – wholesale supply", { name: tr(name) });
+  const alternates = await languageAlternates(categoryHref(name));
   // A range with nothing on sale yet is an empty page: keep it out of search until it has products.
   const stocked = (await listCategories(await getDb())).some((c) => c.name === name && c.n > 0);
   return {
-    title: `${name} – wholesale supply`,
+    title,
     description,
-    alternates: { canonical: categoryHref(name) },
-    openGraph: { title: `${name} – wholesale supply · ${SITE.name}`, description, url: categoryHref(name) },
+    alternates,
+    openGraph: { title: `${title} · ${SITE.name}`, description, url: alternates.canonical },
     ...(stocked ? {} : { robots: { index: false, follow: true } }),
   };
 }

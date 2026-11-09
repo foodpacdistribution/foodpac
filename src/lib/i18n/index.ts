@@ -12,6 +12,16 @@ export const LOCALES: { code: Locale; label: string }[] = [
   { code: "zh", label: "中文" },
 ];
 export const LOCALE_COOKIE = "lang";
+/** Set by the proxy on /zh/… requests: the page is the Chinese version at its own address. */
+export const URL_LOCALE_HEADER = "x-url-locale";
+
+/** Public pages that also exist in Chinese under /zh (for search engines and shared links). */
+const ZH_PAGES = ["/products", "/categories", "/about", "/register"];
+export const hasZhPage = (path: string) => path === "/" || ZH_PAGES.some((p) => path === p || path.startsWith(`${p}/`));
+/** "/products" → "/zh/products", "/" → "/zh". */
+export const zhPath = (path: string) => (path === "/" ? "/zh" : `/zh${path}`);
+/** "/zh/products" → "/products", anything else → null. */
+export const stripZh = (path: string) => (path === "/zh" ? "/" : path.startsWith("/zh/") ? path.slice(3) : null);
 
 export function isLocale(v: unknown): v is Locale {
   return v === "en" || v === "zh";

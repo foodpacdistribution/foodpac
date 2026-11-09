@@ -17,16 +17,19 @@ import { BuyBar } from "./buy-bar";
 import { FavouriteButton } from "../../favourite-button";
 import { Price, ProductCard, ProductImage, StockLabel } from "../../shop-ui";
 import { T, Tx } from "@/components/i18n";
+import { getT, languageAlternates } from "@/lib/i18n/server";
 
 export async function generateMetadata({ params }: { params: Promise<{ sku: string }> }): Promise<Metadata> {
   const { sku } = await params;
   const p = await getProductBySku(await getDb(), null, decodeURIComponent(sku));
   if (!p) return { title: "Product" };
-  const description = p.description || `${p.name} (${p.packSize}) – wholesale ${p.category.toLowerCase()} at trade prices, delivered across ${SITE.serviceArea}.`;
+  const tr = await getT();
+  const description =
+    p.description || tr("{name} ({pack}) – wholesale {category} at trade prices, delivered across {area}.", { name: p.name, pack: p.packSize, category: tr(p.category).toLowerCase(), area: tr(SITE.serviceArea) });
   return {
     title: `${p.name} · ${p.packSize}`,
     description,
-    alternates: { canonical: `/products/${encodeURIComponent(p.sku)}` },
+    alternates: await languageAlternates(`/products/${encodeURIComponent(p.sku)}`),
     openGraph: { title: p.name, description, ...(p.hasImage ? { images: [productImageUrl(p)] } : {}) },
   };
 }

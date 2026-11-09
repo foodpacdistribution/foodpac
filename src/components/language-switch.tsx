@@ -1,9 +1,10 @@
 "use client";
 
 import { Languages } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useTransition } from "react";
 import { setLocale } from "@/app/actions/auth";
-import { LOCALES } from "@/lib/i18n";
+import { hasZhPage, LOCALES, stripZh, zhPath } from "@/lib/i18n";
 import { useLocale } from "./i18n";
 import { cx } from "./ui";
 
@@ -11,6 +12,14 @@ import { cx } from "./ui";
 export function LanguageSwitch({ tone = "light", className }: { tone?: "light" | "dark"; className?: string }) {
   const current = useLocale();
   const [pending, start] = useTransition();
+  const pathname = usePathname();
+  // Public pages have an address per language (/zh/…): move to the other one, so the address
+  // matches what's on screen and a shared link opens in the same language.
+  const pathFor = (code: string) => {
+    const english = stripZh(pathname) ?? pathname;
+    if (code === "zh") return hasZhPage(english) && !pathname.startsWith("/zh") ? zhPath(english) : null;
+    return pathname.startsWith("/zh") ? english : null;
+  };
   return (
     <div
       role="group"
@@ -32,6 +41,9 @@ export function LanguageSwitch({ tone = "light", className }: { tone?: "light" |
           onClick={() =>
             start(async () => {
               await setLocale(l.code);
+              const next = pathFor(l.code);
+              // A full load: the other address may already be cached in the old language.
+              if (next) window.location.assign(next + window.location.search);
             })
           }
           className={cx(

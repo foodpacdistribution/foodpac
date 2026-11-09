@@ -4,15 +4,21 @@ import { getCurrentUser } from "@/lib/auth/dal";
 import { homeFor } from "@/lib/auth/session";
 import { RegisterForm } from "./register-form";
 import { T } from "@/components/i18n";
+import { getT, languageAlternates } from "@/lib/i18n/server";
 
-const registerDescription =
-  "Open a free trade account for your café, restaurant or takeaway: your own trade prices, order online any time, and planned weekday delivery across South East Queensland.";
-export const metadata: Metadata = {
-  title: "Open a trade account",
-  description: registerDescription,
-  alternates: { canonical: "/register" },
-  openGraph: { title: "Open a trade account · Foodpac Distribution", description: registerDescription, url: "/register" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const tr = await getT();
+  const description = tr(
+    "Open a free trade account for your café, restaurant or takeaway: your own trade prices, order online any time, and planned weekday delivery across South East Queensland.",
+  );
+  const alternates = await languageAlternates("/register");
+  return {
+    title: tr("Open a trade account"),
+    description,
+    alternates,
+    openGraph: { title: `${tr("Open a trade account")} · Foodpac Distribution`, description, url: alternates.canonical },
+  };
+}
 
 export default async function RegisterPage() {
   const user = await getCurrentUser();

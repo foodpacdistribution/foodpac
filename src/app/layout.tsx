@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, Inter } from "next/font/google";
 import { I18nProvider } from "@/components/i18n";
-import { getLocale } from "@/lib/i18n/server";
+import { getLocale, getT } from "@/lib/i18n/server";
 import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
@@ -18,16 +18,21 @@ const description =
 // the "Try again" screen) instead of leaving the browser waiting five.
 export const maxDuration = 60;
 
-export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl()),
-  title: { default: "Foodpac Distribution — Wholesale Food Packaging & Supplies, Brisbane", template: "%s · Foodpac Distribution" },
-  description,
-  applicationName: "Foodpac Distribution",
-  // Set GOOGLE_SITE_VERIFICATION to the code from Google Search Console ("HTML tag" method).
-  ...(process.env.GOOGLE_SITE_VERIFICATION ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } } : {}),
-  openGraph: { type: "website", siteName: "Foodpac Distribution", locale: "en_AU", url: "/", title: "Foodpac Distribution", description },
-  twitter: { card: "summary_large_image", title: "Foodpac Distribution", description },
-};
+/** Site-wide title and description, in the page's language (/zh pages are indexed in Chinese). */
+export async function generateMetadata(): Promise<Metadata> {
+  const [tr, locale] = await Promise.all([getT(), getLocale()]);
+  const desc = tr(description);
+  return {
+    metadataBase: new URL(siteUrl()),
+    title: { default: tr("Foodpac Distribution — Wholesale Food Packaging & Supplies, Brisbane"), template: "%s · Foodpac Distribution" },
+    description: desc,
+    applicationName: "Foodpac Distribution",
+    // Set GOOGLE_SITE_VERIFICATION to the code from Google Search Console ("HTML tag" method).
+    ...(process.env.GOOGLE_SITE_VERIFICATION ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } } : {}),
+    openGraph: { type: "website", siteName: "Foodpac Distribution", locale: locale === "zh" ? "zh_CN" : "en_AU", url: "/", title: "Foodpac Distribution", description: desc },
+    twitter: { card: "summary_large_image", title: "Foodpac Distribution", description: desc },
+  };
+}
 
 export const viewport: Viewport = { themeColor: "#ffffff", width: "device-width", initialScale: 1 };
 

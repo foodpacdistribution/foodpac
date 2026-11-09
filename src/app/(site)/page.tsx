@@ -16,8 +16,11 @@ import { Contact, HowItWorks } from "./sections";
 import { siteInfo } from "./site-info";
 import { ProductCard, ProductCount } from "./shop-ui";
 import { T, Tx } from "@/components/i18n";
+import { languageAlternates } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { alternates: { canonical: "/" } };
+export async function generateMetadata(): Promise<Metadata> {
+  return { alternates: await languageAlternates("/") };
+}
 
 export default async function HomePage() {
   const viewer = await getCurrentCustomer();
@@ -58,7 +61,26 @@ export default async function HomePage() {
         logo: `${base}/brand/foodpac-logo-square.png`,
         image: `${base}/opengraph-image.png`,
         description: `${SITE.tagline} Wholesale food packaging, consumables and dry goods for cafés, restaurants and takeaway shops across ${SITE.serviceArea}.`,
-        areaServed: { "@type": "AdministrativeArea", name: SITE.serviceArea },
+        areaServed: [
+          { "@type": "City", name: "Brisbane" },
+          { "@type": "AdministrativeArea", name: SITE.serviceArea },
+        ],
+        // What the business is about, in both languages its customers search in.
+        knowsAbout: [
+          "Food packaging",
+          "Takeaway containers",
+          "Disposable food containers",
+          "Coffee cups and lids",
+          "Paper bags",
+          "Disposable cutlery",
+          "Commercial cleaning supplies",
+          "食品打包盒",
+          "外卖餐盒",
+          "一次性餐盒",
+          "食品包装",
+          "餐饮用品批发",
+        ],
+        knowsLanguage: ["en", "zh"],
         openingHours: site.openingHours,
         ...(address ? { address: { "@type": "PostalAddress", streetAddress: address, addressRegion: "QLD", addressCountry: "AU" } } : {}),
         ...(depot ? { geo: { "@type": "GeoCoordinates", latitude: depot.lat, longitude: depot.lng } } : {}),

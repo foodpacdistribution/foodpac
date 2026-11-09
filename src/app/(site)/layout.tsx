@@ -99,6 +99,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
               { href: "/products", label: "All products" },
               ...ranges.map((c) => ({ href: categoryHref(c.title), label: c.title })),
               ...(viewer ? [{ href: "/portal/quick-order", label: "Quick order" }] : []),
+              { href: "/about", label: "About us" },
               { href: "/#contact", label: "Contact" },
             ]}
           />
@@ -156,6 +157,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             <p className="pb-1 text-xs font-semibold text-white"><T>{"Shop"}</T></p>
             <Link href="/products" className="block py-2 hover:text-white sm:py-0">
               <T>{"All products"}</T></Link>
+            <Link href="/about" className="block py-2 hover:text-white sm:py-0">
+              <T>{"About us"}</T></Link>
             <Link href="/#how-it-works" className="block py-2 hover:text-white sm:py-0">
               <T>{"How it works"}</T></Link>
             <Link href="/#delivery" className="block py-2 hover:text-white sm:py-0">

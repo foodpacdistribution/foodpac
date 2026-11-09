@@ -9,20 +9,23 @@ import { categoryHref, categoryInfo, SITE } from "../content";
 import { CategorySidebar } from "../category-nav";
 import { ProductCard } from "../shop-ui";
 import { T } from "@/components/i18n";
+import { getT, languageAlternates } from "@/lib/i18n/server";
 
 type Search = { q?: string; category?: string; sort?: string; stock?: string };
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<Search> }): Promise<Metadata> {
   const sp = await searchParams;
   // Searches and filtered or sorted lists repeat other pages: keep them out of the index.
-  if (sp.q || sp.sort || sp.stock) return { title: "Products", robots: { index: false, follow: true } };
-  if (sp.category) return { title: sp.category, alternates: { canonical: categoryHref(sp.category) } };
-  const description = `Takeaway packaging, cups, bags, cutlery, cleaning supplies and dry goods at trade prices, delivered across ${SITE.serviceArea}.`;
+  const tr = await getT();
+  if (sp.q || sp.sort || sp.stock) return { title: tr("Products"), robots: { index: false, follow: true } };
+  if (sp.category) return { title: tr(sp.category), alternates: { canonical: categoryHref(sp.category) } };
+  const description = tr("Takeaway packaging, cups, bags, cutlery, cleaning supplies and dry goods at trade prices, delivered across {area}.", { area: tr(SITE.serviceArea) });
+  const alternates = await languageAlternates("/products");
   return {
-    title: "All products",
+    title: tr("All products"),
     description,
-    alternates: { canonical: "/products" },
-    openGraph: { title: "All products · Foodpac Distribution", description, url: "/products" },
+    alternates,
+    openGraph: { title: `${tr("All products")} · Foodpac Distribution`, description, url: alternates.canonical },
   };
 }
 
