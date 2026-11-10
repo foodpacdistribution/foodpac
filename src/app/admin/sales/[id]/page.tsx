@@ -17,9 +17,9 @@ import { CUSTOMER_RETURN_STATUS } from "@/lib/customer-return-labels";
 import { aud, FULFILMENT, PAYMENT_METHOD_LABEL, PAYMENT_STATUS, PAYMENT_TERMS_LABEL, SALES_STATUS } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
 import { editBlocker } from "@/lib/staff-orders";
-import { formatMinutesClock } from "@/lib/time";
+import { formatMinutesClock, todayIn } from "@/lib/time";
 import { InvoiceActions } from "./invoice-actions";
-import { ApplyCredit, SaleActions } from "./sale-actions";
+import { ApplyCredit, MoveDay, SaleActions } from "./sale-actions";
 import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Sales Order" };
@@ -49,6 +49,9 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
   const enteredBy = by && by.role !== "customer" ? by.name : null;
   const fmt = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "medium", timeStyle: "short" });
   const day = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, dateStyle: "medium" });
+  const today = todayIn(s.timezone);
+  // Same rule as the "Missed day" list: confirmed, its day has passed, not delivered.
+  const missed = so.status === "confirmed" && so.deliveryDate < today && d?.status !== "delivered";
   const canCancel = so.status !== "cancelled" && (!d || d.status === "pending" || d.status === "planned" || d.status === "failed");
 
   return (
@@ -97,6 +100,20 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
         <SaleActions id={so.id} status={so.status} paymentStatus={so.paymentStatus} paymentMethod={so.paymentMethod} fulfilment={so.fulfilment} canCancel={canCancel} isAdmin={me.role === "admin"} />
         </div>
       </div>
+
+      {missed && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          <p className="min-w-0 flex-1">
+            <b>
+              <T>{"Missed its delivery day"}</T> (<Tx>{prettyDate(so.deliveryDate, { weekday: "short", day: "numeric", month: "short" })}</Tx>)
+            </b>{" "}
+            <span className="text-red-800/80">
+              {d?.status === "failed" ? <T>{"The drop failed. Move it to another day to send it again."}</T> : <T>{"It wasn't delivered. Move it to another day, or cancel it."}</T>}
+            </span>
+          </p>
+          <MoveDay id={so.id} today={today} />
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
         <Card className="overflow-hidden">

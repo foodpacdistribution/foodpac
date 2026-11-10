@@ -6,8 +6,12 @@ import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { aud } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
-import { canSeePrices, getCart, quote } from "@/lib/shop";
-import { ProductImage } from "../shop-ui";
+import { canSeePrices, getCart, quote, recentlyBought } from "@/lib/shop";
+import { prettyDate } from "@/lib/dates";
+import { todayIn } from "@/lib/time";
+import { lastOrder } from "@/app/portal/orders/data";
+import { RepeatOrder } from "@/app/portal/repeat-order";
+import { ProductCard, ProductImage } from "../shop-ui";
 import { CartQty } from "./cart-line";
 import { T, Tx } from "@/components/i18n";
 
@@ -18,6 +22,9 @@ export default async function CartPage() {
   if (!viewer) redirect("/login?next=%2Fcart");
   const db = await getDb();
   const [lines, s] = await Promise.all([getCart(db, viewer.customer), getSettings(db)]);
+  // An empty cart offers the last order again and what they've bought before.
+  const priced = canSeePrices(viewer.customer);
+  const [last, again] = lines.length === 0 && priced ? await Promise.all([lastOrder(db, viewer.customer.id), recentlyBought(db, viewer.customer, 4)]) : [null, []];
   const q = quote(lines, s);
   const blocked = lines.some((l) => l.issue) || q.belowMinimum || !canSeePrices(viewer.customer);
 
@@ -35,7 +42,24 @@ export default async function CartPage() {
               <T>{"Quick order"}</T></Link>
           </div>
         </div>
-      ) : (
+      ) : null}
+      {lines.length === 0 && last && (
+        <RepeatOrder
+          className="mt-4"
+          order={{ ...last, date: prettyDate(todayIn(s.timezone, last.createdAt), { weekday: "short", day: "numeric", month: "short" }) }}
+        />
+      )}
+      {lines.length === 0 && again.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-xs font-semibold tracking-[0.14em] text-leaf-900/50 uppercase"><T>{"Bought before"}</T></h2>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            {again.map((p) => (
+              <ProductCard key={p.id} p={p} signedIn />
+            ))}
+          </div>
+        </section>
+      )}
+      {lines.length === 0 ? null : (
         <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_340px]">
           <section className="overflow-hidden rounded-3xl border border-leaf-950/10 bg-white">
             {lines.map((l) => (

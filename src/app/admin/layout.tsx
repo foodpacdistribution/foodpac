@@ -10,6 +10,7 @@ import { initials } from "@/lib/account";
 import { getDb } from "@/lib/db";
 import { restoreDeliveries } from "@/lib/deliveries";
 import { enquiries, orders, salesOrders } from "@/lib/db/schema";
+import { missedDelivery } from "@/lib/staff-orders";
 import { getSettings } from "@/lib/planning";
 import { dueFollowUpCount } from "@/lib/pipeline";
 import { todayIn } from "@/lib/time";
@@ -30,14 +31,21 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     (
       [
         ["enquiries", () => db.select({ n: count() }).from(enquiries).where(eq(enquiries.status, "new")).then(n)],
-        // Shop orders waiting on the office: not yet confirmed, or confirmed and not yet picked.
+        // Shop orders waiting on the office: not yet confirmed, confirmed and not yet picked for a
+        // day still to come, or their day passed without a delivery.
         [
           "sales",
           () =>
             db
               .select({ n: count() })
               .from(salesOrders)
-              .where(or(eq(salesOrders.status, "pending"), and(eq(salesOrders.status, "confirmed"), eq(salesOrders.fulfilment, "new"))))
+              .where(
+                or(
+                  eq(salesOrders.status, "pending"),
+                  and(eq(salesOrders.status, "confirmed"), eq(salesOrders.fulfilment, "new"), gte(salesOrders.deliveryDate, todayIn(s.timezone))),
+                  missedDelivery(todayIn(s.timezone)),
+                ),
+              )
               .then(n),
         ],
         // Deliveries from today on that aren't on any shipment yet.

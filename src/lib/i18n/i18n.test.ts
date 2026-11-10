@@ -28,6 +28,14 @@ describe("translate", () => {
   });
 });
 
+describe("missed delivery days", () => {
+  it("translates the tab and the move messages, dates included", () => {
+    expect(translate(zh, "Missed day (3)")).toBe("错过送货日 (3)");
+    expect(translate(zh, "Moved 2 order(s) to Thu, 12 Nov")).toBe("已将 2 个订单改到 11月12日 周四");
+    expect(translate(zh, "Moved 1 order(s) to Thu, 12 Nov · not moved: FP-10001")).toBe("已将 1 个订单改到 11月12日 周四 · 未改期:FP-10001");
+  });
+});
+
 describe("zhDates", () => {
   it("handles the app's date formats", () => {
     expect(zhDates("Mon, 2 Nov 2026")).toBe("2026年11月2日 周一");

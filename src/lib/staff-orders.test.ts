@@ -7,7 +7,7 @@ import type { DB } from "./db";
 import { schema } from "./db";
 import { customers, orders, products, salesOrderItems, salesOrders, users } from "./db/schema";
 import { cancelOrder } from "./shop";
-import { createStaffOrder, editBlocker, updateStaffOrder } from "./staff-orders";
+import { createStaffOrder, editBlocker, followDeliveryDate, missedDelivery, moveSalesToDay, updateStaffOrder } from "./staff-orders";
 import { fillWaiting, listWaiting } from "./stock-allocation";
 
 let db: DB;
@@ -101,5 +101,69 @@ describe("orders staff enter", () => {
     expect(editBlocker({ status: "confirmed", paymentMethod: "invoice", fulfilment: "new", invoiceStatus: "proforma" }, "dispatched")).toMatch(/out for delivery/);
     expect(editBlocker({ status: "confirmed", paymentMethod: "invoice", fulfilment: "packed", invoiceStatus: "proforma" }, "planned")).toBeNull();
     expect(editBlocker({ status: "confirmed", paymentMethod: "invoice", fulfilment: "new", invoiceStatus: "final" }, null)).toMatch(/final/);
+    expect(editBlocker({ status: "confirmed", paymentMethod: "invoice", fulfilment: "loaded", invoiceStatus: "proforma" }, "dispatched")).toMatch(/loaded|out for delivery/);
+    // A failed drop came back on the van: it can be changed and sent again.
+    expect(editBlocker({ status: "confirmed", paymentMethod: "invoice", fulfilment: "loaded", invoiceStatus: "proforma" }, "failed")).toBeNull();
+  });
+});
+
+describe("missed delivery days", () => {
+  const missedIds = async () => (await db.select({ id: salesOrders.id }).from(salesOrders).where(missedDelivery(today))).map((r) => r.id);
+  /** An order placed for a day that has since passed (staff can't enter a past date, so it's moved back). */
+  const pastOrder = async (day: string, deliveryStatus: "pending" | "dispatched" | "failed" | "delivered") => {
+    const so = await place([{ productId: lids, qty: 1, unitPriceCents: 2000 }]);
+    await db.update(salesOrders).set({ deliveryDate: day, fulfilment: deliveryStatus === "pending" ? "new" : "loaded" }).where(eq(salesOrders.id, so.id));
+    await db.update(orders).set({ deliveryDate: day, status: deliveryStatus }).where(eq(orders.id, so.deliveryOrderId!));
+    return so;
+  };
+
+  it("lists confirmed orders whose day passed without a delivery", async () => {
+    const notPlanned = await pastOrder("2026-11-09", "pending");
+    const failed = await pastOrder("2026-11-09", "failed");
+    const delivered = await pastOrder("2026-11-09", "delivered");
+    const ancient = await pastOrder("2026-08-01", "pending");
+    const ids = await missedIds();
+    expect(ids).toEqual(expect.arrayContaining([notPlanned.id, failed.id]));
+    expect(ids).not.toContain(delivered.id);
+    expect(ids).not.toContain(ancient.id); // older than the look-back
+  });
+
+  it("moves a missed order, delivery and all, back into the planner's queue", async () => {
+    const so = await pastOrder("2026-11-09", "failed");
+    const res = await moveSalesToDay(db, [so.id], "2026-11-12", today);
+    expect(res).toMatchObject({ moved: 1, skipped: [] });
+    const [after] = await db.select().from(salesOrders).where(eq(salesOrders.id, so.id));
+    expect(after).toMatchObject({ deliveryDate: "2026-11-12", dueDate: "2026-11-26", fulfilment: "packed" });
+    const [d] = await db.select().from(orders).where(eq(orders.id, so.deliveryOrderId!));
+    expect(d).toMatchObject({ deliveryDate: "2026-11-12", status: "pending", driverId: null });
+    expect(await missedIds()).not.toContain(so.id);
+  });
+
+  it("leaves delivered orders, vans out today and past dates alone", async () => {
+    const delivered = await pastOrder("2026-11-09", "delivered");
+    const outToday = await place([{ productId: lids, qty: 1, unitPriceCents: 2000 }]);
+    await db.update(orders).set({ deliveryDate: today, status: "dispatched" }).where(eq(orders.id, outToday.deliveryOrderId!));
+    const res = await moveSalesToDay(db, [delivered.id, outToday.id], "2026-11-12", today);
+    expect(res.moved).toBe(0);
+    expect(res.skipped).toEqual(expect.arrayContaining([delivered.number, outToday.number]));
+    await expect(moveSalesToDay(db, [outToday.id], "2026-11-01", today)).rejects.toThrow(/past/);
+  });
+
+  it("gives a missed order with no delivery a new one", async () => {
+    const so = await pastOrder("2026-11-09", "pending");
+    await db.update(salesOrders).set({ deliveryOrderId: null }).where(eq(salesOrders.id, so.id));
+    await db.delete(orders).where(eq(orders.id, so.deliveryOrderId!));
+    const res = await moveSalesToDay(db, [so.id], "2026-11-13", today);
+    expect(res.created).toHaveLength(1);
+    const [d] = await db.select().from(orders).where(eq(orders.id, res.created[0]));
+    expect(d).toMatchObject({ deliveryDate: "2026-11-13", orderNumber: so.number });
+  });
+
+  it("keeps the shop order's day in step when its delivery is moved", async () => {
+    const so = await place([{ productId: lids, qty: 1, unitPriceCents: 2000 }]);
+    await db.update(orders).set({ deliveryDate: "2026-11-16" }).where(eq(orders.id, so.deliveryOrderId!));
+    await followDeliveryDate(db, so.deliveryOrderId!, "2026-11-16");
+    const [after] = await db.select().from(salesOrders).where(eq(salesOrders.id, so.id));
+    expect(after).toMatchObject({ deliveryDate: "2026-11-16", dueDate: "2026-11-30" });
   });
 });

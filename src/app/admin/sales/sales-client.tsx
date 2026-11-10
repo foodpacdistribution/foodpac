@@ -1,9 +1,9 @@
 "use client";
 
-import { BadgeCheck, ClipboardList, Download, Plus, Search, ShoppingBag, Trash2, X } from "lucide-react";
+import { BadgeCheck, CalendarClock, ClipboardList, Download, Plus, Search, ShoppingBag, Trash2, TriangleAlert, X } from "lucide-react";
 import Link from "@/components/link";
 import { useState, useTransition } from "react";
-import { deleteSales, markManyPaid, setFulfilment } from "@/app/actions/sales";
+import { deleteSales, markManyPaid, moveSalesDay, setFulfilment } from "@/app/actions/sales";
 import { Toast, type ToastMessage } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, inputCls, PageHeader, Stat } from "@/components/ui";
 import { toCsv } from "@/lib/product-import";
@@ -37,6 +37,8 @@ type Row = {
   invoiceStatus: InvoiceStatus;
   /** Units on this order still waiting for stock. */
   waiting: number;
+  /** Its delivery day has passed and it wasn't delivered. */
+  missed: boolean;
 };
 
 export function SalesClient({
@@ -46,6 +48,7 @@ export function SalesClient({
   today,
   todaySalesCents,
   unpaidCount,
+  missedCount,
   isAdmin,
 }: {
   rows: Row[];
@@ -54,12 +57,14 @@ export function SalesClient({
   today: string;
   todaySalesCents: number;
   unpaidCount: number;
+  missedCount: number;
   isAdmin: boolean;
 }) {
   const tr = useT();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, start] = useTransition();
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [moveTo, setMoveTo] = useState("");
   const toggle = (id: string) => setSelected((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s.add(id))));
   const confirmed = rows.filter((r) => r.status === "confirmed");
   const toPick = confirmed.filter((r) => r.fulfilment === "new").length;
@@ -74,6 +79,8 @@ export function SalesClient({
       setToast({ id: Date.now(), text: r.ok ? (r.message ?? "Updated") : (r.error ?? "Something went wrong"), tone: r.ok ? "ok" : "warn" });
       if (r.ok && clear) setSelected(new Set());
     });
+
+  const missedBadge = (r: Row) => (r.missed ? <Badge tone="red">{tr("Missed day")}</Badge> : null);
 
   const paymentBadge = (r: Row) => {
     const overdue = r.paymentStatus === "unpaid" && r.dueDate && r.dueDate < today;
@@ -131,9 +138,21 @@ export function SalesClient({
         )}
       </form>
 
+      {missedCount > 0 && view !== "missed" && (
+        <Link href="/admin/sales?view=missed" className="mb-3 flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-900 hover:bg-red-100/70">
+          <TriangleAlert className="size-4 shrink-0 text-red-600" />
+          <span className="min-w-0 flex-1">
+            <b>{tr(missedCount === 1 ? "1 order missed its delivery day" : "{n} orders missed their delivery day", { n: missedCount })}</b>{" "}
+            <span className="text-red-800/80">{tr("Not delivered yet. Move them to another day or cancel them.")}</span>
+          </span>
+          <span className="shrink-0 font-semibold">{tr("Sort out")} →</span>
+        </Link>
+      )}
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {[
           ["open", "Open"],
+          ["missed", missedCount ? `Missed day (${missedCount})` : "Missed day"],
           ["invoice", "To invoice"],
           ["unpaid", "Unpaid"],
           ["all", "All"],
@@ -156,6 +175,17 @@ export function SalesClient({
               {<Tx>{FULFILMENT[f].label}</Tx>}
             </button>
           ))}
+          <button disabled={pending} onClick={() => run(() => moveSalesDay(ids, "next"))} className={btn("secondary", "sm")}>
+            <CalendarClock className="size-3.5" /> {tr("Next delivery day")}
+          </button>
+          <span className="flex items-center gap-1">
+            <span className="w-36 shrink-0">
+              <input type="date" aria-label={tr("Move to day")} min={today} value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className={cx(inputCls, "h-8 py-0 text-xs")} />
+            </span>
+            <button disabled={pending || !moveTo} onClick={() => run(() => moveSalesDay(ids, moveTo))} className={btn("secondary", "sm")}>
+              {tr("Move")}
+            </button>
+          </span>
           <button disabled={pending} onClick={() => run(() => markManyPaid(ids))} className={btn("secondary", "sm")}>
             <BadgeCheck className="size-3.5" /> {tr("Mark paid")}
           </button>
@@ -179,7 +209,7 @@ export function SalesClient({
       {rows.length === 0 ? (
         <Card>
           <EmptyState icon={ShoppingBag} title={tr("No orders here")}>
-            {filtered ? tr("Try another search or date range.") : tr("Orders placed in the online shop appear here.")}</EmptyState>
+            {filtered ? tr("Try another search or date range.") : view === "missed" ? tr("Every order whose day has passed was delivered.") : tr("Orders placed in the online shop appear here.")}</EmptyState>
         </Card>
       ) : (
         <>
@@ -208,6 +238,7 @@ export function SalesClient({
                       {r.status === "confirmed" && r.invoiceStatus === "proforma" && <Badge tone="amber">{tr("Proforma")}</Badge>}
                       {r.status === "confirmed" && <Badge tone={FULFILMENT[r.fulfilment].tone}>{<Tx>{FULFILMENT[r.fulfilment].label}</Tx>}</Badge>}
                       {r.delivery && <Badge tone={DELIVERY[r.delivery].tone}>{<Tx>{DELIVERY[r.delivery].label}</Tx>}</Badge>}
+                      {missedBadge(r)}
                       {r.waiting > 0 && r.status !== "cancelled" && <Badge tone="red">{tr("{n} waiting for stock", { n: r.waiting })}</Badge>}
                     </span>
                   </Link>
@@ -247,7 +278,10 @@ export function SalesClient({
                       </p>
                       {r.waiting > 0 && r.status !== "cancelled" && <Badge tone="red" className="mt-1">{tr("{n} waiting for stock", { n: r.waiting })}</Badge>}
                     </td>
-                    <td className={cx("px-2 py-2.5", r.deliveryDate === today && "font-semibold")}>{<Tx>{prettyDate(r.deliveryDate, { weekday: "short", day: "numeric", month: "short" })}</Tx>}</td>
+                    <td className={cx("px-2 py-2.5", r.deliveryDate === today && "font-semibold", r.missed && "text-red-700")}>
+                      {<Tx>{prettyDate(r.deliveryDate, { weekday: "short", day: "numeric", month: "short" })}</Tx>}
+                      {r.missed && <p className="mt-0.5">{missedBadge(r)}</p>}
+                    </td>
                     <td className="px-2 py-2.5">
                       <Badge tone={SALES_STATUS[r.status].tone}>{<Tx>{SALES_STATUS[r.status].label}</Tx>}</Badge>
                     </td>

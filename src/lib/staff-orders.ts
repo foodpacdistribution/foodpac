@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import type { DB } from "./db";
 import { customers, orders, type PaymentMethod, products, routeStops, salesOrderItems, salesOrderNo, salesOrders } from "./db/schema";
 import { shiftDate } from "./dates";
@@ -107,7 +107,8 @@ export function editBlocker(so: Pick<typeof salesOrders.$inferSelect, "status" |
   if (so.status === "cancelled") return "This order is cancelled.";
   if (so.paymentMethod === "card") return "Card orders can't be changed after payment. Cancel it and enter a new order instead.";
   if (so.invoiceStatus === "final") return "The invoice is final, so this order can't be changed. Reopen it as a proforma first.";
-  if (so.fulfilment === "loaded") return "This order is already loaded on the van.";
+  // A failed drop came back on the van, so it can be changed and sent again.
+  if (so.fulfilment === "loaded" && deliveryStatus !== "failed") return "This order is already loaded on the van.";
   if (deliveryStatus === "dispatched" || deliveryStatus === "delivered") return "This order is already out for delivery or delivered.";
   return null;
 }
@@ -185,6 +186,8 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
         windowEndMin: input.windowEndMin,
         notes: input.notes,
         ...(dateChanged && so.paymentMethod === "invoice" && customer ? { dueDate: shiftDate(input.deliveryDate, dueIn[customer.paymentTerms]) } : {}),
+        // Off the van again (new day, or a failed drop being sent again): back to packed in the warehouse.
+        ...(so.fulfilment === "loaded" && (dateChanged || delivery?.status === "failed") ? { fulfilment: "packed" as const } : {}),
         // Paid entirely with store credit and now costs more: the difference is still to pay.
         ...(so.creditAppliedCents > 0 && so.creditAppliedCents >= so.totalCents && totals.totalCents > so.creditAppliedCents ? { paymentStatus: "unpaid" as const, paidAt: null } : {}),
       })
@@ -218,4 +221,105 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
     return { filled, regeocode, previousDate: so.deliveryDate };
   });
   return { ...result, deliveryOrderId: delivery?.id ?? null };
+}
+
+/** How far back a missed delivery day still counts as something to sort out. */
+export const MISSED_LOOKBACK_DAYS = 60;
+
+/**
+ * Confirmed orders whose delivery day has passed without being delivered: never planned, never
+ * sent, or the drop failed. Without this they drop off the open list two days later, unnoticed.
+ */
+export function missedDelivery(today: string) {
+  return and(
+    eq(salesOrders.status, "confirmed"),
+    lt(salesOrders.deliveryDate, today),
+    gte(salesOrders.deliveryDate, shiftDate(today, -MISSED_LOOKBACK_DAYS)),
+    sql`not exists (select 1 from ${orders} d where d.id = ${salesOrders.deliveryOrderId} and d.status = 'delivered')`,
+  );
+}
+
+/**
+ * A delivery moved to another day takes its shop order along: same day, an invoice due date
+ * counted from the new day (unless the invoice is already final), and goods that were on the van
+ * are back in the warehouse as packed.
+ */
+export async function followDeliveryDate(db: DB, deliveryOrderId: string, date: string) {
+  const [so] = await db.select().from(salesOrders).where(eq(salesOrders.deliveryOrderId, deliveryOrderId)).limit(1);
+  if (!so || so.deliveryDate === date) return;
+  const [customer] = await db.select({ paymentTerms: customers.paymentTerms }).from(customers).where(eq(customers.id, so.customerId)).limit(1);
+  await db
+    .update(salesOrders)
+    .set({
+      deliveryDate: date,
+      ...(so.paymentMethod === "invoice" && so.invoiceStatus !== "final" && customer ? { dueDate: shiftDate(date, dueIn[customer.paymentTerms]) } : {}),
+      ...(so.fulfilment === "loaded" ? { fulfilment: "packed" as const } : {}),
+    })
+    .where(eq(salesOrders.id, so.id));
+}
+
+/**
+ * Moves shop orders to another delivery day, with their delivery: off any route that hasn't been
+ * driven, back in the planner's queue. Delivered orders, and ones on a van out today, stay put.
+ * Returns how many moved, why the others didn't, and new deliveries that still need locating.
+ */
+export async function moveSalesToDay(db: DB, ids: string[], date: string, today: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) throw new UserError("Choose a delivery date.");
+  if (date < today) throw new UserError("The delivery date can't be in the past.");
+  const rows = await db
+    .select({ so: salesOrders, delivery: orders, customer: customers })
+    .from(salesOrders)
+    .innerJoin(customers, eq(customers.id, salesOrders.customerId))
+    .leftJoin(orders, eq(orders.id, salesOrders.deliveryOrderId))
+    .where(inArray(salesOrders.id, ids.slice(0, 500)));
+  let moved = 0;
+  const skipped: string[] = [];
+  const created: string[] = [];
+  for (const { so, delivery, customer } of rows) {
+    if (so.status !== "confirmed") {
+      skipped.push(so.number);
+      continue;
+    }
+    if (delivery?.status === "delivered") {
+      skipped.push(so.number);
+      continue;
+    }
+    // On a van that's out today: the driver still has it.
+    if (delivery?.status === "dispatched" && delivery.deliveryDate >= today) {
+      skipped.push(so.number);
+      continue;
+    }
+    if (delivery && delivery.deliveryDate !== date) {
+      const [clash] = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(and(eq(orders.orderNumber, delivery.orderNumber), eq(orders.deliveryDate, date), ne(orders.id, delivery.id)))
+        .limit(1);
+      if (clash) {
+        skipped.push(so.number);
+        continue;
+      }
+    }
+    await db.transaction(async (t) => {
+      const tx = t as unknown as DB;
+      if (delivery) {
+        await tx.delete(routeStops).where(and(eq(routeStops.orderId, delivery.id), eq(routeStops.status, "pending")));
+        await tx.update(orders).set({ deliveryDate: date, status: "pending", driverId: null, updatedAt: new Date() }).where(eq(orders.id, delivery.id));
+        await followDeliveryDate(tx, delivery.id, date);
+      } else {
+        await tx
+          .update(salesOrders)
+          .set({
+            deliveryDate: date,
+            ...(so.paymentMethod === "invoice" && so.invoiceStatus !== "final" ? { dueDate: shiftDate(date, dueIn[customer.paymentTerms]) } : {}),
+            ...(so.fulfilment === "loaded" ? { fulfilment: "packed" as const } : {}),
+          })
+          .where(eq(salesOrders.id, so.id));
+        const id = await createDeliveryOrder(tx, { ...so, deliveryDate: date }, customer);
+        if (id) created.push(id);
+      }
+    });
+    moved++;
+  }
+  return { moved, skipped, created, previousDates: [...new Set(rows.map((r) => r.so.deliveryDate))] };
 }

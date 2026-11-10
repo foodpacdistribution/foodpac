@@ -227,6 +227,35 @@ export async function recentlyBought(db: DB, customer: Customer, limit = 8) {
   return ids.map((id) => priced.find((p) => p.id === id)).filter((x): x is CatalogItem => !!x);
 }
 
+/**
+ * The customer's usual products for the order sheet: what they've ordered most often first, each
+ * with the quantity on their latest order of it.
+ */
+export async function usualItems(db: DB, customer: Customer, limit = 40) {
+  const rows = await db
+    .select({
+      productId: salesOrderItems.productId,
+      orders: sql<number>`count(distinct ${salesOrders.id})::int`,
+      lastQty: sql<number>`(array_agg(${salesOrderItems.qty} order by ${salesOrders.createdAt} desc))[1]`,
+    })
+    .from(salesOrderItems)
+    .innerJoin(salesOrders, eq(salesOrders.id, salesOrderItems.salesOrderId))
+    .where(and(eq(salesOrders.customerId, customer.id), ne(salesOrders.status, "cancelled"), sql`${salesOrderItems.productId} is not null`))
+    .groupBy(salesOrderItems.productId)
+    .orderBy(desc(sql`count(distinct ${salesOrders.id})`), desc(sql`max(${salesOrders.createdAt})`))
+    .limit(limit);
+  if (!rows.length) return [];
+  const items = await db
+    .select(catalogColumns)
+    .from(products)
+    .where(and(eq(products.active, true), inArray(products.id, rows.map((r) => r.productId!))));
+  const priced = await withPrices(db, items, customer);
+  return rows.flatMap((r) => {
+    const p = priced.find((x) => x.id === r.productId);
+    return p ? [{ ...p, lastQty: r.lastQty, timesOrdered: r.orders }] : [];
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Cart
 // ---------------------------------------------------------------------------

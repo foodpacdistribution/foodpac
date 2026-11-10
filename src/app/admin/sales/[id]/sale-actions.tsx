@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { applyOrderCredit, cancelSale, confirmSale, deleteSales, markPaid, setFulfilment } from "@/app/actions/sales";
+import { applyOrderCredit, cancelSale, confirmSale, deleteSales, markPaid, moveSalesDay, setFulfilment } from "@/app/actions/sales";
 import { Toast, type ToastMessage } from "@/components/client-ui";
 import { btn, cx, inputCls } from "@/components/ui";
 import type { FulfilmentStatus, PaymentMethod, PaymentStatus, SalesStatus } from "@/lib/db/schema";
@@ -29,6 +29,33 @@ export function ApplyCredit({ id, maxCents }: { id: string; maxCents: number }) 
         }
       >
         {tr("Use store credit")}
+      </button>
+      <Toast toast={toast} onDone={() => setToast(null)} />
+    </div>
+  );
+}
+
+/** For an order that missed its day: the next delivery day in one click, or a chosen date. */
+export function MoveDay({ id, today }: { id: string; today: string }) {
+  const tr = useT();
+  const [date, setDate] = useState("");
+  const [pending, start] = useTransition();
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const move = (to: string) =>
+    start(async () => {
+      const r = await moveSalesDay([id], to);
+      setToast({ id: Date.now(), text: r.ok ? (r.message ?? "Done") : r.error, tone: r.ok ? "ok" : "warn" });
+    });
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <button disabled={pending} onClick={() => move("next")} className={btn("primary", "sm")}>
+        {tr("Next delivery day")}
+      </button>
+      <span className="w-36 shrink-0">
+        <input type="date" aria-label={tr("Move to day")} min={today} value={date} onChange={(e) => setDate(e.target.value)} className={cx(inputCls, "h-8 py-0 text-xs")} />
+      </span>
+      <button disabled={pending || !date} onClick={() => move(date)} className={btn("secondary", "sm")}>
+        {tr("Move")}
       </button>
       <Toast toast={toast} onDone={() => setToast(null)} />
     </div>

@@ -10,6 +10,7 @@ import { depots, orders, routeStops, salesOrders } from "@/lib/db/schema";
 import { geocodeAddress } from "@/lib/geo/geocode";
 import { getT } from "@/lib/i18n/server";
 import { pruneEmptyRoutes } from "@/lib/shipments";
+import { followDeliveryDate } from "@/lib/staff-orders";
 import { UserError } from "@/lib/planning";
 import { geocodeQuery, type ImportRow, validateImportRow } from "@/lib/orders";
 import { inputToMinutes } from "@/lib/time";
@@ -103,6 +104,7 @@ export async function saveOrder(_prev: unknown, form: FormData) {
           ...(dateChanged || existing.status === "failed" ? { status: "pending" as const, driverId: null } : {}),
         })
         .where(eq(orders.id, id));
+      if (dateChanged) await followDeliveryDate(db, id, deliveryDate);
       if (!addressChanged) orderId = null; // no need to geocode
     } else {
       const [row] = await db.insert(orders).values(values).returning({ id: orders.id });
@@ -220,6 +222,8 @@ export async function rescheduleOrders(ids: string[], date: string) {
         .update(orders)
         .set({ deliveryDate: date, status: "pending", driverId: null, updatedAt: new Date() })
         .where(eq(orders.id, o.id));
+      // A shop order's own delivery day moves with it, or the two disagree.
+      await followDeliveryDate(db, o.id, date);
       moved++;
     }
     revalidateAll();

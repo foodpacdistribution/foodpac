@@ -26,8 +26,10 @@ export default async function HomePage() {
   const viewer = await getCurrentCustomer();
   const customer = viewer?.customer ?? null;
   const db = await getDb();
-  const [featured, counts, recent, [depot], photos, settings, uploaded] = await Promise.all([
+  const [featured, others, counts, recent, [depot], photos, settings, uploaded] = await Promise.all([
     listCatalog(db, customer, { featured: true, limit: 8 }),
+    // To top up the shelf when fewer than 8 are featured (loaded alongside, not after).
+    listCatalog(db, customer, { limit: 16 }),
     categoryCounts(db),
     customer ? recentlyBought(db, customer, 4) : Promise.resolve([]),
     getDepots(db),
@@ -40,7 +42,9 @@ export default async function HomePage() {
   // there (and always show when nothing uploaded is live, so the top of the page is never empty).
   const builtIn = uploaded.length === 0 || settings.builtInPosters;
   const site = siteInfo(settings);
-  const popular = featured.length ? featured : await listCatalog(db, customer, { limit: 8 });
+  // Featured first, topped up with the rest of the range, in whole rows of 4 so the shelf has no gaps.
+  const shelf = [...featured, ...others.filter((o) => !featured.some((f) => f.id === o.id))].slice(0, 8);
+  const popular = shelf.length > 4 ? shelf.slice(0, Math.floor(shelf.length / 4) * 4) : shelf;
   const total = counts.reduce((t, c) => t + c.n, 0);
   const ranges = stockedCategories(counts);
   // A small number ("1 product") reads as an empty shop; the count only shows once it says something.

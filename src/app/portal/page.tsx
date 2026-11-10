@@ -11,10 +11,11 @@ import { prettyDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
-import { recentlyBought } from "@/lib/shop";
+import { canSeePrices, recentlyBought } from "@/lib/shop";
 import { formatMinutesClock, todayIn } from "@/lib/time";
 import { StageSteps } from "./stage";
 import { listSalesOrders } from "./orders/data";
+import { RepeatOrder } from "./repeat-order";
 import { SalesOrderList } from "./orders/list";
 import { T, Tx } from "@/components/i18n";
 
@@ -152,6 +153,18 @@ export default async function PortalOverview() {
                 )}
               </Link>
             </section>
+          )}
+
+          {live[0] && canSeePrices(c) && (
+            <RepeatOrder
+              order={{
+                id: live[0].id,
+                number: live[0].number,
+                date: prettyDate(todayIn(s.timezone, live[0].createdAt), { weekday: "short", day: "numeric", month: "short" }),
+                products: live[0].lines,
+                totalCents: live[0].totalCents,
+              }}
+            />
           )}
 
           {again.length > 0 && (

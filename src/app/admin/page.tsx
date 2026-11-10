@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, gt, lte, ne, or, sql } from "drizzle-orm";
-import { Boxes, CheckCircle2, Circle, Clock, Map as MapIcon, Package, PackageCheck, PackageX, Radio, ShoppingBag, Truck, Upload } from "lucide-react";
+import { and, asc, desc, eq, gt, gte, lte, ne, or, sql } from "drizzle-orm";
+import { Boxes, CheckCircle2, Circle, Clock, Map as MapIcon, Package, PackageCheck, PackageX, Radio, ShoppingBag, TriangleAlert, Truck, Upload } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { DeliveryMap, type MapStop } from "@/components/map";
@@ -22,6 +22,7 @@ import { T, Tx } from "@/components/i18n";
 import { intlLocale } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
 import { needsAttention } from "@/lib/orders";
+import { missedDelivery } from "@/lib/staff-orders";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -33,16 +34,19 @@ export default async function DashboardPage() {
   const today = todayIn(s.timezone);
   const nowS = nowSecondsIn(s.timezone);
   await restoreDeliveries(db, s.timezone);
-  const [view, dayOrders, depotList, newSales, upcoming] = await Promise.all([
+  // Everything that doesn't need the plan goes in one batch: each extra round trip to the
+  // database is felt on every visit.
+  const [view, dayOrders, depotList, newSales, upcoming, events, low, missed] = await Promise.all([
     getPlanView(db, today),
     db.select().from(orders).where(and(eq(orders.deliveryDate, today), ne(orders.source, "quick_route"))),
     getDepots(db),
-    // Shop orders waiting on the office (same rule as the sidebar badge), newest first.
+    // Shop orders waiting on the office, newest first (the sidebar badge also counts missed days).
     db
       .select({ id: salesOrders.id, number: salesOrders.number, status: salesOrders.status, deliveryDate: salesOrders.deliveryDate, totalCents: salesOrders.totalCents, customer: customers.name })
       .from(salesOrders)
       .innerJoin(customers, eq(customers.id, salesOrders.customerId))
-      .where(or(eq(salesOrders.status, "pending"), and(eq(salesOrders.status, "confirmed"), eq(salesOrders.fulfilment, "new"))))
+      // Confirmed ones whose day has passed are under "Missed delivery day" instead.
+      .where(or(eq(salesOrders.status, "pending"), and(eq(salesOrders.status, "confirmed"), eq(salesOrders.fulfilment, "new"), gte(salesOrders.deliveryDate, today))))
       .orderBy(desc(salesOrders.createdAt))
       .limit(6),
     // The next delivery days after today, and how much of each still needs a shipment.
@@ -53,9 +57,6 @@ export default async function DashboardPage() {
       .groupBy(orders.deliveryDate)
       .orderBy(asc(orders.deliveryDate))
       .limit(5),
-  ]);
-  const [live, events, low] = await Promise.all([
-    liveFleet(db, view.routes.filter((r) => r.status !== "planned")),
     db
       .select({ e: deliveryEvents, orderNumber: orders.orderNumber, customer: orders.customerName, driver: drivers.name, color: drivers.color })
       .from(deliveryEvents)
@@ -71,10 +72,20 @@ export default async function DashboardPage() {
       .where(and(eq(products.active, true), lte(products.stock, LOW_STOCK)))
       .orderBy(asc(products.stock), asc(products.name))
       .limit(6),
+    // Confirmed orders whose day passed without a delivery, oldest first.
+    db
+      .select({ id: salesOrders.id, number: salesOrders.number, deliveryDate: salesOrders.deliveryDate, customer: customers.name, total: sql<number>`count(*) over ()::int` })
+      .from(salesOrders)
+      .innerJoin(customers, eq(customers.id, salesOrders.customerId))
+      .where(missedDelivery(today))
+      .orderBy(asc(salesOrders.deliveryDate), asc(salesOrders.number))
+      .limit(5),
   ]);
-
   // How many units customers are waiting for, per running-low product.
-  const waitingRows = low.length ? await listWaiting(db, low.map((p) => p.id)) : [];
+  const [live, waitingRows] = await Promise.all([
+    liveFleet(db, view.routes.filter((r) => r.status !== "planned")),
+    low.length ? listWaiting(db, low.map((p) => p.id)) : Promise.resolve([]),
+  ]);
   const waitingFor = (id: string) => waitingRows.filter((w) => w.productId === id).reduce((n, w) => n + w.qty, 0);
   const plan = view.plan;
   const dispatched = plan?.status === "dispatched" || view.routes.some((r) => r.dispatchedAt);
@@ -289,6 +300,36 @@ export default async function DashboardPage() {
         </div>
 
         <div className="space-y-4">
+          {missed.length > 0 && (
+            <Card className="border-red-200">
+              <CardHeader
+                title={<span className="text-red-800"><T>{"Missed delivery day"}</T></span>}
+                subtitle={<T>{"Confirmed orders whose day passed without a delivery"}</T>}
+                action={
+                  <Link href="/admin/sales?view=missed" className={btn("ghost", "sm")}>
+                    <T vars={{ n: missed[0].total }}>{"Sort out {n}"}</T> →
+                  </Link>
+                }
+              />
+              <ul className="divide-y divide-line">
+                {missed.map((o) => (
+                  <li key={o.id}>
+                    <Link href={`/admin/sales/${o.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50/50">
+                      <TriangleAlert className="size-4 shrink-0 text-red-500" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-slate-900">
+                          {o.number} · {o.customer}
+                        </span>
+                        <span className="block text-xs text-red-700">
+                          <T>{"Was due"}</T>{" "}<Tx>{prettyDate(o.deliveryDate, { weekday: "short", day: "numeric", month: "short" })}</Tx>
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
           {(newSales.length > 0 || upcoming.length > 0) && (
             <Card>
               <CardHeader title={<T>{"Coming up"}</T>} subtitle={<T>{"New shop orders and the next delivery days"}</T>} />

@@ -7,12 +7,13 @@ import { restoreDeliveries } from "@/lib/deliveries";
 import { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { deliveryStatuses } from "@/lib/portal";
+import { missedDelivery } from "@/lib/staff-orders";
 import { todayIn } from "@/lib/time";
 import { SalesClient } from "./sales-client";
 
 export const metadata: Metadata = { title: "Sales Orders" };
 
-const VIEWS = ["open", "invoice", "unpaid", "all", "cancelled"] as const;
+const VIEWS = ["open", "missed", "invoice", "unpaid", "all", "cancelled"] as const;
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; from?: string; to?: string }> }) {
   const me = await requireUser(STAFF);
@@ -28,7 +29,9 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   const to = isDate(sp.to);
   const where = and(
     view === "open"
-      ? and(ne(salesOrders.status, "cancelled"), from ? undefined : gte(salesOrders.deliveryDate, shiftDate(today, -1)))
+      ? and(ne(salesOrders.status, "cancelled"), from ? undefined : or(gte(salesOrders.deliveryDate, shiftDate(today, -1)), missedDelivery(today)))
+      : view === "missed"
+        ? missedDelivery(today)
       : view === "invoice"
         ? // Confirmed orders whose invoice is still a proforma, waiting to be finalised.
           and(eq(salesOrders.status, "confirmed"), eq(salesOrders.invoiceStatus, "proforma"))
@@ -51,15 +54,17 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
       customer: customers.name,
       items: sql<number>`(select coalesce(sum(soi.qty), 0)::int from ${salesOrderItems} soi where soi.sales_order_id = ${salesOrders}.id)`,
       waiting: sql<number>`(select coalesce(sum(soi.backorder_qty), 0)::int from ${salesOrderItems} soi where soi.sales_order_id = ${salesOrders}.id)`,
+      missed: sql<boolean>`coalesce(${missedDelivery(today)}, false)`,
     })
     .from(salesOrders)
     .innerJoin(customers, eq(customers.id, salesOrders.customerId))
     .where(where)
-    .orderBy(view === "open" || view === "invoice" ? sql`${salesOrders.deliveryDate} asc, ${salesOrders.createdAt} asc` : desc(salesOrders.createdAt))
+    .orderBy(view === "open" || view === "missed" || view === "invoice" ? sql`${salesOrders.deliveryDate} asc, ${salesOrders.createdAt} asc` : desc(salesOrders.createdAt))
     .limit(300);
-  const [delivery, [{ todaySales }]] = await Promise.all([
+  const [delivery, [{ todaySales }], [{ missedCount }]] = await Promise.all([
     deliveryStatuses(db, rows.map((r) => r.so.deliveryOrderId).filter((x): x is string => !!x)),
     todaySalesQuery,
+    db.select({ missedCount: sql<number>`count(*)::int` }).from(salesOrders).where(missedDelivery(today)),
   ]);
   const unpaidIds = rows.filter((r) => r.so.paymentStatus === "unpaid" && r.so.status !== "cancelled").map((r) => r.so.id);
 
@@ -71,7 +76,8 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
       today={today}
       todaySalesCents={todaySales}
       unpaidCount={unpaidIds.length}
-      rows={rows.map(({ so, customer, items, waiting }) => ({
+      missedCount={missedCount}
+      rows={rows.map(({ so, customer, items, waiting, missed }) => ({
         id: so.id,
         number: so.number,
         customer,
@@ -86,6 +92,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         dueDate: so.dueDate,
         invoiceStatus: so.invoiceStatus,
         waiting,
+        missed,
       }))}
     />
   );

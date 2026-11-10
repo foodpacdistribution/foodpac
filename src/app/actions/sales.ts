@@ -13,11 +13,12 @@ import { orderConfirmed, sendInvoice } from "@/lib/notify";
 import { type FulfilmentStatus, orders, type PaymentMethod, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { aud, parseDollars } from "@/lib/money";
 import { linkQuoteToOrder, quoteForOrder } from "@/lib/quotes";
-import { createStaffOrder, updateStaffOrder } from "@/lib/staff-orders";
+import { createStaffOrder, moveSalesToDay, updateStaffOrder } from "@/lib/staff-orders";
 import { inputToMinutes, todayIn } from "@/lib/time";
+import { prettyDate } from "@/lib/dates";
 import { refundOrExpire } from "@/lib/payments";
 import { getSettings, UserError } from "@/lib/planning";
-import { cancelOrder, confirmOrder } from "@/lib/shop";
+import { cancelOrder, confirmOrder, deliveryDates } from "@/lib/shop";
 import { pruneEmptyRoutes } from "@/lib/shipments";
 import { fillWaiting, returnStock } from "@/lib/stock-allocation";
 import type { DB } from "@/lib/db";
@@ -156,6 +157,29 @@ export async function setFulfilment(ids: string[], status: FulfilmentStatus) {
       .returning({ id: salesOrders.id });
     revalidate(ids.length === 1 ? ids[0] : undefined);
     return { message: `${rows.length} order${rows.length === 1 ? "" : "s"} updated` };
+  });
+}
+
+/**
+ * Moves orders to another delivery day ("next" = the next delivery day after today's cut-off),
+ * delivery and all. For orders whose day passed without a delivery, or a drop that failed.
+ */
+export async function moveSalesDay(ids: string[], date: string) {
+  return attempt(async () => {
+    await assertUser(STAFF);
+    const db = await getDb();
+    const s = await getSettings(db);
+    const today = todayIn(s.timezone);
+    const day = date === "next" ? deliveryDates(s, 1)[0] : date;
+    if (!day) throw new UserError("No delivery days are set up. Choose them in Settings → Online shop.");
+    const r = await moveSalesToDay(db, ids, day, today);
+    if (r.created.length) after(async () => geocodeOrderIds(await getDb(), r.created));
+    await pruneEmptyRoutes(db, r.previousDates);
+    revalidate(ids.length === 1 ? ids[0] : undefined);
+    revalidatePath("/admin/planner");
+    if (!r.moved) throw new UserError(r.skipped.length ? "These orders can't be moved: they're delivered, cancelled, on a van out today or already on that day." : "Order not found.");
+    const to = prettyDate(day, { weekday: "short", day: "numeric", month: "short" });
+    return { message: r.skipped.length ? `Moved ${r.moved} order(s) to ${to} · not moved: ${r.skipped.join(", ")}` : `Moved ${r.moved} order(s) to ${to}`, data: { day } };
   });
 }
 

@@ -16,6 +16,7 @@ import { DeliveryPromiseText, FreeDeliveryText } from "../../delivery-promise";
 import { BuyBar } from "./buy-bar";
 import { FavouriteButton } from "../../favourite-button";
 import { Price, ProductCard, ProductImage, StockLabel } from "../../shop-ui";
+import { cx } from "@/components/ui";
 import { T, Tx } from "@/components/i18n";
 import { getT, languageAlternates } from "@/lib/i18n/server";
 
@@ -62,7 +63,7 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
         <ArrowLeft className="size-4" /> <T>{p.category}</T>
       </Link>
       <div className="mt-4 grid gap-8 lg:grid-cols-2">
-        <ProductImage p={p} morph priority sizes="(min-width: 1024px) 560px, 100vw" className="aspect-square rounded-lg border border-leaf-950/12" />
+        <ProductImage p={p} morph priority sizes="(min-width: 1024px) 560px, 100vw" className={cx("rounded-lg border border-leaf-950/12", p.hasImage ? "aspect-square" : "aspect-[4/3]")} />
         <div>
           <p className="font-mono text-xs text-leaf-900/50"><T>{"SKU"}</T>{" "}{p.sku}</p>
           <div className="mt-1 flex items-start justify-between gap-3">
