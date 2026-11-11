@@ -3,7 +3,7 @@
 import { AdvancedMarker, AdvancedMarkerAnchorPoint, APIProvider, InfoWindow, Map, useMap } from "@vis.gl/react-google-maps";
 import { useEffect, useMemo, useState } from "react";
 import { clusterPoints, type CustomerPin, samePlace } from "@/lib/customer-map";
-import { bubbleHtml, CustomerPopup, DEFAULT_CENTER, dotHtml } from "./customer-map-parts";
+import { bubbleHtml, CustomerPopup, DEFAULT_CENTER, NAMES_FROM_ZOOM, PIN, pinHtml } from "./customer-map-parts";
 import type { CustomerMapProps } from "./types";
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
@@ -49,8 +49,15 @@ function Clusters({ pins, onSelect }: { pins: CustomerPin[]; onSelect: (s: Selec
     if (n === 1) {
       const p = c.points[0];
       return (
-        <AdvancedMarker key={c.key} position={{ lat: p.lat, lng: p.lng }} anchorPoint={AdvancedMarkerAnchorPoint.CENTER} title={p.name} onClick={() => onSelect({ lat: p.lat, lng: p.lng, pins: c.points, offset: 10 })}>
-          <div dangerouslySetInnerHTML={{ __html: dotHtml(p) }} />
+        <AdvancedMarker
+          key={c.key}
+          position={{ lat: p.lat, lng: p.lng }}
+          // Default anchor: the bottom centre, which is the pin's tip.
+          zIndex={1000}
+          title={p.name}
+          onClick={() => onSelect({ lat: p.lat, lng: p.lng, pins: c.points, offset: PIN.height })}
+        >
+          <div dangerouslySetInnerHTML={{ __html: pinHtml(p, zoom >= NAMES_FROM_ZOOM) }} />
         </AdvancedMarker>
       );
     }

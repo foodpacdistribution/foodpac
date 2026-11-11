@@ -242,7 +242,7 @@ export function CustomerMapClient({ customers }: { customers: MapCustomer[] }) {
                 </span>
               ))}
               <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full border-2 border-slate-400 bg-white" />
+                <span className="grid size-3.5 place-items-center rounded-full bg-amber-500 text-[8px] font-extrabold text-white">?</span>
                 {tr("Placed roughly")}
               </span>
               <span className="flex items-center gap-1.5">

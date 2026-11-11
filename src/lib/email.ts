@@ -1,6 +1,6 @@
 import "server-only";
 import { SITE, type SiteInfo } from "@/app/(site)/site-info";
-import { siteUrl } from "./site-url";
+import { emailSiteUrl } from "./site-url";
 
 // Email through Resend (https://resend.com). Set RESEND_API_KEY to turn it on; without it
 // nothing is sent and the app works as before. Mail comes from our own domain, which is verified
@@ -134,7 +134,7 @@ const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial
  * `preview` is the line inboxes show next to the subject.
  */
 export function layout(opts: { preview?: string; heading: string; body: string; button?: { label: string; url: string }; footer?: string; site?: SiteInfo }) {
-  const base = siteUrl();
+  const base = emailSiteUrl();
   const site = opts.site ?? SITE;
   const button = opts.button
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 4px"><tr><td style="border-radius:999px;background:${C.orange}">

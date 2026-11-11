@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { clusterPoints, type CustomerPin, samePlace } from "@/lib/customer-map";
-import { bubbleHtml, CustomerPopup, DEFAULT_CENTER, dotHtml } from "./customer-map-parts";
+import { bubbleHtml, CustomerPopup, DEFAULT_CENTER, NAMES_FROM_ZOOM, PIN, pinHtml } from "./customer-map-parts";
 import type { CustomerMapProps } from "./types";
 
 const TILE_URL = process.env.NEXT_PUBLIC_TILE_URL ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -35,9 +35,15 @@ function Clusters({ pins }: { pins: CustomerPin[] }) {
     const n = c.points.length;
     if (n === 1) {
       const p = c.points[0];
-      const icon = L.divIcon({ className: "", html: dotHtml(p), iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -8] });
+      const icon = L.divIcon({
+        className: "",
+        html: pinHtml(p, zoom >= NAMES_FROM_ZOOM),
+        iconSize: [PIN.width, PIN.height],
+        iconAnchor: [PIN.width / 2, PIN.height],
+        popupAnchor: [0, -PIN.height],
+      });
       return (
-        <Marker key={c.key} position={[p.lat, p.lng]} icon={icon} title={p.name}>
+        <Marker key={c.key} position={[p.lat, p.lng]} icon={icon} title={p.name} zIndexOffset={1000}>
           <Popup>
             <CustomerPopup pins={c.points} />
           </Popup>

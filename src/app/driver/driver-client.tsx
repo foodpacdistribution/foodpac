@@ -1,10 +1,11 @@
 "use client";
 
-import { CheckCircle2, ChevronDown, Clock, History, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, CloudOff, Clock, History, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
 import Link from "@/components/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { logout } from "@/app/actions/auth";
-import { markDelivered, markFailed, startRoute } from "@/app/actions/driver";
+import { startRoute } from "@/app/actions/driver";
 import { Modal, Toast, type ToastMessage } from "@/components/client-ui";
 import { LanguageSwitch } from "@/components/language-switch";
 import { DeliveryMap, type MapStop } from "@/components/map";
@@ -14,6 +15,7 @@ import { multiStopNavigation, navigationUrls } from "@/lib/orders";
 import type { RouteView, StopView } from "@/lib/planning";
 import { formatClock, formatMinutesClock } from "@/lib/time";
 import { OutcomeForm } from "./outcome-form";
+import { addToOutbox, discardFromOutbox, type OutboxItem, retryFromOutbox, sendOutbox, useOutbox } from "./outbox";
 import { readSharePref, useLocationSharing, writeSharePref } from "./use-location-sharing";
 import { Tx, useLocale, useT } from "@/components/i18n";
 import { intlLocale } from "@/lib/i18n";
@@ -52,7 +54,15 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const clearToast = useCallback(() => setToast(null), []);
 
-  const stops = route?.stops ?? [];
+  // Deliveries saved on this phone and still uploading count as done here already.
+  const router = useRouter();
+  const refresh = useCallback(() => router.refresh(), [router]);
+  const outbox = useOutbox(refresh);
+  const queued = useMemo(() => new Map(outbox.items.map((i) => [i.stopId, i])), [outbox.items]);
+  const stops = (route?.stops ?? []).map((s) => {
+    const q = s.status === "pending" ? queued.get(s.id) : undefined;
+    return q ? { ...s, status: q.kind } : s;
+  });
   const pendingStops = stops.filter((s) => s.status === "pending");
   const completedStops = stops.filter((s) => s.status !== "pending");
   const [cleared, setCleared] = useClearedStops(date);
@@ -63,6 +73,8 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
   const current: StopView | undefined = pendingStops.find((s) => s.id === selectedId) ?? pendingStops[0];
   const openSheet = (kind: "delivered" | "failed") =>
     current && setSheet({ kind, stopId: current.id, name: current.order.customerName || current.order.orderNumber, reference: current.order.orderNumber });
+  const save = (kind: "delivered" | "failed", stop: { stopId: string; name: string }) => (fd: FormData) =>
+    addToOutbox(fd, { stopId: stop.stopId, kind, name: stop.name });
   const finishSheet = (t: Omit<ToastMessage, "id">) => {
     setSheet(null);
     setSelectedId(null);
@@ -172,6 +184,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
             {tr("This shipment is for {day}. You can look it over now; deliver it on the day.", { day: tr(prettyDate(date, { weekday: "long", day: "numeric", month: "long" })) })}
           </p>
         )}
+        <OutboxBanner items={outbox.items} busy={outbox.busy} persistent={outbox.persistent} />
         {/* Progress */}
         <section className="rounded-2xl bg-white p-4 shadow-card">
           <div className="grid grid-cols-3 text-center">
@@ -435,7 +448,11 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                           <span className="block truncate text-sm text-slate-500">{s.order.customerName || s.order.orderNumber}</span>
                           <span className="block truncate text-xs text-slate-400">{s.order.address}</span>
                         </span>
-                        <Badge tone={s.status === "delivered" ? "green" : "red"}>{s.status === "delivered" ? tr("Delivered") : tr("Problem")}</Badge>
+                        {queued.has(s.id) ? (
+                          <Badge tone="amber">{tr("Waiting to upload")}</Badge>
+                        ) : (
+                          <Badge tone={s.status === "delivered" ? "green" : "red"}>{s.status === "delivered" ? tr("Delivered") : tr("Problem")}</Badge>
+                        )}
                         <button
                           onClick={() => setCleared(new Set([...cleared, s.id]))}
                           className="grid size-8 place-items-center rounded-full text-slate-300 hover:bg-slate-100 hover:text-slate-600"
@@ -468,7 +485,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
         {sheet && (
           <OutcomeForm
             kind="delivered"
-            action={markDelivered}
+            save={save("delivered", sheet)}
             fields={{ stopId: sheet.stopId }}
             reference={sheet.reference}
             requirePhoto={requirePhoto}
@@ -478,10 +495,61 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
         )}
       </Modal>
       <Modal open={sheet?.kind === "failed"} onClose={() => setSheet(null)} title={tr("Report a delivery problem")}>
-        {sheet && <OutcomeForm kind="failed" action={markFailed} fields={{ stopId: sheet.stopId }} onDone={() => finishSheet({ tone: "warn", text: `Problem reported · ${sheet.name}` })} />}
+        {sheet && <OutcomeForm kind="failed" save={save("failed", sheet)} fields={{ stopId: sheet.stopId }} onDone={() => finishSheet({ tone: "warn", text: `Problem reported · ${sheet.name}` })} />}
       </Modal>
       <Toast toast={toast} onDone={clearToast} />
     </div>
+  );
+}
+
+/**
+ * Deliveries kept on this phone because they haven't reached the office yet (no signal when
+ * they were done). They upload by themselves; this says so, and shows any the office turned down.
+ */
+function OutboxBanner({ items, busy, persistent }: { items: OutboxItem[]; busy: boolean; persistent: boolean }) {
+  const tr = useT();
+  if (!items.length) return null;
+  const waiting = items.filter((i) => !i.rejected);
+  const rejected = items.filter((i) => i.rejected);
+  return (
+    <section className="space-y-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 shadow-card ring-1 ring-amber-200">
+      {waiting.length > 0 && (
+        <div className="flex items-start gap-3">
+          {busy ? <Spinner className="mt-0.5 size-5 shrink-0" /> : <CloudOff className="mt-0.5 size-5 shrink-0 text-amber-600" />}
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">
+              {waiting.length === 1 ? tr("1 delivery saved on this phone, not uploaded yet") : tr("{n} deliveries saved on this phone, not uploaded yet", { n: waiting.length })}
+            </p>
+            <p className="mt-0.5 text-xs text-amber-800">
+              {tr("Signatures and photos are kept. They upload by themselves when there's signal, so carry on with your next stop.")}
+            </p>
+            {!persistent && <p className="mt-1 text-xs font-semibold text-red-700">{tr("Keep this page open until they're uploaded.")}</p>}
+          </div>
+          <button type="button" onClick={() => void sendOutbox()} disabled={busy} className={btn("secondary", "sm", "shrink-0")}>
+            {tr("Send now")}
+          </button>
+        </div>
+      )}
+      {rejected.map((i) => (
+        <div key={i.id} className="rounded-xl bg-white p-3 ring-1 ring-red-200">
+          <p className="font-semibold text-red-700">{tr("Not accepted: {name}", { name: i.name })}</p>
+          {i.error && <p className="mt-0.5 text-xs text-slate-600">{tr(i.error)}</p>}
+          <p className="mt-0.5 text-xs text-slate-500">{tr("Call the office. The signature and photo are still saved on this phone.")}</p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" onClick={() => void retryFromOutbox(i.id)} className={btn("secondary", "sm")}>
+              {tr("Try again")}
+            </button>
+            <button
+              type="button"
+              onClick={() => confirm(tr("Remove this delivery from the phone? Its signature and photo will be lost.")) && void discardFromOutbox(i.id)}
+              className={btn("ghost", "sm", "text-red-600")}
+            >
+              {tr("Remove")}
+            </button>
+          </div>
+        </div>
+      ))}
+    </section>
   );
 }
 

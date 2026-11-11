@@ -22,7 +22,7 @@ export type CustomerPin = {
 
 /** Pin colour for each sales stage (the pipeline's dots, as hex for the map). */
 export const STAGE_COLOR: Record<SalesStage, string> = {
-  new: "#94a3b8",
+  new: "#64748b",
   interested: "#3b82f6",
   negotiating: "#f59e0b",
   won: "#10b981",
@@ -120,8 +120,8 @@ export function samePlace(points: { lat: number; lng: number }[]) {
 
 /** Bubble diameter and colour: bigger and darker as the count grows. */
 export function bubbleStyle(n: number) {
-  if (n < 10) return { size: 34, color: "#60a5fa" };
-  if (n < 50) return { size: 40, color: "#3b82f6" };
-  if (n < 200) return { size: 48, color: "#2563eb" };
-  return { size: 56, color: "#1d4ed8" };
+  if (n < 10) return { size: 38, color: "#3b82f6" };
+  if (n < 50) return { size: 44, color: "#2563eb" };
+  if (n < 200) return { size: 52, color: "#1d4ed8" };
+  return { size: 60, color: "#1e3a8a" };
 }

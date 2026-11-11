@@ -25,9 +25,11 @@ export function OutcomeForm<T>({
   requireSignature = false,
   proofRequired = false,
   reference = "",
+  save,
 }: {
   kind: "delivered" | "failed";
-  action: Action<T>;
+  /** Sends the result now (Quick route). Not used with `save`. */
+  action?: Action<T>;
   /** Hidden values identifying the stop. */
   fields: Record<string, string>;
   onDone: (data: T | undefined) => void;
@@ -36,9 +38,26 @@ export function OutcomeForm<T>({
   /** A photo or a signature must come with every delivery. */
   proofRequired?: boolean;
   reference?: string;
+  /**
+   * Keep the result on the phone instead of sending it now (it uploads by itself once there's
+   * signal). Used by the driver app, so a customer never has to sign twice.
+   */
+  save?: (form: FormData) => Promise<void>;
 }) {
   const tr = useT();
-  const [state, submit] = useActionState(action, undefined);
+  const [state, submit] = useActionState<ActionResult<T> | undefined, FormData>(
+    save
+      ? async (_prev, fd) => {
+          try {
+            await save(fd);
+            return { ok: true };
+          } catch {
+            return { ok: false, error: "Couldn't save it on this phone. Try again." };
+          }
+        }
+      : action!,
+    undefined,
+  );
   const [photo, setPhoto] = useState<File | null>(null);
   const [signature, setSignature] = useState<File | null>(null);
   const [recipient, setRecipient] = useState("");
@@ -130,7 +149,7 @@ export function OutcomeForm<T>({
       </p>
       <FormError message={state && !state.ok ? state.error : null} />
       {missing && <p className="text-center text-xs font-medium text-amber-700">{tr(missing)}</p>}
-      <SubmitButton disabled={!!missing} variant={kind === "delivered" ? "success" : "primary"} size="lg" className="w-full rounded-xl" pendingText={tr("Uploading…")}>
+      <SubmitButton disabled={!!missing} variant={kind === "delivered" ? "success" : "primary"} size="lg" className="w-full rounded-xl" pendingText={tr(save ? "Saving…" : "Uploading…")}>
         {kind === "delivered" ? tr("Confirm delivered") : tr("Report problem")}
       </SubmitButton>
     </form>

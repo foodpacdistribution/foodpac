@@ -8,7 +8,7 @@ import { accountStatement } from "./invoices";
 import { aud, PAYMENT_METHOD_LABEL } from "./money";
 import { getSettings } from "./planning";
 import { SITE, siteInfo } from "@/app/(site)/site-info";
-import { siteUrl } from "./site-url";
+import { emailSiteUrl } from "./site-url";
 import { formatMinutesClock, todayIn } from "./time";
 
 // The emails the app sends, each built from the database at the moment it goes out.
@@ -55,7 +55,7 @@ export async function orderConfirmed(salesOrderId: string, opts: { office: boole
     getSettings(db),
     customerEmail(db, so.customerId),
   ]);
-  const base = siteUrl();
+  const base = emailSiteUrl();
   const window =
     so.windowStartMin !== null || so.windowEndMin !== null ? ` · ${formatMinutesClock(so.windowStartMin)}–${formatMinutesClock(so.windowEndMin)}` : "";
   const lines =
@@ -121,7 +121,7 @@ export async function orderConfirmed(salesOrderId: string, opts: { office: boole
 export async function enquiryReceived(e: { name: string; email: string; message: string; business: string | null; phone: string | null; suburb: string | null }) {
   const office = officeEmail();
   if (!office) return;
-  const base = siteUrl();
+  const base = emailSiteUrl();
   await sendEmail({
     to: office,
     replyTo: e.email,
@@ -148,7 +148,7 @@ export async function enquiryReceived(e: { name: string; email: string; message:
 export async function accountRequested(c: { id: string; name: string; contact: string; email: string; phone: string | null; address: string | null }) {
   const office = officeEmail();
   if (!office) return;
-  const base = siteUrl();
+  const base = emailSiteUrl();
   await sendEmail({
     to: office,
     replyTo: c.email,
@@ -176,7 +176,7 @@ export async function accountApproved(customerId: string) {
   const [c] = await db.select({ name: customers.name }).from(customers).where(eq(customers.id, customerId)).limit(1);
   const to = c && (await customerEmail(db, customerId));
   if (!c || !to) return;
-  const base = siteUrl();
+  const base = emailSiteUrl();
   await sendEmail({
     to,
     subject: "Your Foodpac trade account is ready",
@@ -217,7 +217,7 @@ export async function passwordReset(to: string, name: string, link: string, logi
 /** "Forgot password" for an email with no login: says so, instead of leaving them waiting for nothing. */
 export async function passwordResetNoAccount(to: string) {
   const site = await business();
-  const base = siteUrl();
+  const base = emailSiteUrl();
   const contact = site.phone ? ` or call ${site.phone}` : "";
   await sendEmail({
     to,
@@ -261,7 +261,7 @@ export async function sendInvoice(db: DB, salesOrderId: string): Promise<{ sent:
   const statement = await accountStatement(db, so.customerId, today);
   const day = (d: Date) => new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, day: "numeric", month: "short", year: "numeric" }).format(d);
   const due = (d: string | null) => (d ? prettyDate(d, { day: "numeric", month: "short", year: "numeric" }) : "On receipt");
-  const base = siteUrl();
+  const base = emailSiteUrl();
   const link = `${base}/portal/orders/${so.id}/invoice`;
   const paid = so.paymentStatus === "paid";
   const site = siteInfo(s);

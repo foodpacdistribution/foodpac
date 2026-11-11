@@ -17,10 +17,27 @@ export function bubbleHtml(n: number) {
   };
 }
 
-/** One customer: a dot in its sales-stage colour; hollow when the position is approximate. */
-export function dotHtml(p: CustomerPin) {
+const STORE_ICON =
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"/><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"/><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"/></svg>';
+
+const escapeHtml = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+/** Size of a customer pin; its tip (bottom centre) sits on the customer's position. */
+export const PIN = { width: 38, height: 43 };
+
+/** Zoom from which each pin also shows the customer's name. */
+export const NAMES_FROM_ZOOM = 15;
+
+/**
+ * One customer: a map pin with a shop icon in its sales-stage colour, a small "?" when the
+ * position is approximate, and the customer's name beside it when zoomed in.
+ */
+export function pinHtml(p: CustomerPin, withName: boolean) {
   const c = STAGE_COLOR[p.stage];
-  return `<div class="cust-dot" style="background:${p.approximate ? "white" : c};border-color:${p.approximate ? c : "white"};opacity:${p.active ? 1 : 0.55}"></div>`;
+  const cls = `cust-pin${p.active ? "" : " is-inactive"}`;
+  const rough = p.approximate ? '<span class="cust-pin-rough">?</span>' : "";
+  const name = withName ? `<span class="cust-pin-name">${escapeHtml(p.name)}</span>` : "";
+  return `<div class="${cls}" style="--c:${c}"><span class="cust-pin-head"></span><span class="cust-pin-icon">${STORE_ICON}</span>${rough}${name}</div>`;
 }
 
 /** What opens when a customer (or a group at one address) is clicked. */
