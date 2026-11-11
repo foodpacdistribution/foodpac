@@ -56,17 +56,18 @@ async function stopsFor(db: DB, orderRows: { id: string; deliveryDate: string }[
   return byOrder;
 }
 
-/** Planned arrival pushed back by how late the van is running (from its last completed stop, or a late start). */
+/**
+ * Arrival time while the van is out. Stored arrival times are re-timed when the driver sets off
+ * and after every delivery, so they already count from where the van really is; this only keeps
+ * them from showing a time that has passed.
+ */
 async function liveEta(db: DB, s: StopRow, timeZone: string) {
   if (s.stop.status !== "pending" || s.route.status !== "in_progress") return { etaS: s.stop.etaS, stopsBefore: null as number | null };
   const all = await db.select().from(routeStops).where(eq(routeStops.routeId, s.route.id)).orderBy(asc(routeStops.seq));
   const before = all.filter((x) => x.seq < s.stop.seq);
   const stopsBefore = before.filter((x) => x.status === "pending").length;
   const lastDone = [...before].reverse().find((x) => x.completedAt);
-  let delayS = 0;
-  if (lastDone?.completedAt) delayS = nowSecondsIn(timeZone, lastDone.completedAt) - lastDone.etdS;
-  else if (s.route.startedAt) delayS = nowSecondsIn(timeZone, s.route.startedAt) - s.route.startS;
-  const etaS = Math.max(s.stop.etaS + Math.max(0, delayS), nowSecondsIn(timeZone));
+  const etaS = Math.max(s.stop.etaS, nowSecondsIn(timeZone));
   return { etaS, stopsBefore, legStartedAt: lastDone?.completedAt ?? s.route.startedAt };
 }
 

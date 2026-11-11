@@ -75,7 +75,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       actualS: actual.reduce((a, r) => a + (r.route.completedAt!.getTime() - r.route.startedAt!.getTime()) / 1000, 0),
       gpsM: rs.reduce((a, r) => a + gpsM(r.route.id), 0),
       gpsPlannedM: rs.filter((r) => fixes.has(r.route.id)).reduce((a, r) => a + r.route.distanceM, 0),
-      plannedForActualS: actual.reduce((a, r) => a + (r.route.endS - r.route.startS), 0),
+      // Arrival times follow the driver through the day, so the plan is the duration kept when they set off.
+      plannedForActualS: actual.reduce((a, r) => a + (r.route.plannedDurationS ?? r.route.endS - r.route.startS), 0),
     };
   });
 

@@ -1,9 +1,9 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, MapPinOff, PackageCheck, Printer, Send, Trash2, Truck, Undo2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, MapPinOff, PackageCheck, Printer, RefreshCcw, Send, Trash2, Truck, Undo2, X } from "lucide-react";
 import Link from "@/components/link";
 import { useMemo, useState, useTransition } from "react";
-import { createShipment, deleteShipment, recallShipment, removeFromShipment, sendShipment } from "@/app/actions/shipments";
+import { createShipment, deleteShipment, recallShipment, removeFromShipment, reoptimiseShipment, sendShipment } from "@/app/actions/shipments";
 import { Toast, type ToastMessage } from "@/components/client-ui";
 import { DateNav } from "@/components/date-nav";
 import { Badge, btn, Card, ColorDot, cx, EmptyState, inputCls, PageHeader, Spinner } from "@/components/ui";
@@ -36,6 +36,7 @@ type Shipment = {
   capacity: number | null;
   status: "planned" | "in_progress" | "completed";
   dispatchedAt: string | null;
+  matrixSource: "osrm" | "estimate" | null;
   startS: number;
   endS: number;
   distanceM: number;
@@ -309,6 +310,24 @@ function ShipmentCard({
           </div>
         ))}
       </dl>
+      {s.matrixSource === "estimate" && done < s.stops.length && (
+        <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800 ring-1 ring-red-200">
+          <p className="flex items-center gap-1.5">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            {tr("Road data didn't load, so this stop order is from straight-line distances and may not be the best.")}
+          </p>
+          <button
+            className={btn("secondary", "sm")}
+            disabled={pending}
+            onClick={() =>
+              (!s.dispatchedAt || confirm(tr("{number} is already on the driver's phone. Re-optimising may change the order of the stops left. Continue?", { number: s.number }))) &&
+              run(`reopt-${s.id}`, () => reoptimiseShipment(s.id))
+            }
+          >
+            {busy === `reopt-${s.id}` ? <Spinner className="size-3" /> : <RefreshCcw className="size-3.5" />} {" "}{tr("Re-optimise")}
+          </button>
+        </div>
+      )}
       {(late > 0 || s.overCapacity > 0 || s.overtimeS > 0) && (
         <p className="mx-4 mt-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
           <AlertTriangle className="size-3.5" />

@@ -43,6 +43,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
         capacity: r.capacity,
         status: r.status,
         dispatchedAt: r.dispatchedAt,
+        matrixSource: r.matrixSource,
         startS: r.startS,
         endS: r.endS,
         distanceM: r.distanceM,

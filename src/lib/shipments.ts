@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { DB } from "./db";
 import { drivers, orders, plans, routes, routeStops, salesOrders, vehicleLocations } from "./db/schema";
 import { type LatLng, routeGeometry, travelMatrix } from "./geo/routing";
-import { depotFor, getDepots, getSettings, learnTiming, refreshPlanSummary, UserError } from "./planning";
+import { depotFor, getDepots, getSettings, learnTiming, refreshPlanSummary, renumberCompleted, UserError } from "./planning";
 import { nowSecondsIn, todayIn } from "./time";
 import { evaluateRoute } from "./vrp/evaluate";
 import { solve } from "./vrp/solver";
@@ -41,7 +41,11 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
         .where(eq(routeStops.routeId, route.id))
         .orderBy(asc(routeStops.seq))
     : [];
-  const done = stopRows.filter((r) => r.stop.status !== "pending");
+  // In the order they were really done: a driver may take a stop out of turn, and the last one
+  // finished is where they are now.
+  const done = stopRows
+    .filter((r) => r.stop.status !== "pending")
+    .sort((a, b) => (a.stop.completedAt?.getTime() ?? 0) - (b.stop.completedAt?.getTime() ?? 0) || a.stop.seq - b.stop.seq);
   if (done.some((d) => removeOrderIds.includes(d.stop.orderId))) throw new UserError("That stop has already been completed.");
   const current = stopRows.filter((r) => r.stop.status === "pending").map((r) => r.stop.orderId);
   const wanted = [...new Set([...current.filter((id) => !removeOrderIds.includes(id)), ...addOrderIds])];
@@ -163,6 +167,9 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
         ...ev.reloads.map((r) => ({ afterSeq: done.length + r.afterIndex + 1, arrivalS: r.arrival, departureS: r.departure })),
       ],
       geometry,
+      matrixSource: matrix.source,
+      // Re-planned after setting off: the new plan is what the day is compared with.
+      ...(started ? { plannedDurationS: ev.end - route.startS } : {}),
       // New stops on a finished route put the driver back on the road.
       ...(started ? { status: "in_progress" as const, completedAt: null } : {}),
     };
@@ -173,6 +180,8 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
       .returning();
     // Delivered and failed stops are the record of what happened; only the stops still to do are replaced.
     await tx.delete(routeStops).where(and(eq(routeStops.routeId, r.id), eq(routeStops.status, "pending")));
+    // Completed stops are 1..n in the order they were done; the new ones follow from n+1 without clashing.
+    await renumberCompleted(tx, done.map((d) => ({ stopId: d.stop.id, seq: d.stop.seq })));
     await tx.insert(routeStops).values(
       ev.stops.map((st, i) => ({
         routeId: r.id,

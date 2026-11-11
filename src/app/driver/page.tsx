@@ -1,11 +1,11 @@
-import { and, asc, eq, gte, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { requireUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { plans, routes, routeStops } from "@/lib/db/schema";
+import { plans, routes, routeStops, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { depotFor, getDepots, getPlanView, getSettings } from "@/lib/planning";
 import { nowSecondsIn, todayIn } from "@/lib/time";
-import { DriverClient } from "./driver-client";
+import { DriverClient, type StopItem } from "./driver-client";
 
 export const metadata: Metadata = { title: "My deliveries" };
 
@@ -31,7 +31,26 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
   const view = await getPlanView(db, date);
   // Drivers only ever receive their own route, and only once it has been dispatched.
   const route = view.routes.find((r) => r.driverId === user.driverId && r.dispatchedAt) ?? null;
-  const depot = depotFor(await getDepots(db), route?.depotId);
+  const orderIds = route?.stops.map((s) => s.orderId) ?? [];
+  const [depotList, lines] = await Promise.all([
+    getDepots(db),
+    // What to hand over at each stop (shop and staff orders; other orders only have a unit count).
+    orderIds.length
+      ? db
+          .select({ orderId: salesOrders.deliveryOrderId, item: salesOrderItems })
+          .from(salesOrderItems)
+          .innerJoin(salesOrders, eq(salesOrders.id, salesOrderItems.salesOrderId))
+          .where(and(inArray(salesOrders.deliveryOrderId, orderIds), ne(salesOrders.status, "cancelled")))
+          .orderBy(asc(salesOrderItems.name))
+      : [],
+  ]);
+  const depot = depotFor(depotList, route?.depotId);
+  const items: Record<string, StopItem[]> = {};
+  for (const { orderId, item } of lines) {
+    if (!orderId) continue;
+    // Like the pick list: what's still waiting for stock isn't on the van.
+    (items[orderId] ??= []).push({ id: item.id, sku: item.sku, name: item.name, packSize: item.packSize, unit: item.unit, qty: item.qty - item.backorderQty, waiting: item.backorderQty });
+  }
 
   return (
     <DriverClient
@@ -43,6 +62,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
       nowS={nowSecondsIn(s.timezone)}
       depot={depot}
       route={route}
+      items={items}
       requirePhoto={s.requirePhoto}
       requireSignature={s.requireSignature}
     />

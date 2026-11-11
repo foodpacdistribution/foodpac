@@ -311,6 +311,14 @@ export const routes = pgTable(
     number: text("number").notNull().default(sql`'SH-' || nextval('shipment_no')`),
     /** When this route was sent to the driver's phone (per shipment, or for the whole day from the planner). */
     dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
+    /** Road data the stop order was worked out with; "estimate" = straight lines, the routing server didn't answer. */
+    matrixSource: text("matrix_source").$type<"osrm" | "estimate">(),
+    /**
+     * How long the route was planned to take, fixed when the driver sets off (and when a started
+     * route is re-planned). Arrival times are re-timed as deliveries happen, so endS − startS ends
+     * up as the actual day; this keeps the plan to compare it with.
+     */
+    plannedDurationS: integer("planned_duration_s"),
   },
   (t) => [uniqueIndex("routes_plan_driver_uq").on(t.planId, t.driverId), uniqueIndex("routes_number_uq").on(t.number)],
 );

@@ -41,10 +41,33 @@ export async function createShipment(date: string, driverId: string, orderIds: s
     revalidate();
     const t = await getT();
     return {
-      message: opts.send
-        ? t("{number} sent to the driver's phone", { number: r?.number ?? "" })
-        : t("Shipment {number} ready: print the docket, then send it to the driver.", { number: r?.number ?? "" }),
+      message: [
+        opts.send
+          ? t("{number} sent to the driver's phone", { number: r?.number ?? "" })
+          : t("Shipment {number} ready: print the docket, then send it to the driver.", { number: r?.number ?? "" }),
+        r?.matrixSource === "estimate" && t(ESTIMATE_WARNING),
+      ]
+        .filter(Boolean)
+        .join(" · "),
     };
+  });
+}
+
+const ESTIMATE_WARNING = "road data didn't load, so the stop order is from straight-line distances. Re-optimise it before the driver leaves.";
+
+/**
+ * Works out the best stop order again for the stops still to do (from where the driver is, if
+ * they've set off). For when the road data didn't load the first time, or the day has changed.
+ */
+export async function reoptimiseShipment(routeId: string) {
+  return attempt(async () => {
+    await assertUser(STAFF);
+    const { db, route, date } = await routeWithDate(routeId);
+    const r = await buildShipment(db, date, route.driverId, []);
+    revalidate();
+    const t = await getT();
+    if (r?.matrixSource === "estimate") throw new UserError(t("Road data still didn't load. Try again in a minute."));
+    return { message: t("{number} re-optimised with road data", { number: r?.number ?? route.number }) };
   });
 }
 

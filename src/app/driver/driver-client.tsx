@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ChevronDown, CloudOff, Clock, History, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, CloudOff, Clock, History, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Package, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
 import Link from "@/components/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
@@ -20,6 +20,9 @@ import { readSharePref, useLocationSharing, writeSharePref } from "./use-locatio
 import { Tx, useLocale, useT } from "@/components/i18n";
 import { intlLocale } from "@/lib/i18n";
 
+/** A line to hand over at a stop: `qty` is what's on the van, `waiting` what's still short of stock. */
+export type StopItem = { id: string; sku: string; name: string; packSize: string; unit: string; qty: number; waiting: number };
+
 type Props = {
   name: string;
   linked: boolean;
@@ -30,6 +33,8 @@ type Props = {
   nowS: number;
   depot: { id: string; lat: number; lng: number; name: string } | null;
   route: RouteView | null;
+  /** Items per order id; orders without a shop/staff order have none (only a unit count). */
+  items: Record<string, StopItem[]>;
   requirePhoto: boolean;
   requireSignature: boolean;
 };
@@ -39,7 +44,7 @@ function greeting(nowS: number) {
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-export function DriverClient({ name, linked, date, today, days, nowS, depot, route, requirePhoto, requireSignature }: Props) {
+export function DriverClient({ name, linked, date, today, days, nowS, depot, route, items, requirePhoto, requireSignature }: Props) {
   const tr = useT();
   // Clock times read "2:44pm" in English and "14:44" in Chinese.
   const clock = (s: number | null) => tr(formatClock(s));
@@ -65,14 +70,24 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
   });
   const pendingStops = stops.filter((s) => s.status === "pending");
   const completedStops = stops.filter((s) => s.status !== "pending");
-  const [cleared, setCleared] = useClearedStops(date);
+  const [cleared, setCleared] = useStoredSet(`dp.cleared.${date}`);
+  // Items the driver ticked off as handed over. Kept on the phone, so a reload or a trip to the maps app doesn't lose them.
+  const [ticked, setTicked] = useStoredSet(`dp.ticked.${date}`);
   const [showDone, setShowDone] = useState(false);
   const visibleDone = completedStops.filter((s) => !cleared.has(s.id));
   const lastDoneAt = completedStops.map((s) => s.completedAt).filter(Boolean).sort().at(-1);
   const doneCount = stops.length - pendingStops.length;
   const current: StopView | undefined = pendingStops.find((s) => s.id === selectedId) ?? pendingStops[0];
-  const openSheet = (kind: "delivered" | "failed") =>
-    current && setSheet({ kind, stopId: current.id, name: current.order.customerName || current.order.orderNumber, reference: current.order.orderNumber });
+  const currentItems = current ? (items[current.orderId] ?? []).filter((i) => i.qty > 0) : [];
+  const tickedHere = currentItems.filter((i) => ticked.has(i.id)).length;
+  const openSheet = (kind: "delivered" | "failed") => {
+    if (!current) return;
+    // Only asks when the driver is using the ticks and has missed some.
+    if (kind === "delivered" && tickedHere > 0 && tickedHere < currentItems.length) {
+      if (!confirm(tr("You've ticked {done} of {total} items. Confirm the delivery anyway?", { done: tickedHere, total: currentItems.length }))) return;
+    }
+    setSheet({ kind, stopId: current.id, name: current.order.customerName || current.order.orderNumber, reference: current.order.orderNumber });
+  };
   const save = (kind: "delivered" | "failed", stop: { stopId: string; name: string }) => (fd: FormData) =>
     addToOutbox(fd, { stopId: stop.stopId, kind, name: stop.name });
   const finishSheet = (t: Omit<ToastMessage, "id">) => {
@@ -96,6 +111,8 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
     return pts.length > 1 ? multiStopNavigation(pts) : null;
   })();
   const projectedFinish = route ? route.endS + (route.status === "in_progress" ? delay : 0) : null;
+  // A route can only be started on its delivery day; before that the button just navigates.
+  const canStart = route?.status === "planned" && date === today;
 
   const header = (
     <header className="bg-navy-900 px-4 pb-16 pt-5 text-white">
@@ -223,11 +240,12 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
           />
         )}
 
-        {route.status === "planned" && current && (
+        {canStart && current && (
           <p className="flex items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
             <PlayCircle className="size-5 shrink-0 text-blue-600" />
             <span>
-              {tr("Tap")}{" "}<strong>{tr("Start route & navigate")}</strong> {" "}{tr("when you set off. Dispatch will see you're on the road.")}</span>
+              {tr("Tap")}{" "}<strong>{tr("Start route & navigate")}</strong> {" "}{tr("when you set off. Dispatch will see you're on the road.")}{" "}
+              {tr("Arrival times are counted from the moment you start.")}</span>
           </p>
         )}
 
@@ -258,7 +276,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                     {tr("Window")}{" "}{formatMinutesClock(current.order.windowStartMin)}–{formatMinutesClock(current.order.windowEndMin)}
                   </span>
                 )}
-                {current.order.demand > 1 && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700">{current.order.demand} {" "}{tr("units")}</span>}
+                {current.order.demand > 1 && !!items[current.orderId]?.length && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700">{current.order.demand} {" "}{tr("units")}</span>}
               </div>
               {current.order.notes && (
                 <p className="flex gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">
@@ -273,11 +291,12 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                   rel="noreferrer"
                   className={btn("primary", "lg", "rounded-xl")}
                   // Setting off is when the route starts: one tap instead of a separate "Start" step.
-                  onClick={() => route.status === "planned" && startTransition(async () => {
-                    await startRoute(route.id);
+                  onClick={() => canStart && startTransition(async () => {
+                    const r = await startRoute(route.id);
+                    if (!r.ok) setToast({ id: Date.now(), tone: "warn", text: tr(r.error) });
                   })}
                 >
-                  {pending ? <Spinner className="size-5" /> : <Navigation className="size-5" />} {route.status === "planned" ? (pending ? tr("Starting…") : tr("Start route & navigate")) : tr("Navigate")}
+                  {pending ? <Spinner className="size-5" /> : <Navigation className="size-5" />} {canStart ? (pending ? tr("Starting…") : tr("Start route & navigate")) : tr("Navigate")}
                 </a>
                 {current.order.phone && (
                   <a href={`tel:${current.order.phone.replace(/\s+/g, "")}`} className={btn("secondary", "lg", "rounded-xl px-4")} aria-label={tr("Call customer")}>
@@ -293,6 +312,17 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                     <Route className="size-3.5" /> {" "}{tr("Next")}{" "}{multiNav.count} {" "}{tr("stops in Google Maps")}</a>
                 )}
               </p>
+              <ItemChecklist
+                items={items[current.orderId] ?? []}
+                demand={current.order.demand}
+                ticked={ticked}
+                onToggle={(id) => {
+                  const next = new Set(ticked);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  setTicked(next);
+                }}
+              />
               <div className="grid grid-cols-2 gap-2 border-t border-line pt-3">
                 <button className={btn("success", "lg", "rounded-xl")} onClick={() => openSheet("delivered")}>
                   <CheckCircle2 className="size-5" /> {" "}{tr("Delivered")}</button>
@@ -390,6 +420,14 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                         {s.order.customerName || s.order.orderNumber}
                       </span>
                       <span className="block truncate text-xs text-slate-500">{s.order.address}</span>
+                      {items[s.orderId]?.some((i) => i.qty > 0) && (
+                        <span className="block truncate text-xs text-slate-400">
+                          {items[s.orderId]
+                            .filter((i) => i.qty > 0)
+                            .map((i) => `${i.qty}× ${i.name}`)
+                            .join(" · ")}
+                        </span>
+                      )}
                     </span>
                     {s.status === "pending" ? (
                       <span className="text-sm font-semibold tabular-nums text-slate-700">{clock(s.etaS)}</span>
@@ -600,39 +638,103 @@ function LocationBar({
   );
 }
 
+/** What the hook below holds when the phone won't let the page store anything. */
+const memoryStore = new Map<string, string>();
+
 /**
- * Completed stops the driver cleared from today's list. Only hidden on this phone: the delivery
- * record, photo and signature stay in History and with the office.
+ * A set of ids kept on this phone (cleared stops, ticked items). Only on this phone: the
+ * delivery record, photo and signature stay in History and with the office.
  */
-function useClearedStops(date: string): [Set<string>, (next: Set<string>) => void] {
-  const key = `dp.cleared.${date}`;
-  // Read through useSyncExternalStore so the server render (nothing cleared) and the phone agree.
+function useStoredSet(key: string): [Set<string>, (next: Set<string>) => void] {
+  // Read through useSyncExternalStore so the server render (empty) and the phone agree.
   const raw = useSyncExternalStore(
     (onChange) => {
-      window.addEventListener("dp:cleared", onChange);
+      window.addEventListener("dp:stored", onChange);
       window.addEventListener("storage", onChange);
       return () => {
-        window.removeEventListener("dp:cleared", onChange);
+        window.removeEventListener("dp:stored", onChange);
         window.removeEventListener("storage", onChange);
       };
     },
     () => {
       try {
-        return localStorage.getItem(key) ?? "[]";
+        return localStorage.getItem(key) ?? memoryStore.get(key) ?? "[]";
       } catch {
-        return "[]";
+        return memoryStore.get(key) ?? "[]";
       }
     },
     () => "[]",
   );
-  const cleared = useMemo(() => new Set(JSON.parse(raw) as string[]), [raw]);
+  const value = useMemo(() => new Set(JSON.parse(raw) as string[]), [raw]);
   const set = (next: Set<string>) => {
+    const v = JSON.stringify([...next]);
+    memoryStore.set(key, v);
     try {
-      localStorage.setItem(key, JSON.stringify([...next]));
+      localStorage.setItem(key, v);
     } catch {
-      // Storage blocked: nothing to remember.
+      // Storage blocked: kept for as long as the page is open.
     }
-    window.dispatchEvent(new Event("dp:cleared"));
+    window.dispatchEvent(new Event("dp:stored"));
   };
-  return [cleared, set];
+  return [value, set];
+}
+
+/** What to hand over at this stop, with a tick per line. Long orders show the first few until opened. */
+function ItemChecklist({ items, demand, ticked, onToggle }: { items: StopItem[]; demand: number; ticked: Set<string>; onToggle: (id: string) => void }) {
+  const tr = useT();
+  const [all, setAll] = useState(false);
+  const onVan = items.filter((i) => i.qty > 0);
+  const short = items.filter((i) => i.waiting > 0);
+  if (!items.length) {
+    return demand > 0 ? (
+      <p className="flex items-center gap-2 border-t border-line pt-3 text-sm text-slate-600">
+        <Package className="size-4 text-slate-400" /> {tr("Hand over {n} units", { n: demand })}
+      </p>
+    ) : null;
+  }
+  const done = onVan.filter((i) => ticked.has(i.id)).length;
+  const shown = all || onVan.length <= 6 ? onVan : onVan.slice(0, 5);
+  return (
+    <div className="border-t border-line pt-3">
+      <p className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <span className="flex items-center gap-1.5">
+          <Package className="size-3.5" /> {tr("To hand over")}
+        </span>
+        <span className={cx("tabular-nums", done === onVan.length && onVan.length > 0 ? "text-emerald-600" : "text-slate-400")}>
+          {done}/{onVan.length}
+        </span>
+      </p>
+      <ul className="mt-2 space-y-1">
+        {shown.map((i) => {
+          const on = ticked.has(i.id);
+          return (
+            <li key={i.id}>
+              <label className={cx("flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 ring-1", on ? "bg-emerald-50 ring-emerald-200" : "ring-line")}>
+                <input type="checkbox" className="size-5 shrink-0 accent-emerald-600" checked={on} onChange={() => onToggle(i.id)} />
+                <span className="w-10 shrink-0 text-right text-base font-semibold tabular-nums text-slate-900">{i.qty}×</span>
+                <span className={cx("min-w-0 flex-1 text-sm", on ? "text-slate-500 line-through" : "text-slate-800")}>
+                  {i.name}
+                  <span className="block text-[11px] text-slate-400">
+                    {i.packSize ? `${i.packSize} · ` : ""}
+                    {i.unit} · {i.sku}
+                  </span>
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      {shown.length < onVan.length && (
+        <button type="button" onClick={() => setAll(true)} className="mt-1.5 text-xs font-medium text-blue-600">
+          {tr("Show all {n} items", { n: onVan.length })}
+        </button>
+      )}
+      {short.length > 0 && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {tr("Not on the van (waiting for stock):")}{" "}
+          {short.map((i) => `${i.waiting}× ${i.name}`).join(" · ")}
+        </p>
+      )}
+    </div>
+  );
 }

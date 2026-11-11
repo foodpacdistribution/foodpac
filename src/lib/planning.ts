@@ -150,6 +150,8 @@ export type RouteView = {
   number: string;
   /** When it was sent to the driver; null = not visible on their phone yet. */
   dispatchedAt: string | null;
+  /** "estimate" = optimised on straight-line distances because the road data didn't load. */
+  matrixSource: "osrm" | "estimate" | null;
   geometry: [number, number][] | null;
   stops: StopView[];
 };
@@ -237,6 +239,7 @@ export async function getPlanView(db: DB, date: string): Promise<PlanView> {
       startedAt: route.startedAt?.toISOString() ?? null,
       number: route.number,
       dispatchedAt: route.dispatchedAt?.toISOString() ?? null,
+      matrixSource: route.matrixSource ?? plan.context?.matrixSource ?? null,
       geometry: route.geometry,
       stops: stopRows
         .filter((r) => r.stop.routeId === route.id)
@@ -360,7 +363,7 @@ export type OptimiseInput = {
   learnedTiming?: boolean;
 };
 
-type CompletedStop = { orderId: string; demand: number; lat: number; lng: number; etdS: number; status: string; trip: number };
+type CompletedStop = { stopId: string; seq: number; orderId: string; demand: number; lat: number; lng: number; etdS: number; status: string; trip: number };
 type ExistingRoute = { id: string; driverId: string; startS: number; status: string; reloads: RouteReload[]; completed: CompletedStop[] };
 
 async function loadExistingRoutes(db: DB, planId: string | undefined): Promise<Map<string, ExistingRoute>> {
@@ -373,7 +376,9 @@ async function loadExistingRoutes(db: DB, planId: string | undefined): Promise<M
     .from(routeStops)
     .innerJoin(orders, eq(orders.id, routeStops.orderId))
     .where(and(inArray(routeStops.routeId, rs.map((r) => r.id)), inArray(routeStops.status, ["delivered", "failed"])))
-    .orderBy(asc(routeStops.seq));
+    // The order they were really done in: a driver may pick a stop out of turn, and the last one
+    // finished is where they are now.
+    .orderBy(asc(routeStops.completedAt), asc(routeStops.seq));
   for (const r of rs) {
     map.set(r.driverId, {
       id: r.id,
@@ -383,7 +388,7 @@ async function loadExistingRoutes(db: DB, planId: string | undefined): Promise<M
       reloads: r.reloads,
       completed: done
         .filter((d) => d.stop.routeId === r.id)
-        .map((d) => ({ orderId: d.order.id, demand: d.order.demand, lat: d.order.lat!, lng: d.order.lng!, etdS: d.stop.etdS, status: d.stop.status, trip: d.stop.trip })),
+        .map((d) => ({ stopId: d.stop.id, seq: d.stop.seq, orderId: d.order.id, demand: d.order.demand, lat: d.order.lat!, lng: d.order.lng!, etdS: d.stop.etdS, status: d.stop.status, trip: d.stop.trip })),
     });
   }
   return map;
@@ -583,12 +588,18 @@ export async function applyManualEdit(date: string, assignment: { driverId: stri
       priority: o.priority,
     }));
   const jobIndex = new Map(jobs.map((j, i) => [j.id, i]));
+  // A driver who has already set off is timed from when they really left, not the planned start.
+  const startedAt = new Map(
+    (await db.select({ driverId: routes.driverId, startS: routes.startS, status: routes.status }).from(routes).where(eq(routes.planId, plan.id)))
+      .filter((r) => r.status !== "planned")
+      .map((r) => [r.driverId, r.startS]),
+  );
   const vehicles: Vehicle[] = ctx.vehicles.map((v) => ({
     id: v.driverId,
     startNode: nodeOf.get(v.startKey)!,
     endNode: v.endKey ? nodeOf.get(v.endKey)! : null,
     depotNode: nodeOf.get(v.depotKey ?? v.endKey ?? v.startKey),
-    startTime: v.startTime,
+    startTime: Math.max(v.startTime, startedAt.get(v.driverId) ?? 0),
     maxDuration: v.maxDuration,
     capacity: v.capacity,
     firstTripCapacity: v.firstTripCapacity ?? v.capacity,
@@ -644,9 +655,34 @@ async function resolveNodePoints(db: DB, keys: string[]): Promise<LatLng[]> {
   });
 }
 
+/** Saves new arrival times for stops (one statement, however many stops). */
+export async function writeStopTimes(db: Pick<DB, "execute">, stops: { id: string; etaS: number; etdS: number; waitS: number; lateS: number }[]) {
+  if (!stops.length) return;
+  await db.execute(sql`
+    update route_stops as s set eta_s = v.eta, etd_s = v.etd, wait_s = v.wait, late_s = v.late
+    from (values ${sql.join(
+      stops.map((st) => sql`(${st.id}::uuid, ${st.etaS}::int, ${st.etdS}::int, ${st.waitS}::int, ${st.lateS}::int)`),
+      sql`, `,
+    )}) as v(id, eta, etd, wait, late)
+    where s.id = v.id`);
+}
+
 // ---------------------------------------------------------------------------
 // Persistence shared by optimise and manual edit
 // ---------------------------------------------------------------------------
+
+/**
+ * Numbers a route's completed stops 1..n in the order given (the order they were done). Stops
+ * planned after them are numbered from n+1, so the driver's list and the docket never mix them up.
+ */
+export async function renumberCompleted(db: Pick<DB, "execute">, stops: { stopId: string; seq: number }[]) {
+  const changed = stops.map((st, i) => ({ id: st.stopId, seq: i + 1, was: st.seq })).filter((st) => st.seq !== st.was);
+  if (!changed.length) return;
+  await db.execute(sql`
+    update route_stops as s set seq = v.seq
+    from (values ${sql.join(changed.map((c) => sql`(${c.id}::uuid, ${c.seq}::int)`), sql`, `)}) as v(id, seq)
+    where s.id = v.id`);
+}
 
 async function persistPlan(
   db: DB,
@@ -703,6 +739,8 @@ async function persistPlan(
     if (prevRouteIds.length) {
       await tx.delete(routeStops).where(and(inArray(routeStops.routeId, prevRouteIds), eq(routeStops.status, "pending")));
     }
+    // Completed stops become 1..n in the order they were done, so the new stops (n+1 on) never share a number with them.
+    for (const r of existing.values()) await renumberCompleted(tx, r.completed);
 
     const keepRoutes = new Set<string>();
     const orderStatus = plan.status === "dispatched" ? "dispatched" : "planned";
@@ -733,7 +771,8 @@ async function persistPlan(
       );
 
       const totals: RouteTotals = {
-        startS: done.length ? prevRoute!.startS : ev.start,
+        // A driver who has set off keeps the time they really left.
+        startS: prevRoute && (done.length || prevRoute.status !== "planned") ? prevRoute.startS : ev.start,
         endS: ev.jobIds.length ? ev.end : Math.max(...doneStops.map((st) => st.etdS)),
         distanceM: doneTotals.distanceM + ev.distance,
         driveS: doneTotals.driveS + ev.driveTime,
@@ -760,6 +799,9 @@ async function persistPlan(
           ...ev.reloads.map((r) => ({ afterSeq: done.length + r.afterIndex + 1, arrivalS: r.arrival, departureS: r.departure })),
         ],
         geometry: geometries.get(ev.vehicleId) ?? null,
+        matrixSource: context.matrixSource,
+        // Re-planned after setting off: the new plan is what the day is compared with.
+        ...(prevRoute && prevRoute.status !== "planned" ? { plannedDurationS: totals.endS - totals.startS } : {}),
         // Nothing left → finished; new stops on a started/finished route → back on the road.
         ...(ev.jobIds.length
           ? prevRoute && prevRoute.status !== "planned"
