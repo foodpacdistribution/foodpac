@@ -2,9 +2,8 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { restoreDeliveries } from "@/lib/deliveries";
+import { checkLocationsLater, restoreDeliveries } from "@/lib/deliveries";
 import { drivers, optimisationRuns, orders } from "@/lib/db/schema";
-import { relocateMisplacedOrders } from "@/lib/geo/geocode";
 import { getDepots, getPlanView, getSettings, learnTiming } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
 import { PlannerClient } from "./planner-client";
@@ -22,7 +21,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: Prom
   await restoreDeliveries(db, s.timezone);
   const today = todayIn(s.timezone);
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : today;
-  await relocateMisplacedOrders(db, date);
+  checkLocationsLater(date);
 
   const [view, driverRows, orderRows, depotList, timing] = await Promise.all([
     getPlanView(db, date),

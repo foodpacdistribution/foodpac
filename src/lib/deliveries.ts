@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { cache } from "react";
 import { type DB, getDb } from "./db";
 import { restoreMissingDeliveries } from "./shop";
+import { checkDayLocations } from "./geo/geocode";
 import { geocodeOrderIds } from "./sync";
 import { todayIn } from "./time";
 
@@ -24,3 +25,17 @@ export const restoreDeliveries = cache(async (_db: DB, timezone: string) => {
     }
   });
 });
+
+/**
+ * After the response, locates the day's orders that are waiting for a pin or were pinned in the
+ * wrong town (see checkDayLocations). Moved pins show on the next refresh.
+ */
+export function checkLocationsLater(date: string) {
+  after(async () => {
+    try {
+      await checkDayLocations(await getDb(), date);
+    } catch (err) {
+      console.error("[admin] couldn't check order locations:", err);
+    }
+  });
+}

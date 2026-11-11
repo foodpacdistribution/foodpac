@@ -2,9 +2,8 @@ import { and, asc, eq, ilike, or, type SQL } from "drizzle-orm";
 import type { Metadata } from "next";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { restoreDeliveries } from "@/lib/deliveries";
+import { checkLocationsLater, restoreDeliveries } from "@/lib/deliveries";
 import { depots, drivers, type OrderStatus, orders, plans, routeStops, routes } from "@/lib/db/schema";
-import { relocateMisplacedOrders } from "@/lib/geo/geocode";
 import { getSettings } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
 import { OrdersClient } from "./orders-client";
@@ -20,7 +19,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const s = await getSettings(db);
   await restoreDeliveries(db, s.timezone);
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayIn(s.timezone);
-  await relocateMisplacedOrders(db, date);
+  checkLocationsLater(date);
   const status = sp.status as OrderStatus | "attention" | undefined;
   const q = sp.q?.trim();
 

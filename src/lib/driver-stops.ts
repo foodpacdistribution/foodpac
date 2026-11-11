@@ -9,6 +9,7 @@ import { deliveryEvents, orders, plans, routes, routeStops } from "./db/schema";
 import type { Outcome } from "./outcome";
 import { getSettings, refreshPlanSummary, UserError, writeStopTimes } from "./planning";
 import { saveProof } from "./proofs";
+import { buildShipment } from "./shipments";
 import { nowSecondsIn, todayIn } from "./time";
 import { retimeStops } from "./vrp/retime";
 
@@ -232,4 +233,34 @@ export async function startDriverRoute(routeId: string, at = new Date()) {
   if (didStart) {
     after(() => emailRouteStarted(routeId).catch((err) => console.warn("[delivery-emails] route started:", (err as Error).message)));
   }
+}
+
+/**
+ * The driver puts the stops still to do in their own order (`stopIds`), or back in the best
+ * order from where they are (null). Arrival times are worked out again with road times, and the
+ * office, the docket and the customer's tracking page follow. Stops they left out (done on the
+ * phone, still uploading) go first.
+ */
+export async function reorderDriverRoute(routeId: string, stopIds: string[] | null) {
+  const user = await assertUser(["driver"]);
+  if (!user.driverId) throw new UserError("Your login isn't linked to a driver profile.");
+  const db = await getDb();
+  const [row] = await db
+    .select({ route: routes, plan: plans })
+    .from(routes)
+    .innerJoin(plans, eq(plans.id, routes.planId))
+    .where(and(eq(routes.id, routeId), eq(routes.driverId, user.driverId)))
+    .limit(1);
+  if (!row || !row.route.dispatchedAt) throw new UserError("Route not found.");
+  const pending = await db
+    .select({ id: routeStops.id, orderId: routeStops.orderId })
+    .from(routeStops)
+    .where(and(eq(routeStops.routeId, routeId), eq(routeStops.status, "pending")))
+    .orderBy(asc(routeStops.seq));
+  if (pending.length < 2) return;
+  const orderOf = new Map(pending.map((p) => [p.id, p.orderId]));
+  const listed = stopIds?.map((id) => orderOf.get(id)).filter((id): id is string => !!id);
+  const order = listed && [...pending.map((p) => p.orderId).filter((id) => !listed.includes(id)), ...listed];
+  await buildShipment(db, row.plan.deliveryDate, user.driverId, [], [], { order, keepStart: true });
+  revalidateDriverPages();
 }

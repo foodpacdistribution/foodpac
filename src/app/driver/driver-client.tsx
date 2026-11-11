@@ -1,11 +1,11 @@
 "use client";
 
-import { CheckCircle2, ChevronDown, CloudOff, Clock, History, LocateFixed, LocateOff, LogOut, MapPin, MessageSquareText, Navigation, Package, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, ChevronDown, CloudOff, Clock, History, ListOrdered, LocateFixed, LocateOff, LogOut, MapPin, MessageSquareText, Navigation, Package, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
 import Link from "@/components/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { logout } from "@/app/actions/auth";
-import { startRoute, tellCustomerArriving } from "@/app/actions/driver";
+import { reorderStops, startRoute, tellCustomerArriving } from "@/app/actions/driver";
 import { Modal, Toast, type ToastMessage } from "@/components/client-ui";
 import { LanguageSwitch } from "@/components/language-switch";
 import { DeliveryMap, type MapStop } from "@/components/map";
@@ -58,6 +58,8 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
   const [sheet, setSheet] = useState<null | { kind: "delivered" | "failed"; stopId: string; name: string; reference: string }>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(false);
+  // The driver's own stop order while they arrange it (stop ids), null when not arranging.
+  const [arranging, setArranging] = useState<string[] | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const clearToast = useCallback(() => setToast(null), []);
 
@@ -97,6 +99,23 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
     setSelectedId(null);
     setToast({ id: Date.now(), ...t });
   };
+  const saveOrder = (stopIds: string[] | null) =>
+    startTransition(async () => {
+      const r = await reorderStops(route!.id, stopIds);
+      setToast({ id: Date.now(), tone: r.ok ? "ok" : "warn", text: tr(r.ok ? (r.message ?? "Saved") : r.error) });
+      if (r.ok) {
+        setArranging(null);
+        setSelectedId(null);
+        refresh();
+      }
+    });
+  const move = (i: number, by: number) =>
+    setArranging((list) => {
+      if (!list || i + by < 0 || i + by >= list.length) return list;
+      const next = [...list];
+      [next[i], next[i + by]] = [next[i + by], next[i]];
+      return next;
+    });
   // A later day's stops can't be running late yet.
   const delay = current && date === today ? Math.max(0, nowS - current.etaS) : 0;
   // A planned depot reload sits between the previous stop and this one.
@@ -400,10 +419,54 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
 
         {/* All stops */}
         <section className="overflow-hidden rounded-2xl bg-white shadow-card">
-          <h3 className="border-b border-line px-4 py-2.5 text-sm font-semibold text-slate-900">
-            {pendingStops.length ? tr(`To deliver · ${pendingStops.length}`) : tr("Today's stops")}
-          </h3>
+          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
+            <h3 className="text-sm font-semibold text-slate-900">{pendingStops.length ? tr(`To deliver · ${pendingStops.length}`) : tr("Today's stops")}</h3>
+            {pendingStops.length > 1 && !arranging && (
+              <button type="button" className={btn("ghost", "sm")} onClick={() => setArranging(pendingStops.map((s) => s.id))}>
+                <ListOrdered className="size-4" /> {tr("Change order")}
+              </button>
+            )}
+          </div>
           {pendingStops.length === 0 && <p className="px-4 py-3 text-sm text-slate-500">{tr("Nothing left to deliver.")}</p>}
+          {arranging ? (
+            <div>
+              <p className="bg-blue-50 px-4 py-2 text-xs text-blue-800">{tr("Move stops up or down into the order you'll deliver them. Arrival times are worked out again when you save.")}</p>
+              <ol className="divide-y divide-line">
+                {arranging.map((id, i) => {
+                  const s = pendingStops.find((x) => x.id === id);
+                  if (!s) return null;
+                  return (
+                    <li key={id} className="flex items-center gap-3 py-2 pl-4 pr-2">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: route.color }}>
+                        {doneCount + i + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-slate-900">{s.order.customerName || s.order.orderNumber}</span>
+                        <span className="block truncate text-xs text-slate-500">{s.order.address}</span>
+                      </span>
+                      <button type="button" className="grid size-11 place-items-center rounded-full text-slate-600 active:bg-slate-100 disabled:opacity-25" disabled={i === 0} onClick={() => move(i, -1)} aria-label={tr("Move up")}>
+                        <ArrowUp className="size-5" />
+                      </button>
+                      <button type="button" className="grid size-11 place-items-center rounded-full text-slate-600 active:bg-slate-100 disabled:opacity-25" disabled={i === arranging.length - 1} onClick={() => move(i, 1)} aria-label={tr("Move down")}>
+                        <ArrowDown className="size-5" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+              <div className="grid grid-cols-2 gap-2 border-t border-line p-3">
+                <button type="button" className={btn("secondary", "md", "rounded-xl")} disabled={pending} onClick={() => setArranging(null)}>
+                  {tr("Cancel")}
+                </button>
+                <button type="button" className={btn("primary", "md", "rounded-xl")} disabled={pending} onClick={() => saveOrder(arranging)}>
+                  {pending ? <Spinner className="size-4" /> : null} {tr("Save order")}
+                </button>
+                <button type="button" className="col-span-2 py-1 text-xs text-slate-500 underline" disabled={pending} onClick={() => saveOrder(null)}>
+                  {tr("Back to the best order from where I am")}
+                </button>
+              </div>
+            </div>
+          ) : (
           <ol className="divide-y divide-line">
             {pendingStops.map((s) => {
               const isCurrent = s.id === current?.id;
@@ -471,6 +534,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
               );
             })}
           </ol>
+          )}
         </section>
 
         {completedStops.length > 0 && (

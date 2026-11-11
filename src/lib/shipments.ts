@@ -21,8 +21,19 @@ export const MAX_SHIPMENT_STOPS = 80;
  * capacity, starting and (optionally) ending at the driver's depot. On a shipment the driver
  * has started, delivered stops stay as they are and the rest (with any new orders) is
  * re-ordered from where the driver is now, so their next stop is always the best one.
+ *
+ * `opts.order` keeps the stops still to do in the order given (order ids) instead of working
+ * one out: the driver's own order, re-timed with road times. `opts.keepStart` keeps the route's
+ * planned start for a route not yet started (else it's the driver's shift start).
  */
-export async function buildShipment(db: DB, date: string, driverId: string, addOrderIds: string[], removeOrderIds: string[] = []) {
+export async function buildShipment(
+  db: DB,
+  date: string,
+  driverId: string,
+  addOrderIds: string[],
+  removeOrderIds: string[] = [],
+  opts: { order?: string[]; keepStart?: boolean } = {},
+) {
   const s = await getSettings(db);
   const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId)).limit(1);
   if (!driver || !driver.active) throw new UserError("Choose an active driver.");
@@ -71,7 +82,7 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
   const shiftLength = (driver.maxShiftMin ?? s.defaultMaxShiftMin) * 60;
   const last = done.at(-1);
   let from: LatLng = { lat: depot.lat, lng: depot.lng };
-  let startTime = (driver.shiftStartMin ?? s.defaultStartMin) * 60;
+  let startTime = route && opts.keepStart ? route.startS : (driver.shiftStartMin ?? s.defaultStartMin) * 60;
   let maxDuration = shiftLength;
   let maxTrips = Math.max(1, driver.maxTrips);
   let firstTripCapacity = driver.capacity;
@@ -126,10 +137,12 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
     priority: o.priority,
   }));
   const problem: Problem = { vehicles: [vehicle], jobs, matrix: { durations, distances: matrix.distances }, objective: "time" };
-  const solution = solve(problem, { timeLimitMs: Math.min(6000, 800 + jobs.length * 80) });
-  // You chose these orders for this driver, so none are dropped: any the solver couldn't fit
-  // (window or shift too tight) go at the end and show as late on the docket.
-  const order = solution.routes[0]?.jobIds.map((id) => jobs.findIndex((j) => j.id === id)) ?? [];
+  // The order given; else the best one. You chose these orders for this driver, so none are
+  // dropped: any left out (or the solver couldn't fit: window or shift too tight) go at the end
+  // and show as late on the docket.
+  const order = opts.order
+    ? opts.order.map((id) => jobs.findIndex((j) => j.id === id)).filter((i) => i >= 0)
+    : (solve(problem, { timeLimitMs: Math.min(6000, 800 + jobs.length * 80) }).routes[0]?.jobIds.map((id) => jobs.findIndex((j) => j.id === id)) ?? []);
   for (let i = 0; i < jobs.length; i++) if (!order.includes(i)) order.push(i);
   const ev = evaluateRoute(problem, vehicle, order);
 
@@ -178,24 +191,39 @@ export async function buildShipment(db: DB, date: string, driverId: string, addO
       .values({ planId: p.id, driverId: driver.id, ...values })
       .onConflictDoUpdate({ target: [routes.planId, routes.driverId], set: values })
       .returning();
-    // Delivered and failed stops are the record of what happened; only the stops still to do are replaced.
-    await tx.delete(routeStops).where(and(eq(routeStops.routeId, r.id), eq(routeStops.status, "pending")));
     // Completed stops are 1..n in the order they were done; the new ones follow from n+1 without clashing.
     await renumberCompleted(tx, done.map((d) => ({ stopId: d.stop.id, seq: d.stop.seq })));
-    await tx.insert(routeStops).values(
-      ev.stops.map((st, i) => ({
-        routeId: r.id,
-        orderId: st.jobId,
-        seq: done.length + i + 1,
-        trip: tripOffset + st.trip,
-        etaS: st.arrival,
-        etdS: st.departure,
-        waitS: st.wait,
-        lateS: st.late,
-        legDistanceM: st.legDistance,
-        legDriveS: st.legDuration,
-      })),
-    );
+    const newStops = ev.stops.map((st, i) => ({
+      routeId: r.id,
+      orderId: st.jobId,
+      seq: done.length + i + 1,
+      trip: tripOffset + st.trip,
+      etaS: st.arrival,
+      etdS: st.departure,
+      waitS: st.wait,
+      lateS: st.late,
+      legDistanceM: st.legDistance,
+      legDriveS: st.legDuration,
+    }));
+    // Same stops, new order: they keep their ids, which a delivery still uploading from the
+    // driver's phone points at.
+    const stopIdOf = new Map(stopRows.filter((x) => x.stop.status === "pending").map((x) => [x.stop.orderId, x.stop.id]));
+    if (stopIdOf.size === newStops.length && newStops.every((st) => stopIdOf.has(st.orderId))) {
+      await tx.execute(sql`
+        update route_stops as s set seq = v.seq, trip = v.trip, eta_s = v.eta, etd_s = v.etd, wait_s = v.wait, late_s = v.late, leg_distance_m = v.dist, leg_drive_s = v.drive
+        from (values ${sql.join(
+          newStops.map(
+            (st) =>
+              sql`(${stopIdOf.get(st.orderId)}::uuid, ${st.seq}::int, ${st.trip}::int, ${st.etaS}::int, ${st.etdS}::int, ${st.waitS}::int, ${st.lateS}::int, ${st.legDistanceM}::int, ${st.legDriveS}::int)`,
+          ),
+          sql`, `,
+        )}) as v(id, seq, trip, eta, etd, wait, late, dist, drive)
+        where s.id = v.id`);
+    } else {
+      // Delivered and failed stops are the record of what happened; only the stops still to do are replaced.
+      await tx.delete(routeStops).where(and(eq(routeStops.routeId, r.id), eq(routeStops.status, "pending")));
+      await tx.insert(routeStops).values(newStops);
+    }
     await tx
       .update(orders)
       .set({ status: r.dispatchedAt ? "dispatched" : "planned", driverId: driver.id, updatedAt: new Date() })

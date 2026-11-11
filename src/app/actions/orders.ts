@@ -152,7 +152,8 @@ export async function confirmOrderLocation(id: string, lat: number, lng: number)
     const db = await getDb();
     const [o] = await db
       .update(orders)
-      .set({ lat, lng, geocodeStatus: "ok", updatedAt: new Date() })
+      // The geocoder's label described its own guess; without one, the pin reads as placed by hand.
+      .set({ lat, lng, geocodeStatus: "ok", geocodeLabel: null, updatedAt: new Date() })
       .where(eq(orders.id, id))
       .returning({ id: orders.id });
     if (!o) throw new UserError("Order not found.");
