@@ -12,11 +12,17 @@ import { shiftDate } from "@/lib/dates";
 import { Badge, btn, Card, ColorDot, cx, EmptyState, Field, GEOCODE_STATUS, inputCls, ORDER_STATUS, PageHeader, Spinner } from "@/components/ui";
 import { DELIVERY_PLACE_WARN_M, describeDeliveryPlace, mapPinUrl } from "@/lib/orders";
 import type { orders as ordersTable } from "@/lib/db/schema";
-import { formatMinutesClock, minutesToInput } from "@/lib/time";
+import { formatClock, formatMinutesClock, minutesToInput } from "@/lib/time";
 import { Tx, useLocale, useT } from "@/components/i18n";
 import { intlLocale } from "@/lib/i18n";
 
-type Order = Omit<typeof ordersTable.$inferSelect, "createdAt" | "updatedAt"> & { createdAt: string; updatedAt: string };
+type Order = Omit<typeof ordersTable.$inferSelect, "createdAt" | "updatedAt"> & {
+  createdAt: string;
+  updatedAt: string;
+  /** Position on the driver's planned route for this day (1 = first delivery), and the planned arrival. */
+  stopSeq?: number | null;
+  stopEtaS?: number | null;
+};
 type Driver = { id: string; name: string; color: string };
 type Depot = { id: string; name: string };
 
@@ -291,6 +297,7 @@ export function OrdersClient(props: {
                   <button type="button" onClick={() => (o.status === "delivered" || o.status === "failed" ? setRecord(o) : setEditing(o))} className="min-w-0 flex-1 text-left">
                     <span className="flex items-start justify-between gap-2">
                       <span className="flex min-w-0 items-center gap-1.5 font-medium break-all text-slate-900">
+                        {o.stopSeq != null && <StopNo seq={o.stopSeq} color={driver?.color} />}
                         {o.orderNumber}
                         {o.priority > 0 && <Zap className="size-3.5 shrink-0 fill-amber-400 text-amber-500" />}
                       </span>
@@ -316,6 +323,11 @@ export function OrdersClient(props: {
                           <ColorDot color={driver.color} /> {driver.name}
                         </span>
                       )}
+                      {o.stopEtaS != null && (
+                        <span>
+                          {tr("ETA")} {formatClock(o.stopEtaS)}
+                        </span>
+                      )}
                     </span>
                   </button>
                   {o.geocodeStatus !== "ok" && (
@@ -330,7 +342,7 @@ export function OrdersClient(props: {
             })}
           </ul>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[960px] text-sm">
+            <table className="w-full min-w-[1040px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   <th className="w-10 px-3 py-2.5">
@@ -341,6 +353,7 @@ export function OrdersClient(props: {
                       aria-label={tr("Select all")}
                     />
                   </th>
+                  <th className="px-3 py-2.5">{tr("Stop order")}</th>
                   <th className="px-3 py-2.5">{tr("Order")}</th>
                   <th className="px-3 py-2.5">{tr("Customer")}</th>
                   <th className="px-3 py-2.5">{tr("Delivery address")}</th>
@@ -371,6 +384,18 @@ export function OrdersClient(props: {
                           }}
                           aria-label={`Select ${o.orderNumber}`}
                         />
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        {o.stopSeq != null ? (
+                          <span className="flex items-center gap-2">
+                            <StopNo seq={o.stopSeq} color={driver?.color} />
+                            <span className="text-xs tabular-nums text-slate-500" title={tr("ETA")}>
+                              {formatClock(o.stopEtaS)}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-400" title={tr("Not on a route yet")}>—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-1.5 font-medium text-slate-900">
@@ -757,5 +782,17 @@ function LocationCheck({ order, near, onCancel, onDone }: { order: Order; near: 
         </button>
       </div>
     </div>
+  );
+}
+
+/** The order's place on its driver's route, in the driver's colour. */
+function StopNo({ seq, color }: { seq: number; color?: string }) {
+  return (
+    <span
+      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums text-white"
+      style={{ backgroundColor: color ?? "#64748b" }}
+    >
+      {seq}
+    </span>
   );
 }

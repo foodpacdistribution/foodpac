@@ -1223,6 +1223,8 @@ export const ZH: Record<string, string> = {
   "Stock is reserved when you place the order.": "下单时会为您预留库存。",
   "Stock on hand": "现有库存",
   "Stop": "站点",
+  "Stop order": "配送顺序",
+  "Not on a route yet": "尚未排入路线",
   "Stops": "站点",
   "Stops on shipments": "配送单中的站点",
   "Street address *": "街道地址 *",

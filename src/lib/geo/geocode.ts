@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { DB } from "../db";
-import { geocodeCache, type GeocodeStatus } from "../db/schema";
+import { geocodeCache, type GeocodeStatus, orders } from "../db/schema";
+import { geocodeQuery } from "../orders";
 
 export type GeocodeResult = {
   status: Exclude<GeocodeStatus, "pending">;
@@ -29,10 +30,34 @@ export function stripUnit(address: string) {
     .trim();
 }
 
+const STATES = "QLD|NSW|VIC|SA|WA|TAS|NT|ACT|Queensland|New South Wales|Victoria|South Australia|Western Australia|Tasmania|Northern Territory|Australian Capital Territory";
+
+/** The postcode written in an address or geocoder label ("…, Morayfield QLD 4510", "…, 4510, Australia"), or null. */
+export function postcodeOf(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const t = text.replace(/,?\s*australia\s*$/i, "");
+  const m = new RegExp(`\\b(?:${STATES})\\b,?\\s*(\\d{4})\\b`, "i").exec(t) ?? /,\s*(\d{4})\s*$/.exec(t);
+  return m ? m[1] : null;
+}
+
+/** "18/29 Bruce Hwy, Morayfield QLD 4510" → "Bruce Hwy, Morayfield QLD 4510": the street, for when the number can't be found. */
+export function stripNumber(address: string) {
+  return stripUnit(address)
+    .replace(/^\s*\d+[a-z]?(?:\s*-\s*\d+[a-z]?)?\s+/i, "")
+    .trim();
+}
+
 export async function geocodeAddress(db: DB, address: string): Promise<GeocodeResult> {
   const key = normalise(address);
+  // Google sometimes ignores the suburb and postcode and matches the same street number in
+  // another town ("29 Bruce Hwy, Morayfield 4510" → Rockhampton 4700, 600 km away) as if exact.
+  const want = COUNTRY === "au" ? postcodeOf(address) : null;
+  const elsewhere = (r: { status: string; label: string | null }) => {
+    const got = r.status === "failed" ? null : postcodeOf(r.label);
+    return !!want && !!got && got !== want;
+  };
   const [cached] = await db.select().from(geocodeCache).where(eq(geocodeCache.query, key)).limit(1);
-  if (cached && cached.status !== "failed") {
+  if (cached && cached.status !== "failed" && !elsewhere(cached)) {
     return { status: cached.status as GeocodeResult["status"], lat: cached.lat, lng: cached.lng, label: cached.label, provider: cached.provider };
   }
 
@@ -45,6 +70,15 @@ export async function geocodeAddress(db: DB, address: string): Promise<GeocodeRe
       if (retry.status !== "failed") result = { ...retry, status: "approximate" };
     }
   }
+  if (elsewhere(result)) {
+    // Wrong postcode: fall back to the street in the right area, for someone to check the pin.
+    const street = stripNumber(address);
+    const retry = street !== address ? await lookup(street) : null;
+    result =
+      retry && retry.status !== "failed" && !elsewhere(retry)
+        ? { ...retry, status: "approximate" }
+        : { status: "failed", lat: null, lng: null, label: null, provider: result.provider };
+  }
 
   await db
     .insert(geocodeCache)
@@ -54,6 +88,32 @@ export async function geocodeAddress(db: DB, address: string): Promise<GeocodeRe
       set: { lat: result.lat, lng: result.lng, label: result.label, status: result.status, provider: result.provider },
     });
   return result;
+}
+
+/**
+ * Looks again at the day's open orders that were pinned in a different postcode from their
+ * address, before that was checked. A pin someone placed by hand (it no longer matches what the
+ * geocoder returned) is theirs and is left alone. Returns how many orders were moved.
+ */
+export async function relocateMisplacedOrders(db: DB, date: string) {
+  if (COUNTRY !== "au") return 0;
+  const rows = await db
+    .select({ id: orders.id, address: orders.address, suburb: orders.suburb, postcode: orders.postcode, lat: orders.lat, lng: orders.lng, geocodeLabel: orders.geocodeLabel })
+    .from(orders)
+    .where(and(eq(orders.deliveryDate, date), isNotNull(orders.lat), isNotNull(orders.geocodeLabel), inArray(orders.status, ["pending", "planned", "dispatched"])));
+  let moved = 0;
+  for (const o of rows) {
+    const query = geocodeQuery(o);
+    const want = postcodeOf(query);
+    const got = postcodeOf(o.geocodeLabel);
+    if (!want || !got || want === got) continue;
+    const [cached] = await db.select({ lat: geocodeCache.lat, lng: geocodeCache.lng }).from(geocodeCache).where(eq(geocodeCache.query, normalise(query))).limit(1);
+    if (!cached || cached.lat !== o.lat || cached.lng !== o.lng) continue;
+    const r = await geocodeAddress(db, query);
+    await db.update(orders).set({ lat: r.lat, lng: r.lng, geocodeStatus: r.status, geocodeLabel: r.label, updatedAt: new Date() }).where(eq(orders.id, o.id));
+    moved++;
+  }
+  return moved;
 }
 
 async function lookup(address: string): Promise<GeocodeResult> {

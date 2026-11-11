@@ -15,6 +15,7 @@ import {
   settings,
   users,
 } from "./db/schema";
+import { relocateMisplacedOrders } from "./geo/geocode";
 import { type LatLng, routeGeometry, travelMatrix } from "./geo/routing";
 import { shiftDate } from "./dates";
 import { nowSecondsIn, todayIn } from "./time";
@@ -449,6 +450,8 @@ export async function optimisePlan(input: OptimiseInput, userId: string) {
   const isToday = input.date === todayIn(s.timezone);
   const nowS = nowSecondsIn(s.timezone);
 
+  // A stop pinned in the wrong town would drag the whole route (and its order) there.
+  await relocateMisplacedOrders(db, input.date);
   const dayOrders = await db
     .select()
     .from(orders)
