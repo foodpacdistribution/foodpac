@@ -1,11 +1,11 @@
 "use client";
 
-import { CheckCircle2, ChevronDown, CloudOff, Clock, History, LocateFixed, LocateOff, LogOut, MapPin, Navigation, Package, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, CloudOff, Clock, History, LocateFixed, LocateOff, LogOut, MapPin, MessageSquareText, Navigation, Package, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
 import Link from "@/components/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { logout } from "@/app/actions/auth";
-import { startRoute } from "@/app/actions/driver";
+import { startRoute, tellCustomerArriving } from "@/app/actions/driver";
 import { Modal, Toast, type ToastMessage } from "@/components/client-ui";
 import { LanguageSwitch } from "@/components/language-switch";
 import { DeliveryMap, type MapStop } from "@/components/map";
@@ -35,6 +35,8 @@ type Props = {
   route: RouteView | null;
   /** Items per order id; orders without a shop/staff order have none (only a unit count). */
   items: Record<string, StopItem[]>;
+  /** Customer emails are on, so the "about 10 minutes away" button can be offered. */
+  canTellCustomer: boolean;
   requirePhoto: boolean;
   requireSignature: boolean;
 };
@@ -44,7 +46,7 @@ function greeting(nowS: number) {
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-export function DriverClient({ name, linked, date, today, days, nowS, depot, route, items, requirePhoto, requireSignature }: Props) {
+export function DriverClient({ name, linked, date, today, days, nowS, depot, route, items, canTellCustomer, requirePhoto, requireSignature }: Props) {
   const tr = useT();
   // Clock times read "2:44pm" in English and "14:44" in Chinese.
   const clock = (s: number | null) => tr(formatClock(s));
@@ -192,7 +194,8 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
   }));
 
   return (
-    <div className="min-h-dvh pb-10">
+    // Room at the bottom for the action bar that sits above the tab bar.
+    <div className={cx("min-h-dvh", current ? "pb-28" : "pb-10")}>
       {header}
       <main className="mx-auto -mt-12 max-w-lg space-y-4 px-4">
         {dayTabs}
@@ -304,6 +307,22 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                   </a>
                 )}
               </div>
+              {canTellCustomer && date === today && route.status === "in_progress" && (
+                <button
+                  type="button"
+                  disabled={!!current.headsUpAt || pending}
+                  className={btn("secondary", "md", "w-full rounded-xl")}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const r = await tellCustomerArriving(current.id);
+                      setToast({ id: Date.now(), tone: r.ok ? "ok" : "warn", text: tr(r.ok ? (r.message ?? "Sent") : r.error) });
+                    })
+                  }
+                >
+                  <MessageSquareText className="size-4" />{" "}
+                  {current.headsUpAt ? tr("Customer told you're 10 minutes away") : tr("Tell customer: about 10 minutes away")}
+                </button>
+              )}
               <p className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
                 <a href={navigationUrls(current.order.lat, current.order.lng).apple} target="_blank" rel="noreferrer" className="underline">
                   {tr("Use Apple Maps")}</a>
@@ -323,12 +342,6 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                   setTicked(next);
                 }}
               />
-              <div className="grid grid-cols-2 gap-2 border-t border-line pt-3">
-                <button className={btn("success", "lg", "rounded-xl")} onClick={() => openSheet("delivered")}>
-                  <CheckCircle2 className="size-5" /> {" "}{tr("Delivered")}</button>
-                <button className={btn("danger", "lg", "rounded-xl")} onClick={() => openSheet("failed")}>
-                  <TriangleAlert className="size-5" /> {" "}{tr("Problem")}</button>
-              </div>
             </div>
           </section>
         ) : (
@@ -519,6 +532,23 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
         )}
       </main>
 
+      {/* Delivered / Problem always within thumb reach, however long the stop card gets. */}
+      {current && (
+        <div className="no-print fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-line bg-white/95 px-4 py-2.5 backdrop-blur">
+          <div className="mx-auto max-w-lg">
+            <p className="mb-1.5 truncate text-xs text-slate-500">
+              {tr("Stop")}{" "}{current.seq} · <span className="font-medium text-slate-800">{current.order.customerName || current.order.orderNumber}</span>
+              {currentItems.length > 0 && <span className="tabular-nums"> · {tickedHere}/{currentItems.length}</span>}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button className={btn("success", "lg", "rounded-xl")} onClick={() => openSheet("delivered")}>
+                <CheckCircle2 className="size-5" /> {" "}{tr("Delivered")}</button>
+              <button className={btn("danger", "lg", "rounded-xl")} onClick={() => openSheet("failed")}>
+                <TriangleAlert className="size-5" /> {" "}{tr("Problem")}</button>
+            </div>
+          </div>
+        </div>
+      )}
       <Modal open={sheet?.kind === "delivered"} onClose={() => setSheet(null)} title={tr("Confirm delivery")}>
         {sheet && (
           <OutcomeForm

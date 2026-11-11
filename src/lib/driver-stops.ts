@@ -1,8 +1,10 @@
 import "server-only";
 import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { assertUser } from "./auth/dal";
 import { type DB, getDb } from "./db";
+import { emailDelivered, emailHeadsUp, emailNextStop, emailRouteStarted } from "./delivery-emails";
 import { deliveryEvents, orders, plans, routes, routeStops } from "./db/schema";
 import type { Outcome } from "./outcome";
 import { getSettings, refreshPlanSummary, UserError, writeStopTimes } from "./planning";
@@ -164,7 +166,27 @@ export async function finishStop(stopId: string, outcome: Outcome, at = new Date
     if (live.endS !== undefined) await refreshPlanSummary(tx as unknown as DB, plan.id, plan.deliveryDate);
   });
   revalidateDriverPages();
+  // Customer emails (when turned on), after the phone has its answer.
+  const implicitStart = !route.startedAt && sameDay;
+  after(async () => {
+    try {
+      if (implicitStart) await emailRouteStarted(route.id);
+      if (outcome.type === "delivered") await emailDelivered(stopId);
+      await emailNextStop(route.id);
+    } catch (err) {
+      console.warn("[delivery-emails] after a delivery:", (err as Error).message);
+    }
+  });
   return { already: false };
+}
+
+/** The driver's "about 10 minutes away" button for one of their stops. */
+export async function sendHeadsUp(stopId: string) {
+  const { db, stop } = await ownStop(stopId);
+  if (stop.status !== "pending") throw new UserError("This stop is already completed.");
+  const r = await emailHeadsUp(db, stop);
+  if (!r.sent) throw new UserError(r.reason);
+  revalidateDriverPages();
 }
 
 /**
@@ -189,6 +211,7 @@ export async function startDriverRoute(routeId: string, at = new Date()) {
   if (plan.deliveryDate !== todayIn(timezone, at)) throw new UserError("This shipment is for another day. Start it on the day you deliver it.");
   const startS = nowSecondsIn(timezone, at);
 
+  let didStart = false;
   await db.transaction(async (tx) => {
     // Only the first tap starts the route (a double tap or a second phone does nothing).
     const [started] = await tx
@@ -197,6 +220,7 @@ export async function startDriverRoute(routeId: string, at = new Date()) {
       .where(and(eq(routes.id, routeId), eq(routes.status, "planned")))
       .returning({ id: routes.id });
     if (!started) return;
+    didStart = true;
     const { totals, firstOrderId } = await retimeRemaining(tx, route, startS);
     await tx.update(routes).set(totals).where(eq(routes.id, routeId));
     if (firstOrderId) {
@@ -205,4 +229,7 @@ export async function startDriverRoute(routeId: string, at = new Date()) {
     await refreshPlanSummary(tx as unknown as DB, plan.id, plan.deliveryDate);
   });
   revalidateDriverPages();
+  if (didStart) {
+    after(() => emailRouteStarted(routeId).catch((err) => console.warn("[delivery-emails] route started:", (err as Error).message)));
+  }
 }

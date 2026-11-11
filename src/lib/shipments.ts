@@ -280,6 +280,110 @@ export async function recallShipment(db: DB, routeId: string) {
   });
 }
 
+/** "12 Smith St, Fortitude Valley QLD 4006" → "Fortitude Valley". Null when the address doesn't say. */
+export function suburbOf(address: string): string | null {
+  const m = /(?:^|,)\s*([^,]+?)[\s,]+(?:QLD|NSW|VIC|SA|WA|TAS|NT|ACT)\b(?:\s+\d{4})?\s*(?:,\s*Australia)?\s*$/i.exec(address.trim());
+  const name = m?.[1].replace(/^\d+[a-z]?\s+/i, "").trim();
+  return name ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : null;
+}
+
+/**
+ * Shares orders out between several drivers: who gets which is worked out like the Route Planner
+ * does (road times, delivery windows, van capacity and shifts, keeping the drivers' days even),
+ * counting what each already has on their shipment. Each driver's shipment is then built (or
+ * added to) as usual. Orders that fit nobody stay ready to ship.
+ */
+export async function splitIntoShipments(db: DB, date: string, driverIds: string[], orderIds: string[]) {
+  if (driverIds.length < 2) throw new UserError("Choose at least two drivers to share the orders between.");
+  if (!orderIds.length) throw new UserError("Select the orders to ship.");
+  const s = await getSettings(db);
+  const depotList = await getDepots(db);
+  if (!depotList.length) throw new UserError("Add a depot address in Settings first: shipments start from the depot.");
+  const team = await db.select().from(drivers).where(and(inArray(drivers.id, driverIds), eq(drivers.active, true)));
+  if (team.length < 2) throw new UserError("Choose at least two active drivers.");
+
+  const fresh = await db.select().from(orders).where(inArray(orders.id, orderIds));
+  for (const o of fresh) {
+    if (o.deliveryDate !== date) throw new UserError(`Order ${o.orderNumber} is for another day.`);
+    if (o.status !== "pending") throw new UserError(`Order ${o.orderNumber} is already in a shipment.`);
+    if (o.lat === null || o.lng === null) throw new UserError(`Order ${o.orderNumber}'s address hasn't been located yet. Verify it on the Orders page first.`);
+  }
+  if (fresh.length !== new Set(orderIds).size) throw new UserError("An order no longer exists. Reload the page.");
+
+  // What each driver already carries today counts against their van and their day.
+  const [plan] = await db.select().from(plans).where(eq(plans.deliveryDate, date)).limit(1);
+  const carried = plan
+    ? await db
+        .select({ driverId: routes.driverId, o: orders })
+        .from(routeStops)
+        .innerJoin(routes, eq(routes.id, routeStops.routeId))
+        .innerJoin(orders, eq(orders.id, routeStops.orderId))
+        .where(and(eq(routes.planId, plan.id), inArray(routes.driverId, team.map((d) => d.id)), eq(routeStops.status, "pending")))
+    : [];
+
+  const points: LatLng[] = [];
+  const nodeOf = new Map<string, number>();
+  const node = (key: string, p: LatLng) => {
+    if (!nodeOf.has(key)) {
+      nodeOf.set(key, points.length);
+      points.push(p);
+    }
+    return nodeOf.get(key)!;
+  };
+  const teamIds = new Set(team.map((d) => d.id));
+  const vehicles: Vehicle[] = team.map((d) => {
+    const depot = depotFor(depotList, d.depotId)!;
+    const n = node(`depot:${depot.id}`, depot);
+    return {
+      id: d.id,
+      startNode: n,
+      endNode: s.returnToDepot ? n : null,
+      depotNode: n,
+      startTime: (d.shiftStartMin ?? s.defaultStartMin) * 60,
+      maxDuration: (d.maxShiftMin ?? s.defaultMaxShiftMin) * 60,
+      capacity: d.capacity,
+      maxTrips: Math.max(1, d.maxTrips),
+      reloadTime: s.reloadMin * 60,
+    };
+  });
+  const learned = await learnTiming(db, s.timezone);
+  const job = (o: typeof orders.$inferSelect, allowed: string[] | undefined): Job => ({
+    id: o.id,
+    node: node(`order:${o.id}`, { lat: o.lat!, lng: o.lng! }),
+    service: (o.serviceMin ?? learned?.serviceMin ?? s.defaultServiceMin) * 60,
+    twStart: o.windowStartMin !== null ? o.windowStartMin * 60 : null,
+    twEnd: o.windowEndMin !== null ? o.windowEndMin * 60 : null,
+    demand: o.demand,
+    priority: o.priority,
+    allowedVehicles: allowed,
+  });
+  const jobs: Job[] = [
+    ...carried.filter((c) => c.o.lat !== null).map((c) => job(c.o, [c.driverId])),
+    // An order meant for one driver only goes to them (and stays put if they're not in the team).
+    ...fresh.map((o) => job(o, o.pinnedDriverId ? [o.pinnedDriverId].filter((id) => teamIds.has(id)) : undefined)),
+  ];
+  const matrix = await travelMatrix(points);
+  const factor = learned?.trafficFactor ?? s.trafficFactor;
+  const problem: Problem = {
+    vehicles,
+    jobs,
+    matrix: { durations: matrix.durations.map((row) => row.map((d) => Math.round(d * factor))), distances: matrix.distances },
+    objective: "balanced",
+  };
+  const solution = solve(problem, { timeLimitMs: Math.min(8000, 1000 + jobs.length * 80) });
+
+  const freshIds = new Set(fresh.map((o) => o.id));
+  const made: { driver: string; number: string; added: number }[] = [];
+  for (const r of solution.routes) {
+    const mine = r.jobIds.filter((id) => freshIds.has(id));
+    if (!mine.length) continue;
+    const route = await buildShipment(db, date, r.vehicleId, mine);
+    if (route) made.push({ driver: team.find((d) => d.id === r.vehicleId)!.name, number: route.number, added: mine.length });
+  }
+  const left = fresh.length - made.reduce((n, m) => n + m.added, 0);
+  return { made, left, matrixSource: matrix.source };
+}
+
 /** Orders for the day that aren't on any shipment yet, with their shop order (if any) for warehouse status. */
 export async function readyToShip(db: DB, date: string) {
   const rows = await db
@@ -294,6 +398,9 @@ export async function readyToShip(db: DB, date: string) {
     customerName: o.customerName,
     address: o.address,
     located: o.lat !== null,
+    lat: o.lat,
+    lng: o.lng,
+    suburb: o.suburb?.trim() || suburbOf(o.address),
     geocodeStatus: o.geocodeStatus,
     windowStartMin: o.windowStartMin,
     windowEndMin: o.windowEndMin,

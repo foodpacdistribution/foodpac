@@ -20,6 +20,7 @@ export async function optimise(input: OptimiseInput) {
     const user = await assertUser(STAFF);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new UserError("Invalid date.");
     if (!["balanced", "time", "distance"].includes(input.objective)) throw new UserError("Invalid objective.");
+    if (input.mode !== undefined && input.mode !== "full" && input.mode !== "insert") throw new UserError("Invalid mode.");
     // Learned from the drivers' own deliveries; worked out here so it's always current.
     const db = await getDb();
     const learned = input.learnedTiming ? await learnTiming(db, (await getSettings(db)).timezone) : null;
@@ -31,7 +32,9 @@ export async function optimise(input: OptimiseInput) {
     const t = await getT();
     return {
       message: [
-        t("Routes optimised in {secs}s", { secs: (r.solverMs / 1000).toFixed(1) }),
+        input.mode === "insert"
+          ? t("{n} order(s) added to the routes; stops already on them kept their order", { n: r.added })
+          : t("Routes optimised in {secs}s", { secs: (r.solverMs / 1000).toFixed(1) }),
         learned && t("timed from your deliveries (+{pct}% driving, {min} min per stop)", { pct: Math.round((trafficFactor - 1) * 100), min: defaultServiceMin }),
         r.unassigned > 0 && t("{n} order(s) could not be assigned", { n: r.unassigned }),
         r.matrixSource === "estimate" && t("road data unavailable, times are straight-line estimates"),

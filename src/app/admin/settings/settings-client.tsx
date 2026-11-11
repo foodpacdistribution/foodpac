@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Camera, MapPin, Pencil, Plug, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { Building2, Camera, Mail, MapPin, Pencil, Plug, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { createStaffUser, deleteUser, saveDepot, saveSettings } from "@/app/actions/settings";
 import { FormError, KeptForm, Modal, SubmitButton, useKeptForm } from "@/components/client-ui";
@@ -116,6 +116,16 @@ export function SettingsClient({
                 <label className="flex items-center gap-2">
                   <input type="checkbox" name="requireSignature" defaultChecked={s.requireSignature} /> {" "}{tr("Require the customer's signature")}</label>
                 <p className="text-xs text-slate-500">{tr("Drivers can always add a photo or signature; these make them mandatory before a stop can be marked delivered.")}</p>
+              </div>
+              <div className="h-px bg-line" />
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <Mail className="size-3.5" /> {" "}{tr("Customer emails")}</p>
+              <div className="space-y-2 text-sm text-slate-700">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" name="notifyCustomers" defaultChecked={s.notifyCustomers} /> {" "}{tr("Email customers about their delivery")}</label>
+                <p className="text-xs text-slate-500">
+                  {tr("When the driver sets off (with the expected time), when they're the next stop, and when it's delivered. Drivers also get a button to say they're about 10 minutes away. Only customers with an email address on file get them.")}
+                </p>
               </div>
               <FormError message={state && !state.ok ? state.error : null} />
               {state?.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 ring-1 ring-emerald-200">{state.message}</p>}

@@ -31,6 +31,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
       date={date}
       today={today}
       hasDepot={depots.length > 0}
+      depots={depots.map((d) => ({ id: d.id, name: d.name, lat: d.lat, lng: d.lng }))}
       ready={ready}
       drivers={driverRows}
       shipments={view.routes.map((r) => ({
@@ -44,6 +45,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
         status: r.status,
         dispatchedAt: r.dispatchedAt,
         matrixSource: r.matrixSource,
+        geometry: r.geometry,
         startS: r.startS,
         endS: r.endS,
         distanceM: r.distanceM,
@@ -53,6 +55,9 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
           orderId: st.orderId,
           seq: st.seq,
           lateS: st.lateS,
+          etaS: st.etaS,
+          windowStartMin: st.order.windowStartMin,
+          windowEndMin: st.order.windowEndMin,
           // When the driver confirmed it (signature / photo); nothing until then. Seconds are dropped
           // (not rounded) so it reads the same minute as the invoice's "Delivered … at".
           doneS: st.completedAt && st.status !== "pending" ? Math.floor(nowSecondsIn(s.timezone, new Date(st.completedAt)) / 60) * 60 : null,
@@ -61,6 +66,8 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
           customerName: st.order.customerName,
           address: st.order.address,
           demand: st.order.demand,
+          lat: st.order.lat,
+          lng: st.order.lng,
         })),
       }))}
     />

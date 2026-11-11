@@ -20,6 +20,7 @@ import { shiftDate } from "./dates";
 import { nowSecondsIn, todayIn } from "./time";
 import { fitTiming, type Leg, type Timing } from "./vrp/calibrate";
 import { evaluateRoute } from "./vrp/evaluate";
+import { insertJobs } from "./vrp/insert";
 import { naivePlan, solve } from "./vrp/solver";
 import type { Job, Objective, Problem, RouteEval, Vehicle } from "./vrp/types";
 
@@ -109,6 +110,8 @@ export type StopView = {
   legDriveS: number;
   status: "pending" | "delivered" | "failed";
   completedAt: string | null;
+  /** When the driver told the customer they were about 10 minutes away. */
+  headsUpAt: string | null;
   order: {
     orderNumber: string;
     customerName: string;
@@ -256,6 +259,7 @@ export async function getPlanView(db: DB, date: string): Promise<PlanView> {
           legDriveS: stop.legDriveS,
           status: stop.status,
           completedAt: stop.completedAt?.toISOString() ?? null,
+          headsUpAt: stop.headsUpAt?.toISOString() ?? null,
           order: {
             orderNumber: order.orderNumber,
             customerName: order.customerName,
@@ -361,6 +365,11 @@ export type OptimiseInput = {
   returnToDepot: boolean;
   /** Use learnTiming's driving speed and unloading time instead of trafficFactor / defaultServiceMin. */
   learnedTiming?: boolean;
+  /**
+   * "insert": keep every route's stops in their current order and only slot in the orders that
+   * aren't on a route yet (new since the last run). Default: plan the whole day again.
+   */
+  mode?: "full" | "insert";
 };
 
 type CompletedStop = { stopId: string; seq: number; orderId: string; demand: number; lat: number; lng: number; etdS: number; status: string; trip: number };
@@ -413,14 +422,29 @@ export async function optimisePlan(input: OptimiseInput, userId: string) {
   const depotList = await getDepots(db);
   if (!depotList.length) throw new UserError("Add a depot address in Settings before planning routes.");
   if (input.driverIds.length === 0) throw new UserError("Select at least one driver.");
+  const insertOnly = input.mode === "insert";
 
+  const [existingPlan] = await db.select().from(plans).where(eq(plans.deliveryDate, input.date)).limit(1);
+  // Adding to the routes as they are: each driver's stops still to do, in their current order.
+  const pendingByDriver = new Map<string, string[]>();
+  if (insertOnly) {
+    if (!existingPlan) throw new UserError("Optimise the day first; new orders can then be added to its routes.");
+    const rows = await db
+      .select({ driverId: routes.driverId, orderId: routeStops.orderId })
+      .from(routeStops)
+      .innerJoin(routes, eq(routes.id, routeStops.routeId))
+      .where(and(eq(routes.planId, existingPlan.id), eq(routeStops.status, "pending")))
+      .orderBy(asc(routeStops.seq));
+    for (const r of rows) pendingByDriver.set(r.driverId, [...(pendingByDriver.get(r.driverId) ?? []), r.orderId]);
+  }
+
+  // A driver who already has stops keeps them, ticked or not.
   const selected = await db
     .select()
     .from(drivers)
-    .where(and(inArray(drivers.id, input.driverIds), eq(drivers.active, true)));
+    .where(and(inArray(drivers.id, [...new Set([...input.driverIds, ...pendingByDriver.keys()])]), eq(drivers.active, true)));
   if (!selected.length) throw new UserError("None of the selected drivers are active.");
 
-  const [existingPlan] = await db.select().from(plans).where(eq(plans.deliveryDate, input.date)).limit(1);
   const existing = await loadExistingRoutes(db, existingPlan?.id);
   const isToday = input.date === todayIn(s.timezone);
   const nowS = nowSecondsIn(s.timezone);
@@ -510,8 +534,21 @@ export async function optimisePlan(input: OptimiseInput, userId: string) {
   const matrix = await travelMatrix(points);
   const durations = matrix.durations.map((row) => row.map((d) => Math.round(d * input.trafficFactor)));
   const problem: Problem = { vehicles, jobs, matrix: { durations, distances: matrix.distances }, objective: input.objective };
-  const timeLimitMs = Math.min(12000, Math.max(1500, 1000 + jobs.length * 60));
-  const solution = solve(problem, { timeLimitMs });
+  let solution: { routes: RouteEval[]; unassigned: { jobId: string; reason: string }[]; elapsedMs: number; iterations: number };
+  let added = 0;
+  if (insertOnly) {
+    const started = Date.now();
+    const jobIndex = new Map(jobs.map((j, i) => [j.id, i]));
+    const seqs = vehicles.map((v) => (pendingByDriver.get(v.id) ?? []).map((id) => jobIndex.get(id)).filter((i): i is number => i !== undefined));
+    const onRoute = new Set(seqs.flat());
+    const candidates = jobs.map((_, i) => i).filter((i) => !onRoute.has(i));
+    const r = insertJobs(problem, seqs, candidates);
+    added = candidates.length - r.unassigned.length;
+    solution = { ...r, elapsedMs: Date.now() - started, iterations: 0 };
+  } else {
+    const timeLimitMs = Math.min(12000, Math.max(1500, 1000 + jobs.length * 60));
+    solution = solve(problem, { timeLimitMs });
+  }
   // Compare like with like: the naive plan serves exactly the orders the optimiser could serve.
   const served = new Set(solution.routes.flatMap((r) => r.jobIds));
   const baselineEvals = naivePlan({ ...problem, jobs: jobs.filter((j) => served.has(j.id)) });
@@ -541,13 +578,13 @@ export async function optimisePlan(input: OptimiseInput, userId: string) {
     unassigned,
     baseline: summarise(baselineEvals.map(evalTotals), served.size),
     ordersTotal: dayOrders.length,
-    kind: "optimise",
+    kind: insertOnly ? "insert" : "optimise",
     userId,
     solverMs: solution.elapsedMs,
     settingsSnapshot: { ...input, iterations: solution.iterations },
   });
 
-  return { planId, matrixSource: matrix.source, unassigned: unassigned.length, solverMs: solution.elapsedMs };
+  return { planId, matrixSource: matrix.source, unassigned: unassigned.length, solverMs: solution.elapsedMs, added };
 }
 
 // ---------------------------------------------------------------------------
@@ -695,7 +732,7 @@ async function persistPlan(
     unassigned: { orderId: string; reason: string }[];
     baseline: PlanSummary | null;
     ordersTotal: number;
-    kind: "optimise" | "manual_edit";
+    kind: "optimise" | "insert" | "manual_edit";
     userId: string;
     solverMs: number | null;
     settingsSnapshot: Record<string, unknown> | null;

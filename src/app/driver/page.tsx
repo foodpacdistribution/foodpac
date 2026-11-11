@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { requireUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { plans, routes, routeStops, salesOrderItems, salesOrders } from "@/lib/db/schema";
+import { customerEmailsOn } from "@/lib/delivery-emails";
 import { depotFor, getDepots, getPlanView, getSettings } from "@/lib/planning";
 import { nowSecondsIn, todayIn } from "@/lib/time";
 import { DriverClient, type StopItem } from "./driver-client";
@@ -63,6 +64,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
       depot={depot}
       route={route}
       items={items}
+      canTellCustomer={await customerEmailsOn(db)}
       requirePhoto={s.requirePhoto}
       requireSignature={s.requireSignature}
     />

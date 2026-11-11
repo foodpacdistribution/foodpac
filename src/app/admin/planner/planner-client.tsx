@@ -10,6 +10,7 @@ import {
   GripVertical,
   KanbanSquare,
   Map as MapIcon,
+  Plus,
   RefreshCcw,
   RotateCcw,
   Send,
@@ -109,7 +110,7 @@ export function PlannerClient(props: Props) {
   const { date, view, drivers, orders, defaults, timing } = props;
   const plan = view.plan;
   const [pending, startTransition] = useTransition();
-  const [busy, setBusy] = useState<null | "optimise" | "save" | "dispatch" | "delete">(null);
+  const [busy, setBusy] = useState<null | "optimise" | "insert" | "save" | "dispatch" | "delete">(null);
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [mode, setMode] = useState<"map" | "board">("map");
   const [focusRouteId, setFocusRouteId] = useState<string | null>(null);
@@ -200,11 +201,11 @@ export function PlannerClient(props: Props) {
     setNotice(r.ok ? { tone: "ok", text: r.message ?? "Done" } : { tone: "error", text: r.error ?? "Failed" });
   }
 
-  function runOptimise() {
-    if (plan?.status === "dispatched" && !confirm("This plan is already with the drivers. Re-optimising updates their remaining stops. Continue?")) return;
-    setBusy("optimise");
+  function runOptimise(mode: "full" | "insert" = "full") {
+    if (mode === "full" && plan?.status === "dispatched" && !confirm("This plan is already with the drivers. Re-optimising updates their remaining stops. Continue?")) return;
+    setBusy(mode === "insert" ? "insert" : "optimise");
     startTransition(async () => {
-      report(await optimise({ date, driverIds, startMin, defaultServiceMin: serviceMin, objective, trafficFactor: traffic, returnToDepot, learnedTiming: useLearned }));
+      report(await optimise({ date, driverIds, startMin, defaultServiceMin: serviceMin, objective, trafficFactor: traffic, returnToDepot, learnedTiming: useLearned, mode }));
       setBusy(null);
     });
   }
@@ -343,6 +344,13 @@ export function PlannerClient(props: Props) {
           </>
         }
       />
+      <p className="-mt-2 mb-4 text-xs text-slate-500">
+        {tr("The whole day for every driver at once. To build or change one driver's shipment, or share some orders between a few drivers, use")}{" "}
+        <Link href={`/admin/shipments?date=${date}`} className="font-medium text-blue-700 hover:underline">
+          {tr("Shipments")} →
+        </Link>{" "}
+        {tr("Both work on the same routes.")}
+      </p>
 
       {notice && (
         <div
@@ -515,7 +523,7 @@ export function PlannerClient(props: Props) {
                   {tr(blocker.cta ?? "")} →
                 </Link>
               ) : (
-                <button className={btn("primary", "lg", "w-full")} disabled={pending || !!blocker} onClick={runOptimise}>
+                <button className={btn("primary", "lg", "w-full")} disabled={pending || !!blocker} onClick={() => runOptimise()}>
                   {busy === "optimise" ? (
                     <>
                       <Spinner /> {" "}{tr("Optimising…")}</>
@@ -676,7 +684,23 @@ export function PlannerClient(props: Props) {
                       <span className="flex items-center gap-1.5 text-amber-800">
                         <AlertTriangle className="size-4" /> {draft.unassigned.length} {" "}{tr("not on any route")}</span>
                     }
+                    action={
+                      !dirty && !blocker && view.routes.length > 0 ? (
+                        <button
+                          className={btn("primary", "sm")}
+                          disabled={pending}
+                          onClick={() => runOptimise("insert")}
+                        >
+                          {busy === "insert" ? <Spinner className="size-3" /> : <Plus className="size-3.5" />} {" "}{tr("Add to routes")}
+                        </button>
+                      ) : undefined
+                    }
                   />
+                  {!dirty && view.routes.length > 0 && (
+                    <p className="border-b border-line bg-amber-50/50 px-4 py-2 text-[11px] text-slate-600">
+                      {tr("Add to routes slots them in where they add the least driving. Stops already on a route, and on the drivers' phones, keep their order.")}
+                    </p>
+                  )}
                   <ul className="divide-y divide-line">
                     {draft.unassigned.map((id) => {
                       const o = orderById.get(id);
@@ -724,7 +748,7 @@ export function PlannerClient(props: Props) {
                     {view.runs.map((r) => (
                       <li key={r.id} className="flex items-center justify-between gap-2 px-4 py-2">
                         <span className="text-slate-700">
-                          {r.kind === "optimise" ? tr("Optimised") : tr("Manual edit")}
+                          {r.kind === "optimise" ? tr("Optimised") : r.kind === "insert" ? tr("New orders added") : tr("Manual edit")}
                           <span className="text-slate-400"> · {r.userName ?? "—"}</span>
                         </span>
                         <span className="text-right text-slate-500 tabular-nums">

@@ -45,6 +45,8 @@ export const settings = pgTable("settings", {
   reloadMin: integer("reload_min").notNull().default(15),
   requirePhoto: boolean("require_photo").notNull().default(false),
   requireSignature: boolean("require_signature").notNull().default(false),
+  /** Email customers when their delivery is on its way, when they're next, and when it's delivered. */
+  notifyCustomers: boolean("notify_customers").notNull().default(false),
   /** Online shop. Money is in cents, ex GST. */
   deliveryFeeCents: integer("delivery_fee_cents").notNull().default(1500),
   freeDeliveryOverCents: integer("free_delivery_over_cents").notNull().default(30000),
@@ -345,6 +347,10 @@ export const routeStops = pgTable(
     legDriveS: integer("leg_drive_s").notNull(),
     status: text("status").$type<StopStatus>().notNull().default("pending"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    /** When the customer was emailed that they're the next stop (so it goes once). */
+    nextNotifiedAt: timestamp("next_notified_at", { withTimezone: true }),
+    /** When the driver sent the "about 10 minutes away" email for this stop. */
+    headsUpAt: timestamp("heads_up_at", { withTimezone: true }),
   },
   // Not unique per order: a failed delivery rescheduled to another day gets a new stop, the old one stays as history.
   (t) => [index("route_stops_route_idx").on(t.routeId), index("route_stops_order_idx").on(t.orderId)],
@@ -382,7 +388,7 @@ export const optimisationRuns = pgTable(
     planId: uuid("plan_id")
       .notNull()
       .references(() => plans.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"optimise" | "manual_edit">().notNull(),
+    kind: text("kind").$type<"optimise" | "insert" | "manual_edit">().notNull(),
     userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     summary: jsonb("summary").$type<PlanSummary>().notNull(),
     baseline: jsonb("baseline").$type<PlanSummary>(),

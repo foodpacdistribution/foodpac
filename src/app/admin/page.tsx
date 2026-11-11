@@ -111,11 +111,32 @@ export default async function DashboardPage() {
   });
   const projectedFinish = routeRows.length ? Math.max(...routeRows.map((x) => x.projected ?? 0)) : null;
 
-  const steps = [
+  // Each step counts as done only when it's done for every order, not as soon as one route exists.
+  const notRouted = count("pending");
+  const notSent = count("planned");
+  const steps: { done: boolean; label: string; href: string; icon: typeof Upload; left?: string }[] = [
     { done: dayOrders.length > 0, label: "Import today's orders", href: `/admin/orders/import?date=${today}`, icon: Upload },
-    { done: dayOrders.length > 0 && notLocated === 0, label: "Verify delivery addresses", href: `/admin/orders?date=${today}&status=attention`, icon: Package },
-    { done: !!plan, label: "Optimise routes", href: `/admin/planner?date=${today}`, icon: MapIcon },
-    { done: dispatched, label: "Dispatch to drivers", href: `/admin/planner?date=${today}`, icon: Truck },
+    {
+      done: dayOrders.length > 0 && notLocated === 0,
+      label: "Verify delivery addresses",
+      href: `/admin/orders?date=${today}&status=attention`,
+      icon: Package,
+      left: notLocated ? `${notLocated} to check` : undefined,
+    },
+    {
+      done: (!!plan || view.routes.length > 0) && notRouted === 0,
+      label: "Optimise routes",
+      href: `/admin/planner?date=${today}`,
+      icon: MapIcon,
+      left: notRouted && (plan || view.routes.length) ? `${notRouted} not on a route yet` : undefined,
+    },
+    {
+      done: dispatched && notRouted === 0 && notSent === 0,
+      label: "Dispatch to drivers",
+      href: `/admin/planner?date=${today}`,
+      icon: Truck,
+      left: notSent ? `${notSent} not sent yet` : undefined,
+    },
   ];
   const nextStep = steps.find((st) => !st.done);
 
@@ -421,7 +442,10 @@ export default async function DashboardPage() {
                     ) : (
                       <span className="grid size-5 place-items-center rounded-full border-2 border-slate-300 text-[10px] font-bold text-slate-400">{i + 1}</span>
                     )}
-                    <span className={cx("flex-1 text-sm", st.done ? "text-slate-400 line-through" : "font-medium text-slate-800")}>{<Tx>{st.label}</Tx>}</span>
+                    <span className={cx("flex-1 text-sm", st.done ? "text-slate-400 line-through" : "font-medium text-slate-800")}>
+                      {<Tx>{st.label}</Tx>}
+                      {!st.done && st.left && <span className="block text-xs font-normal text-amber-700">{<Tx>{st.left}</Tx>}</span>}
+                    </span>
                     <st.icon className="size-4 text-slate-300" />
                   </Link>
                 </li>

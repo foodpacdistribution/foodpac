@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({ db: null as unknown, user: null as unknown }))
 vi.mock("./db", async (orig) => ({ ...(await orig<typeof import("./db")>()), getDb: async () => state.db }));
 vi.mock("./auth/dal", () => ({ assertUser: async () => state.user }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
+vi.mock("next/server", () => ({ after: () => {} }));
 
 const TZ = "Australia/Sydney";
 const H = 3600;

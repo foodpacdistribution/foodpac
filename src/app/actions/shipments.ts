@@ -8,7 +8,7 @@ import { getDb } from "@/lib/db";
 import { plans, routes } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
 import { UserError } from "@/lib/planning";
-import { buildShipment, deleteShipment as removeShipment, recallShipment as recall, sendShipment as send } from "@/lib/shipments";
+import { buildShipment, deleteShipment as removeShipment, recallShipment as recall, sendShipment as send, splitIntoShipments } from "@/lib/shipments";
 
 function revalidate() {
   for (const p of ["/admin/shipments", "/admin/orders", "/admin/planner", "/admin", "/admin/sales", "/admin/tracking", "/driver"]) revalidatePath(p);
@@ -68,6 +68,28 @@ export async function reoptimiseShipment(routeId: string) {
     const t = await getT();
     if (r?.matrixSource === "estimate") throw new UserError(t("Road data still didn't load. Try again in a minute."));
     return { message: t("{number} re-optimised with road data", { number: r?.number ?? route.number }) };
+  });
+}
+
+/** Shares the selected orders out between several drivers' shipments (created or added to; not sent yet). */
+export async function splitShipments(date: string, driverIds: string[], orderIds: string[]) {
+  return attempt(async () => {
+    await assertUser(STAFF);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new UserError("Choose a date.");
+    const db = await getDb();
+    const r = await splitIntoShipments(db, date, [...new Set(driverIds)], [...new Set(orderIds)]);
+    revalidate();
+    const t = await getT();
+    if (!r.made.length) throw new UserError(t("None of the orders fit these drivers' vans and shifts."));
+    return {
+      message: [
+        r.made.map((m) => `${m.driver} +${m.added} (${m.number})`).join(" · "),
+        r.left > 0 && t("{n} didn't fit and are still ready to ship", { n: r.left }),
+        r.matrixSource === "estimate" && t(ESTIMATE_WARNING),
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    };
   });
 }
 
