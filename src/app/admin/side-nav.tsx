@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeDollarSign, BarChart3, Boxes, Building2, ClipboardList, Factory, FileText, GalleryHorizontal, HandCoins, Inbox, LayoutDashboard, Map, Package, PackageCheck, PackagePlus, Radio, RotateCcw, Settings, ShoppingBag, Target, TrendingUp, Truck, Undo2, Wallet, Warehouse, Zap, ChevronDown, Menu as MenuIcon, X } from "lucide-react";
+import { BadgeDollarSign, BarChart3, Boxes, Building2, ClipboardList, Factory, FileText, GalleryHorizontal, HandCoins, Inbox, LayoutDashboard, Map, MapPinned, Package, PackageCheck, PackagePlus, Radio, RotateCcw, Settings, ShoppingBag, Target, TrendingUp, Truck, Undo2, Wallet, Warehouse, Zap, ChevronDown, Menu as MenuIcon, X } from "lucide-react";
 import Link from "@/components/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -8,6 +8,7 @@ import { Drawer } from "@/components/drawer";
 import { LinkPending } from "@/components/client-ui";
 import { cx } from "@/components/ui";
 import type { Role } from "@/lib/db/schema";
+import { SALES_PAGES } from "@/lib/auth/sales-pages";
 import { useT } from "@/components/i18n";
 
 const SECTIONS = [
@@ -49,6 +50,7 @@ const SECTIONS = [
     items: [
       { href: "/admin/pipeline", label: "Sales Pipeline", icon: Target },
       { href: "/admin/customers", label: "Customers", icon: Building2 },
+      { href: "/admin/customer-map", label: "Customer Map", icon: MapPinned },
       { href: "/admin/drivers", label: "Drivers", icon: Truck },
     ],
   },
@@ -80,9 +82,9 @@ const URGENT = new Set(["/admin/sales", "/admin/enquiries"]);
 
 export type NavItem = (typeof SECTIONS)[number]["items"][number];
 
-/** The menu this role sees: sales staff only get the pipeline; Settings is admin only. */
+/** The menu this role sees: sales staff only get the pipeline and customer map; Settings is admin only. */
 export function navFor(role: Role) {
-  const allowed = (i: NavItem) => (role === "sales" ? i.href === "/admin/pipeline" : !("adminOnly" in i) || role === "admin");
+  const allowed = (i: NavItem) => (role === "sales" ? SALES_PAGES.includes(i.href) : !("adminOnly" in i) || role === "admin");
   return SECTIONS.map((s) => ({ ...s, items: s.items.filter(allowed) })).filter((s) => s.items.length);
 }
 

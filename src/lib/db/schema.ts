@@ -129,6 +129,15 @@ export const customers = pgTable("customers", {
   followUpNote: text("follow_up_note"),
   /** Last time someone marked a follow-up done; quiet-customer reminders wait a full quiet spell after it. */
   contactedAt: timestamp("contacted_at", { withTimezone: true }),
+  /**
+   * Where the address is, for the customer map. `geocodedAddress` is the address these were
+   * found for: when it no longer matches `address`, the customer is placed again.
+   */
+  lat: doublePrecision("lat"),
+  lng: doublePrecision("lng"),
+  geocodeStatus: text("geocode_status").$type<Exclude<GeocodeStatus, "pending">>(),
+  geocodeLabel: text("geocode_label"),
+  geocodedAddress: text("geocoded_address"),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("customers_code_key").on(sql`lower(${t.code})`)]);
 

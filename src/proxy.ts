@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { homeFor, SALES_HOME, SESSION_COOKIE, verifySession } from "./lib/auth/session";
+import { homeFor, SALES_HOME, salesMayOpen, SESSION_COOKIE, verifySession } from "./lib/auth/session";
 import { hasZhPage, LOCALE_COOKIE, stripZh, URL_LOCALE_HEADER } from "./lib/i18n";
 
 // The public website is open to everyone; only the back office and the driver app need a session.
@@ -45,8 +45,8 @@ export async function proxy(request: NextRequest) {
   if (session.role === "driver" && !pathname.startsWith("/driver") && pathname !== "/quick-route" && pathname !== "/account") {
     return NextResponse.redirect(new URL("/driver", request.url));
   }
-  // Sales staff only have the pipeline (and their own profile).
-  if (session.role === "sales" && !(pathname === SALES_HOME || pathname.startsWith(`${SALES_HOME}/`)) && pathname !== "/account") {
+  // Sales staff only have the pipeline and the customer map (and their own profile).
+  if (session.role === "sales" && !salesMayOpen(pathname)) {
     return NextResponse.redirect(new URL(SALES_HOME, request.url));
   }
   if (session.role === "customer" && !pathname.startsWith("/portal")) {

@@ -82,3 +82,10 @@ describe("purchasing and store credit messages", () => {
     expect(translate(zh, "Pending supplier confirmation")).toBe("等待供应商确认");
   });
 });
+
+describe("customer map", () => {
+  it("translates the counts", () => {
+    expect(translate(zh, "{n} customers here", { n: 4 })).toBe("这里有 4 个客户");
+    expect(translate(zh, "Placing customers on the map: {n} to go", { n: 12 })).toBe("正在把客户标到地图上:还剩 12 个");
+  });
+});

@@ -17,6 +17,8 @@ describe("afterLogin", () => {
     expect(afterLogin("sales", null)).toBe("/admin/pipeline");
     expect(afterLogin("sales", "/admin/pipeline?stage=won")).toBe("/admin/pipeline?stage=won");
     expect(afterLogin("sales", "/account")).toBe("/account");
+    expect(afterLogin("sales", "/admin/customer-map")).toBe("/admin/customer-map");
+    expect(afterLogin("sales", "/admin/customers")).toBe("/admin/pipeline");
   });
   it("rejects external and malformed targets", () => {
     expect(afterLogin("admin", "https://evil.example")).toBe("/admin");

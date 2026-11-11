@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useSyncExternalStore } from "react";
-import type { MapProps } from "./types";
+import type { CustomerMapProps, MapProps } from "./types";
 
 const loading = () => <div className="grid h-full w-full animate-pulse place-items-center bg-slate-100 text-sm text-slate-400">Loading map…</div>;
 
@@ -11,6 +11,8 @@ const loading = () => <div className="grid h-full w-full animate-pulse place-ite
 const USE_GOOGLE = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 const GoogleInner = dynamic(() => import("./google-map-inner"), { ssr: false, loading });
 const LeafletInner = dynamic(() => import("./map-inner"), { ssr: false, loading });
+const GoogleCustomers = dynamic(() => import("./customer-map-google"), { ssr: false, loading });
+const LeafletCustomers = dynamic(() => import("./customer-map-leaflet"), { ssr: false, loading });
 
 // A rejected key (billing off, API not enabled, wrong referrer, …) makes Google cover
 // the map with an error dialog. Switch to OpenStreetMap instead, and remember it for
@@ -48,6 +50,13 @@ export function DeliveryMap(props: MapProps) {
   const failed = useSyncExternalStore(subscribe, () => googleFailed, () => false);
   const MapInner = USE_GOOGLE && !failed ? GoogleInner : LeafletInner;
   return <MapInner {...props} />;
+}
+
+/** Customers on a map, grouped into bubbles with a count that split up as you zoom in. */
+export function CustomerMap(props: CustomerMapProps) {
+  const failed = useSyncExternalStore(subscribe, () => googleFailed, () => false);
+  const Inner = USE_GOOGLE && !failed ? GoogleCustomers : LeafletCustomers;
+  return <Inner {...props} />;
 }
 
 export type { MapDepot, MapRoute, MapStop, MapVehicle } from "./types";

@@ -169,6 +169,13 @@
       "when": 1794202856603,
       "tag": "0023_quotes_customer_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794351599303,
+      "tag": "0024_customer_locations",
+      "breakpoints": true
     }
   ]
 }

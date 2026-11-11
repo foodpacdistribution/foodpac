@@ -130,7 +130,7 @@ export function SettingsClient({
 
         <div className="space-y-4">
           <Card>
-            <CardHeader title={<span className="flex items-center gap-2"><Users className="size-4 text-slate-400" /> {" "}{tr("Staff logins")}</span>} subtitle={tr("Sales staff only see the Sales Pipeline. Driver logins are managed on the Drivers page.")} />
+            <CardHeader title={<span className="flex items-center gap-2"><Users className="size-4 text-slate-400" /> {" "}{tr("Staff logins")}</span>} subtitle={tr("Sales staff only see the Sales Pipeline and the Customer Map. Driver logins are managed on the Drivers page.")} />
             {notice && <p className="border-b border-line bg-slate-50 px-4 py-2 text-xs text-slate-600">{notice}</p>}
             <ul className="divide-y divide-line">
               {shownUsers.map((u) => (

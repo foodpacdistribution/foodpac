@@ -9,6 +9,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { codeTaken, syncCustomerCodes } from "@/lib/customer-code";
 import { cleanCode, type CustomerImportRow, MAX_CUSTOMER_ROWS } from "@/lib/customer-import";
 import { applyCustomerImport, type CustomerImportResult, linkOrdersToCustomer } from "@/lib/customers";
+import { locateCustomersLater } from "@/lib/customer-locations";
 import { getDb } from "@/lib/db";
 import { accountApproved } from "@/lib/notify";
 import { customers, type PaymentTerms, salesOrders, users } from "@/lib/db/schema";
@@ -83,6 +84,7 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
     await linkOrdersToCustomer(db, { id: customerId, name, phone: values.phone });
     // Registration promises an email once the account can order.
     if (before && !before.approved && values.approved) after(() => accountApproved(customerId));
+    locateCustomersLater();
     revalidatePath("/admin/customers");
     revalidatePath("/admin/pipeline");
     return { message: id ? "Customer updated" : "Customer added" };
@@ -133,6 +135,8 @@ export async function importCustomers(rows: CustomerImportRow[]) {
       const db = await getDb();
       for (const c of created) await linkOrdersToCustomer(db, c);
     });
+    // New and changed addresses go on the customer map (a big import finishes when the map is opened).
+    locateCustomersLater(240_000);
     revalidatePath("/admin/customers");
     revalidatePath("/admin/pipeline");
     return { data: result };

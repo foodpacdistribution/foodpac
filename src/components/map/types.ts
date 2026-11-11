@@ -58,3 +58,11 @@ export type MapProps = {
   /** Zoom used when there is only one thing to show (default 13; ~18 shows the building). */
   singleZoom?: number;
 };
+
+export type CustomerMapProps = {
+  pins: import("@/lib/customer-map").CustomerPin[];
+  /** The map re-frames to `fitPins` whenever this changes (a filter or an area was picked). */
+  fitKey: string;
+  fitPins: import("@/lib/customer-map").CustomerPin[];
+  className?: string;
+};

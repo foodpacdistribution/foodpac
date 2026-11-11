@@ -1,5 +1,6 @@
 import { jwtVerify, SignJWT } from "jose";
 import type { Role } from "../db/schema";
+import { SALES_HOME, salesMayOpen } from "./sales-pages";
 
 export const SESSION_COOKIE = "dp_session";
 const MAX_AGE_S = 60 * 60 * 24 * 7;
@@ -15,8 +16,7 @@ function secret() {
   return new TextEncoder().encode(s);
 }
 
-/** The one back-office page sales staff use. */
-export const SALES_HOME = "/admin/pipeline";
+export { SALES_HOME, salesMayOpen };
 
 /** Where each role lands after signing in, and where it is sent when it opens a page it can't use. */
 export function homeFor(role: Role) {
@@ -34,7 +34,7 @@ export function afterLogin(role: Role, next: string | null | undefined) {
   const under = (p: string) => path === p || path.startsWith(`${p}/`);
   const ok =
     role === "sales"
-      ? under(SALES_HOME) || path === "/account" || !(under("/admin") || under("/portal") || under("/driver") || path === "/quick-route")
+      ? salesMayOpen(path) || !(under("/admin") || under("/portal") || under("/driver") || path === "/quick-route")
       : role === "customer"
       ? !under("/admin") && !under("/driver") && !under("/quick-route")
       : role === "driver"

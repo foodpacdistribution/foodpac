@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { attempt } from "@/lib/action";
 import { assertUser, PIPELINE } from "@/lib/auth/dal";
 import { linkOrdersToCustomer } from "@/lib/customers";
+import { locateCustomersLater } from "@/lib/customer-locations";
 import { getDb } from "@/lib/db";
 import { customers, settings } from "@/lib/db/schema";
 import { prettyDate } from "@/lib/dates";
@@ -83,6 +84,7 @@ export async function saveLead(_prev: unknown, form: FormData) {
         .returning({ id: customers.id });
     }
     await linkOrdersToCustomer(db, { id: customerId!, name, phone: details.phone });
+    locateCustomersLater();
     refresh();
     return { message: id ? `Customer updated: ${name}` : `Customer added: ${name}` };
   });

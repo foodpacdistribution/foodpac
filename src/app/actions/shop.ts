@@ -18,6 +18,7 @@ import { canSeePrices, cancelOrder, placeOrder } from "@/lib/shop";
 import { refundOrExpire } from "@/lib/payments";
 import { createCheckoutSession, stripeEnabled } from "@/lib/stripe";
 import { geocodeOrderIds } from "@/lib/sync";
+import { locateCustomersLater } from "@/lib/customer-locations";
 import { inputToMinutes } from "@/lib/time";
 
 const MAX_QTY = 9999;
@@ -290,6 +291,7 @@ export async function registerCustomer(_prev: unknown, form: FormData) {
       return { user: u, customer: c };
     });
     after(() => accountRequested({ id: customer.id, name: business, contact: name, email, phone: customer.phone, address: customer.address }));
+    locateCustomersLater();
     const token = await signSession({ sub: user.id, role: "customer", name: user.name, driverId: null });
     (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
     revalidatePath("/admin/customers");

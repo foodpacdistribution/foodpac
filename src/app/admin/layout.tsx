@@ -20,7 +20,7 @@ import { SideNav } from "./side-nav";
 import { T } from "@/components/i18n";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
-  // Pages check their own roles too; sales staff only get the pipeline.
+  // Pages check their own roles too; sales staff only get the pipeline and the customer map.
   const db = await getDb();
   const [user, s] = await Promise.all([requireUser(PIPELINE), getSettings(db)]);
   await restoreDeliveries(db, s.timezone);
