@@ -209,9 +209,15 @@ function readTable(lines: Line[]): string[][] | null {
 const LABEL = /^([A-Za-z][A-Za-z0-9 #./&()'-]{0,30}?)\s*:\s*(.*)$/;
 const isLabel = (c: Cell) => LABEL.test(c.text);
 const fieldOf = (label: string) => Object.keys(guessMapping([label]))[0];
-/** Document titles and letterheads, never a customer name. */
-const TITLE = /^(tax\s+)?(invoice|delivery\s+(order|docket|note)|packing\s+(slip|list)|picking\s+(slip|list)|sales\s+order|consignment\s+note|order\s+confirmation|statement|quote|quotation)$|\b(pty\.?\s+ltd|limited|abn)\b/i;
-const POSTCODE = /\b\d{4}\b/;
+/** The document's own title, never a customer name (unlike TITLE, a customer can be a Pty Ltd). */
+const DOC_TITLE = /^(tax\s+)?(invoice|delivery\s+(order|docket|note)|packing\s+(slip|list)|picking\s+(slip|list)|sales\s+order|consignment\s+note|order\s+confirmation|statement|quote|quotation)$/i;
+/** Text above this (page units from the top) is the letterhead. */
+const LETTERHEAD_Y = 130;
+/** Labels of the delivery address, and of the billing address used when there is none. */
+const SHIP_LABEL = /^(ship|deliver(y)?)\s*to$|^delivery\s+address$/i;
+const BILL_LABEL = /^(bill|invoice|sold)\s*to$/i;
+/** The sender's bank details printed under an invoice. */
+const BANK_LABEL = /^(name|account(\s+(name|no\.?|number))?|bsb|bank|swift|bic|iban)$/i;
 /** "South Brisbane, 4101" / "TOOWONG QLD 4066" */
 const SUBURB_LINE = /^([A-Za-z][A-Za-z .'-]*?)[,\s]+(?:(?:QLD|NSW|VIC|ACT|TAS|SA|WA|NT)\s+)?(\d{4})$/i;
 
@@ -235,26 +241,72 @@ function fieldValue(label: Cell, inline: string, cells: Cell[]): string[] {
   return below;
 }
 
+/** A postcode closing a line: "Redbank QLD 4301", "4301, Australia", "Brisbane, QLD, Australia, 4129". Not "Shop 3334, 1 Smith St". */
+const ENDS_WITH_POSTCODE = /(^|[\s,])\d{4}\s*(,\s*australia)?\s*,?$/i;
+/** "Middle Park QLD 4074", "Booval, 4304", "Brisbane, QLD, Australia, 4129": a line that names the locality. */
+const LOCALITY_LINE = /^[A-Za-z][A-Za-z .'-]*(,\s*|\s+)(QLD|NSW|VIC|ACT|TAS|SA|WA|NT|australia|\d{4})\b/i;
+const STATE_POSTCODE = /(?:^|,)\s*([^,\d]+?)\s*,?\s+(?:QLD|NSW|VIC|ACT|TAS|SA|WA|NT)\s*,?\s*(?:australia\s*,?\s*)?(\d{4})\b/i;
+const CJK = /[\u3400-\u9fff\uff00-\uffef]/;
+
+/** Tidies a joined address: full-width commas, doubled commas, a trailing "Australia". */
+const tidyAddress = (a: string) =>
+  a
+    .replace(/\s*，\s*/g, ", ")
+    .replace(/,\s*australia\b(?=\s*,)/gi, "")
+    .replace(/\s*,(\s*,)+/g, ",")
+    .replace(/\s+,/g, ",")
+    .replace(/,?\s*australia\s*,?\s*$/i, "")
+    .replace(/[\s,]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * Joins the lines of an address the document wrapped to fit its column: "… Centre, 3" +
+ * "Gehrke Rd, …" is one address, not two. A line naming the locality ("Booval, 4304") starts
+ * a new part, after a comma.
+ */
+function joinWrappedLines(lines: string[]) {
+  return lines.reduce((acc, l) => {
+    if (!acc) return l;
+    const sep = /,$/.test(acc.trim()) || !LOCALITY_LINE.test(l) ? " " : ", ";
+    return acc.trimEnd() + sep + l.trim();
+  }, "");
+}
+
 /**
  * Splits a "SHIP TO" block — [business name], street, [suburb line], [person] — into
  * the street address (up to its postcode), suburb, postcode, business and person.
+ *
+ * `wrapped`: the customer's name is already known (printed as a heading), so the lines
+ * before the street are the start of the address wrapped onto two lines ("Metro Middle Park
+ * Shopping" / "Centre, Kiosk 2/90 Horizon Dr"), not a business name. Lines in Chinese there
+ * are directions for the driver ("WWS门口" = at the WWS entrance) and go to `notes`.
  */
-export function splitAddress(lines: string[]) {
-  const end = lines.findIndex((l) => POSTCODE.test(l));
-  if (end < 0) return { address: lines.join(", ") };
-  // Lines before the first one with a number are a business name ("Sushi Paradise", then "66 Ernest St").
-  const street = Math.max(0, lines.slice(0, end + 1).findIndex((l) => /\d/.test(l)));
-  const out: { address: string; suburb?: string; postcode?: string; company?: string; attention?: string } = {
-    address: lines.slice(street, end + 1).join(", "),
-  };
-  if (street > 0) out.company = lines.slice(0, street).join(", ");
-  const rest = lines.slice(end + 1);
-  const m = SUBURB_LINE.exec(lines[end]) ?? (rest[0] ? SUBURB_LINE.exec(rest[0]) : null);
+export function splitAddress(lines: string[], { wrapped = false }: { wrapped?: boolean } = {}) {
+  lines = lines.map((l) => l.trim()).filter(Boolean);
+  const end = lines.findIndex((l) => ENDS_WITH_POSTCODE.test(l));
+  if (end < 0) return { address: tidyAddress(wrapped ? joinWrappedLines(lines) : lines.join(", ")) };
+  const out: { address: string; suburb?: string; postcode?: string; company?: string; attention?: string; notes?: string } = { address: "" };
+  let body = lines.slice(0, end + 1);
+  if (wrapped) {
+    const directions = body.filter((l) => CJK.test(l) && !/\d/.test(l));
+    if (directions.length) out.notes = directions.map((l) => l.replace(/[\s,，]+$/, "")).join(", ");
+    body = body.filter((l) => !directions.includes(l));
+    out.address = tidyAddress(joinWrappedLines(body));
+  } else {
+    // Lines before the first one with a number are a business name ("Sushi Paradise", then "66 Ernest St").
+    const street = Math.max(0, body.findIndex((l) => /\d/.test(l)));
+    out.address = tidyAddress(body.slice(street).join(", "));
+    if (street > 0) out.company = body.slice(0, street).join(", ");
+  }
+  if (!out.notes) delete out.notes;
+  // Old systems repeat the country and the "City, postcode" under the address.
+  const rest = lines.slice(end + 1).filter((l) => !/^australia,?$/i.test(l));
+  const m = SUBURB_LINE.exec(lines[end]) ?? (rest[0] ? SUBURB_LINE.exec(rest[0]) : null) ?? STATE_POSTCODE.exec(out.address);
   if (m) {
     out.suburb = m[1].trim();
     out.postcode = m[2];
   }
-  // "South brisbane, 4101" after a full street address only repeats it.
   if (rest[0] && SUBURB_LINE.test(rest[0])) rest.shift();
   const people = rest.map((l) => l.replace(/^(attn|attention)\b[:.]?\s*/i, "")).filter((l) => l && !/@|\d{5,}/.test(l));
   if (people.length) out.attention = people.join(", ");
@@ -285,6 +337,17 @@ function readLabelledDocs(lines: Line[], pageCount: number): string[][] | null {
   };
 
   for (const doc of docs) {
+    // The sender's own name (letterhead "FOODPAC DISTRIBUTION PTY LTD" across the top of the
+    // page): never the customer. A customer can be a Pty Ltd too, further down.
+    const own = new Set(
+      doc
+        .filter((c) => c.y < LETTERHEAD_Y && /\b(pty\.?\s+ltd|limited)\b/i.test(c.text))
+        .flatMap((c) => c.text.toLowerCase().match(/[a-z]+/g) ?? []),
+    );
+    const isOwn = (v: string) => {
+      const words = v.toLowerCase().match(/[a-z]+/g) ?? [];
+      return words.length > 0 && words.every((w) => own.has(w));
+    };
     const fields: Field[] = [];
     for (const c of [...doc].sort((a, b) => a.page - b.page || a.y - b.y || a.x0 - b.x0)) {
       const m = LABEL.exec(c.text);
@@ -292,27 +355,81 @@ function readLabelledDocs(lines: Line[], pageCount: number): string[][] | null {
       const lines = fieldValue(c, m[2].trim(), doc.filter((d) => d.page === c.page));
       if (lines.length) fields.push({ label: m[1].trim(), lines, at: c });
     }
+    // Payment details at the foot of an invoice ("NAME: Foodpac Distribution", "BSB:", "ACCOUNT:")
+    // are the sender's bank account, not the customer.
+    const bank = fields.filter((f) => BANK_LABEL.test(f.label) && !/^name$/i.test(f.label));
+    const nearBank = (f: Field) => bank.some((b) => b.at.page === f.at.page && Math.abs(b.at.y - f.at.y) <= b.at.h * 6);
+    const kept = fields.filter((f) => !(bank.length && (BANK_LABEL.test(f.label) && nearBank(f))) && !isOwn(f.lines.join(" ")));
+
     const record: Record<string, string> = {};
-    const ship = fields.find((f) => fieldOf(f.label) === "address");
-    // Delivery orders print the customer as a heading straight above the ship-to block.
-    if (ship && !fields.some((f) => fieldOf(f.label) === "customerName")) {
-      const above = doc
-        .filter((c) => c.page === ship.at.page && c.y < ship.at.y && ship.at.y - c.y <= Math.max(c.h, ship.at.h) * 4 && Math.abs(c.x0 - ship.at.x0) <= ship.at.h * 2)
-        .sort((a, b) => b.y - a.y)[0];
-      if (above && !isLabel(above) && !TITLE.test(above.text)) put(record, "Customer", above.text);
-    }
-    for (const f of fields) {
-      if (f === ship) {
-        const a = splitAddress(f.lines);
-        put(record, f.label, a.address);
-        if (a.company) put(record, "Customer", a.company);
-        put(record, "Suburb", a.suburb);
-        put(record, "Postcode", a.postcode);
-        if (a.attention) put(record, "Notes", `Attn: ${a.attention}`);
-      } else {
-        put(record, f.label, f.lines.join(", "));
+    const shipLabel = kept.find((f) => SHIP_LABEL.test(f.label)) ?? kept.find((f) => fieldOf(f.label) === "address" && !BILL_LABEL.test(f.label));
+    const billLabel = kept.find((f) => BILL_LABEL.test(f.label));
+    // Invoices and delivery orders print the customer as a heading straight above the
+    // "BILL TO / SHIP TO" labels (an empty "BILL TO:" still marks the spot).
+    const anchors = doc
+      .filter((c) => {
+        const m = LABEL.exec(c.text);
+        return !!m && (SHIP_LABEL.test(m[1].trim()) || BILL_LABEL.test(m[1].trim()) || fieldOf(m[1]) === "address");
+      })
+      .map((c) => ({ at: c }));
+    const top = anchors.length ? Math.min(...anchors.map((f) => f.at.y)) : null;
+    const heading =
+      top === null || kept.some((f) => fieldOf(f.label) === "customerName" && !isOwn(f.lines.join(" ")) && !/info/i.test(f.label))
+        ? undefined
+        : doc
+            .filter(
+              (c) =>
+                c.page === anchors[0].at.page &&
+                c.y < top &&
+                top - c.y <= Math.max(c.h, anchors[0].at.h) * 4 &&
+                anchors.some((a) => Math.abs(c.x0 - a.at.x0) <= a.at.h * 2) &&
+                !isLabel(c) &&
+                !DOC_TITLE.test(c.text) &&
+                !isOwn(c.text),
+            )
+            .sort((a, b) => b.y - a.y)[0];
+    if (heading) put(record, "Customer", heading.text);
+
+    // The delivery address: SHIP TO, or BILL TO when the ship-to block only names a person.
+    const usable = (a: ReturnType<typeof splitAddress>) => !!a.postcode || /\d/.test(a.address);
+    const wrapped = { wrapped: !!heading };
+    let ship = shipLabel;
+    let addr = ship ? splitAddress(ship.lines, wrapped) : null;
+    if ((!addr || !usable(addr)) && billLabel) {
+      const bill = splitAddress(billLabel.lines, wrapped);
+      if (usable(bill)) {
+        if (addr?.address && !usable(addr)) bill.attention ??= addr.address;
+        ship = billLabel;
+        addr = bill;
       }
     }
+    const putAddress = () => {
+      if (!ship || !addr) return;
+      // A billing address used for delivery goes under the ship-to heading, so it maps to the address.
+      put(record, ship === billLabel ? "SHIP TO" : ship.label, addr.address);
+      if (addr.company) put(record, "Customer", addr.company);
+      put(record, "Suburb", addr.suburb);
+      put(record, "Postcode", addr.postcode);
+      const notes = [addr.notes, addr.attention && `Attn: ${addr.attention}`].filter(Boolean).join(" · ");
+      put(record, "Notes", notes || undefined);
+    };
+    // An invoice's DATE is when it was invoiced, often days before the delivery: keep it out of
+    // the delivery date, so the date chosen on the import page is used.
+    const isInvoice = doc.some((c) => /^(tax\s+)?invoice$/i.test(c.text));
+    // Its DATE DUE is when payment is due, never a delivery date (on any document).
+    const labelOf = (f: Field) =>
+      /^(date\s+due|due\s+date|payment\s+due)$/i.test(f.label) ? "Payment due" : isInvoice && /^(invoice\s+)?date$/i.test(f.label) ? "Invoiced on" : f.label;
+    let placed = false;
+    for (const f of kept) {
+      // Both address blocks become the one delivery address, where the first of them is printed.
+      if (f === shipLabel || f === billLabel) {
+        if (!placed) putAddress();
+        placed = true;
+        continue;
+      }
+      put(record, labelOf(f), f.lines.join(", "));
+    }
+    if (!placed) putAddress();
     if (ship) rows.push(record);
   }
   const m = guessMapping(headers);

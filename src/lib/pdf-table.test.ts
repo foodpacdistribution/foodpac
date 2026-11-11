@@ -160,3 +160,87 @@ describe("pdfToMatrix — unreadable PDFs", () => {
     expect(() => pdfToMatrix([[t("Just a letter about nothing in particular", 40, 40)]])).toThrow(/order table/);
   });
 });
+
+// The invoices Foodpac's old system prints (positions from a real one, details made up):
+// letterhead top right, the customer as a heading over an empty BILL TO and a SHIP TO block
+// whose address wraps over several lines, a label/value block on the right, and the bank
+// details ("NAME: Foodpac Distribution") at the foot.
+function invoice(heading: string, ship: string[], bill: string[] = []): PdfPage[] {
+  const label = (s: string, y: number) => t(s, 535, y, 9);
+  const value = (s: string, y: number) => ({ ...t(s, 0, y, 9), x: 877 - s.length * 4.5 });
+  return [
+    [
+      t("FOODPAC DISTRIBUTION PTY LTD", 567, 55, 11),
+      t("INVOICE", 750, 207, 22),
+      t(heading, 49, 262, 15),
+      t("BILL TO:", 47, 297, 9),
+      ...bill.map((l, i) => t(l, 47, 314 + i * 17, 9)),
+      t("SHIP TO:", 294, 297, 9),
+      ...ship.map((l, i) => t(l, 294, 314 + i * 17, 9)),
+      label("INVOICE #:", 301), value("INV002222", 301),
+      label("DATE:", 320), value("Nov 11, 2026", 320),
+      label("DATE DUE:", 339), value("Nov 25, 2026", 339),
+      label("CUSTOMER INFO:", 431), value("distribution foodpac", 431),
+      t("#", 47, 476, 9), t("ITEM", 72, 476, 9), t("PRICE", 342, 476, 9), t("QTY", 541, 476, 9),
+      t("1", 47, 538, 9), t("Obento Sushi Rice 10KG", 72, 538, 9), t("16.00", 360, 538, 9), t("8.00", 548, 538, 9),
+      t("NAME: Foodpac Distribution", 47, 982, 7), t("BSB: 014-269", 47, 990, 7), t("ACCOUNT: 803-095-111", 47, 998, 7),
+      t("INV002222", 47, 1240, 9), t("Page 1 of 1", 787, 1240, 9),
+    ],
+  ];
+}
+
+describe("pdfToMatrix — invoices", () => {
+  const read = (pages: PdfPage[]) => {
+    const [h, row] = pdfToMatrix(pages);
+    const m = guessMapping(h);
+    const v = (k: keyof typeof m) => (m[k] === undefined ? undefined : row[m[k]!]);
+    return { customer: v("customerName"), address: v("address"), suburb: v("suburb"), postcode: v("postcode"), notes: v("notes"), order: v("orderNumber"), date: v("deliveryDate") };
+  };
+
+  it("takes the customer from the heading, not the bank details or the sender", () => {
+    const r = read(invoice("Shikii Sushi (Redbank)", ["Shop 3334, 1 Collingwood Dr,", "Redbank Plaza, Redbank QLD", "4301, Australia", "Redbank, 4301"]));
+    expect(r.customer).toBe("Shikii Sushi (Redbank)");
+    expect(r.order).toBe("INV002222");
+    expect(r.date).toBeUndefined();
+  });
+
+  it("finds the heading over a tax number line, and leaves the invoice date out of the delivery date", () => {
+    const pages = invoice("1st Care Community", ["1/17 LEAROYD RD, Acacia Ridge"], ["1/17 LEAROYD RD, Acacia Ridge"]);
+    pages[0] = pages[0].map((x) => (x.str === "1st Care Community" ? { ...x, y: 270 } : x));
+    pages[0].push(t("Tax Registration Number: ABN 55612123412", 49, 282, 9));
+    const r = read(pages);
+    expect(r).toMatchObject({ customer: "1st Care Community", address: "1/17 LEAROYD RD, Acacia Ridge", date: undefined });
+  });
+
+  it("keeps a whole address that wraps, and never takes a shop number for the postcode", () => {
+    expect(read(invoice("Shikii Sushi (Redbank)", ["Shop 3334, 1 Collingwood Dr,", "Redbank Plaza, Redbank QLD", "4301, Australia", "Redbank, 4301"]))).toMatchObject({
+      address: "Shop 3334, 1 Collingwood Dr, Redbank Plaza, Redbank QLD 4301",
+      suburb: "Redbank",
+      postcode: "4301",
+    });
+    expect(read(invoice("Sushi party (Middle park)", ["Metro Middle Park Shopping", "Centre, Kiosk 2/90 Horizon Dr,", "Middle Park QLD 4074", "Middle park, 4078"]))).toMatchObject({
+      customer: "Sushi party (Middle park)",
+      address: "Metro Middle Park Shopping Centre, Kiosk 2/90 Horizon Dr, Middle Park QLD 4074",
+      postcode: "4074",
+    });
+    expect(read(invoice("Go N sushi (Plainland)", ["Plainland Plaza Shopping Centre, 3", "Gehrke Rd, Plainland QLD 4341,", "Australia", "Plainlands, 4341"])).address).toBe(
+      "Plainland Plaza Shopping Centre, 3 Gehrke Rd, Plainland QLD 4341",
+    );
+  });
+
+  it("puts directions for the driver into the notes, and keeps a customer that is a Pty Ltd", () => {
+    expect(read(invoice("Sushi Guru (Moorooka)", ["WWS门口，Shopping Centre,", "SHOP 7/125 Beaudesert Rd,", "Moorooka QLD 4105", "Blair"]))).toMatchObject({
+      address: "SHOP 7/125 Beaudesert Rd, Moorooka QLD 4105",
+      notes: "WWS门口，Shopping Centre · Attn: Blair",
+    });
+    expect(read(invoice("Soraya Foods Pty Ltd", ["4/26 Felix St ，Brisbane City", "Brisbane, QLD, Australia, 4000", "Lindy"])).customer).toBe("Soraya Foods Pty Ltd");
+  });
+
+  it("delivers to the billing address when the ship-to block only names a person", () => {
+    expect(read(invoice("13 Asian Supermarket (New Town)", ["sean"], ["475 Tor St, Newtown QLD 4350", "sean"]))).toMatchObject({
+      address: "475 Tor St, Newtown QLD 4350",
+      postcode: "4350",
+      notes: "Attn: sean",
+    });
+  });
+});
