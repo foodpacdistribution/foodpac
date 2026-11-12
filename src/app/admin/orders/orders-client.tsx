@@ -584,7 +584,15 @@ function DeliveryRecord({ orderId }: { orderId: string }) {
                 <a key={p.id} href={`/api/proofs/${p.id}`} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-line bg-slate-50">
                   {/* eslint-disable-next-line @next/next/no-img-element -- authenticated private image */}
                   <img src={`/api/proofs/${p.id}`} alt={p.kind === "photo" ? "Delivery photo" : "Customer signature"} className={cx("w-full", p.kind === "photo" ? "h-40 object-cover" : "h-28 object-contain bg-white")} />
-                  <span className="block px-2 py-1 text-[11px] text-slate-500">{p.kind === "photo" ? tr("Photo") : tr("Signature")}</span>
+                  <span className="block px-2 py-1 text-[11px] text-slate-500">
+                    {p.kind === "photo" ? tr("Photo") : tr("Signature")}
+                    {/* Sent by the driver after the delivery was confirmed. */}
+                    {new Date(p.at).getTime() - new Date(e.at).getTime() > 5 * 60_000 && (
+                      <span className="ml-1 text-amber-700">
+                        · {tr("added later")} {new Date(p.at).toLocaleString(locale, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                      </span>
+                    )}
+                  </span>
                   {p.sha256 && (
                     <span
                       title={`SHA-256 ${p.sha256}`}
@@ -665,6 +673,24 @@ function OrderForm({
         <p className="-mt-2 text-xs text-slate-500">
           {tr("Located as:")}{" "}<span className="text-slate-700">{order.geocodeLabel}</span>
         </p>
+      )}
+      {!!order?.goods?.length && (
+        <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm ring-1 ring-line">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <Package className="size-3.5" /> {tr("Goods (from the invoice)")} · {order.goods.length}
+          </p>
+          <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto text-slate-700">
+            {order.goods.map((g, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="w-10 shrink-0 text-right font-medium tabular-nums">{g.qty !== null ? `${g.qty}×` : "•"}</span>
+                <span className="min-w-0">
+                  {g.name}
+                  {g.unit && <span className="text-slate-400"> · {g.unit}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <div className="grid gap-3 sm:grid-cols-4">
         <Field label={tr("Window from")}>

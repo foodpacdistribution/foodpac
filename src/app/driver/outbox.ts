@@ -8,7 +8,8 @@ import { useEffect, useSyncExternalStore } from "react";
 export type OutboxItem = {
   id: string;
   stopId: string;
-  kind: "delivered" | "failed";
+  /** A finished stop, or photos added to one afterwards. */
+  kind: "delivered" | "failed" | "photos";
   /** Customer or order, for the driver's list. */
   name: string;
   /** When the driver confirmed (phone clock, ms). */
@@ -109,6 +110,17 @@ export async function addToOutbox(form: FormData, meta: { stopId: string; kind: 
   void sendOutbox();
 }
 
+/** Keeps photos for a stop that's already finished on the phone, then starts uploading them (after the stop itself, if that's still waiting). */
+export async function addPhotosToOutbox(files: File[], meta: { stopId: string; name: string }) {
+  const at = Date.now();
+  const stored: OutboxItem["files"] = [];
+  for (const f of files) if (f.size) stored.push({ field: "photo", name: f.name, type: f.type, data: await f.arrayBuffer() });
+  if (!stored.length) return;
+  await load();
+  await put({ id: newId(), ...meta, kind: "photos", doneAt: at, fields: [["stopId", meta.stopId]], files: stored, error: null, rejected: false });
+  void sendOutbox();
+}
+
 /** Uploads what's waiting, oldest first. Stops at the first one that can't get through (no signal). */
 export async function sendOutbox() {
   await load();
@@ -127,7 +139,7 @@ export async function sendOutbox() {
       for (const f of item.files) form.append(f.field, new File([f.data], f.name, { type: f.type }));
       let res: Response;
       try {
-        res = await fetch("/api/driver/outcome", { method: "POST", body: form, signal: AbortSignal.timeout(60_000) });
+        res = await fetch(item.kind === "photos" ? "/api/driver/photos" : "/api/driver/outcome", { method: "POST", body: form, signal: AbortSignal.timeout(60_000) });
       } catch {
         await put({ ...item, error: "No signal yet" });
         noSignal = true;

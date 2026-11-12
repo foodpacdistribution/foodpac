@@ -264,8 +264,21 @@ export async function importOrders(rows: ImportRow[], defaultDate: string) {
       const got = new Set(ins.map((r) => r.orderNumber));
       batch.forEach((b) => !got.has(b.orderNumber) && duplicates.push(b.orderNumber));
     }
+    // An order already here (even one on a route) takes the goods from its invoice imported
+    // again: they're what the driver hands over, and don't change the route.
+    const dup = new Set(duplicates);
+    let goodsUpdated = 0;
+    for (const v of valid) {
+      if (!v.goods || !dup.has(v.orderNumber)) continue;
+      const done = await db
+        .update(orders)
+        .set({ goods: v.goods, updatedAt: new Date() })
+        .where(and(eq(orders.orderNumber, v.orderNumber), eq(orders.deliveryDate, v.deliveryDate)))
+        .returning({ id: orders.id });
+      goodsUpdated += done.length;
+    }
     revalidateAll();
-    return { data: { inserted: ids.length, ids, duplicates, errors } };
+    return { data: { inserted: ids.length, ids, duplicates, errors, goodsUpdated } };
   });
 }
 

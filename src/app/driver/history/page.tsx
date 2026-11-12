@@ -91,9 +91,11 @@ export default async function DriverHistoryPage({ searchParams }: { searchParams
                         <p className={cx("mt-0.5 flex items-center gap-1 text-[11px]", it.placeM > DELIVERY_PLACE_WARN_M ? "text-amber-700" : "text-slate-400")}>
                           <MapPin className="size-3" /> {" "}<T>{"Confirmed"}</T>{" "}{it.placeM < 1000 ? `${it.placeM} m` : `${(it.placeM / 1000).toFixed(1)} km`} {" "}<T>{"from the address"}</T></p>
                       )}
-                      {(it.photoId || it.signatureId) && (
-                        <div className="mt-2 flex gap-2">
-                          {it.photoId && <Proof id={it.photoId} label="Photo" icon={Camera} />}
+                      {(it.photoIds.length > 0 || it.signatureId) && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {it.photoIds.map((id) => (
+                            <Proof key={id} id={id} label="Photo" icon={Camera} />
+                          ))}
                           {it.signatureId && <Proof id={it.signatureId} label="Signature" icon={PenLine} contain />}
                         </div>
                       )}

@@ -162,6 +162,9 @@ export const users = pgTable("users", {
 export type OrderStatus = "pending" | "planned" | "dispatched" | "delivered" | "failed";
 export type GeocodeStatus = "pending" | "ok" | "approximate" | "failed";
 
+/** One line of goods on an order: "5 × Paper bowl 750ml (PKT)". */
+export type GoodsLine = { name: string; qty: number | null; unit: string | null };
+
 export const orders = pgTable(
   "orders",
   {
@@ -185,6 +188,8 @@ export const orders = pgTable(
     demand: integer("demand").notNull().default(1),
     priority: integer("priority").notNull().default(0),
     notes: text("notes"),
+    /** What's being delivered, from the imported invoice or delivery order: shown to the driver at the stop. */
+    goods: jsonb("goods").$type<GoodsLine[]>(),
     pinnedDriverId: uuid("pinned_driver_id").references(() => drivers.id, { onDelete: "set null" }),
     /** Ship-from depot: only drivers based there can take it. null = any depot. */
     depotId: uuid("depot_id").references(() => depots.id, { onDelete: "set null" }),

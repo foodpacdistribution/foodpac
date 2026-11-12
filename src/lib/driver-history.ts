@@ -16,7 +16,8 @@ export type HistoryItem = {
   note: string | null;
   /** How far from the address the outcome was confirmed (GPS), if recorded. */
   placeM: number | null;
-  photoId: string | null;
+  /** Taken at the door first, then any added later. */
+  photoIds: string[];
   signatureId: string | null;
 };
 
@@ -42,7 +43,7 @@ export async function driverHistory(db: DB, driverId: string, from: string): Pro
     .orderBy(desc(deliveryEvents.createdAt));
   const proofs = events.length
     ? await db
-        .select({ id: deliveryProofs.id, eventId: deliveryProofs.eventId, kind: deliveryProofs.kind })
+        .select({ id: deliveryProofs.id, eventId: deliveryProofs.eventId, kind: deliveryProofs.kind, at: deliveryProofs.createdAt })
         .from(deliveryProofs)
         .where(inArray(deliveryProofs.eventId, events.map((e) => e.id)))
     : [];
@@ -71,7 +72,7 @@ export async function driverHistory(db: DB, driverId: string, from: string): Pro
         ev && ev.lat !== null && ev.lng !== null && order.lat !== null && order.lng !== null
           ? Math.round(haversine({ lat: ev.lat, lng: ev.lng }, { lat: order.lat, lng: order.lng }))
           : null,
-      photoId: own.find((p) => p.kind === "photo")?.id ?? null,
+      photoIds: own.filter((p) => p.kind === "photo").sort((a, b) => a.at.getTime() - b.at.getTime()).map((p) => p.id),
       signatureId: own.find((p) => p.kind === "signature")?.id ?? null,
     });
     days.set(date, day);

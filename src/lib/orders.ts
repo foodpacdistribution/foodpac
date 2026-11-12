@@ -1,3 +1,4 @@
+import type { GoodsLine } from "./db/schema";
 import { parseTime, parseTimeWindow } from "./time";
 
 /** Fields an import column can map to. */
@@ -16,6 +17,7 @@ export const IMPORT_FIELDS = [
   { key: "demand", label: "Quantity / units", synonyms: ["qty", "quantity", "units", "items", "cartons", "pallets", "parcels", "boxes"] },
   { key: "priority", label: "Priority", synonyms: ["priority", "urgent", "express"] },
   { key: "notes", label: "Notes", synonyms: ["notes", "note", "instructions", "delivery instructions", "comments", "comment"] },
+  { key: "goods", label: "Goods (one per line, e.g. 5 × Rice 10kg)", synonyms: ["goods", "products", "line items", "order lines", "goods list", "contents"] },
   { key: "depot", label: "Depot (name)", synonyms: ["depot", "warehouse", "branch", "ship from", "dispatch from"] },
 ] as const;
 
@@ -138,8 +140,38 @@ export function validateImportRow(raw: ImportRow, defaultDate: string, index: nu
       demand: demand ?? 1,
       priority,
       notes: t("notes") || null,
+      goods: parseGoods(t("goods")),
     },
   };
+}
+
+const NUM = String.raw`\d+(?:\.\d+)?`;
+/** "5 × Paper bowl · PKT", "5x Paper bowl", "Paper bowl x 5", or just "Paper bowl". */
+const QTY_FIRST = new RegExp(`^(${NUM})\\s*[x×*]\\s*(.+)$`, "i");
+const QTY_LAST = new RegExp(`^(.+?)\\s+[x×*]\\s*(${NUM})$`, "i");
+
+/** Goods as written in an import ("5 × Paper bowl · PKT", one per line or separated by ;), or null when there are none. */
+export function parseGoods(text: string): GoodsLine[] | null {
+  const lines = text
+    .split(/\r?\n|;/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 200)
+    .map((l): GoodsLine => {
+      const [main, unit] = l.split(/\s+·\s+/, 2);
+      const first = QTY_FIRST.exec(main);
+      const last = first ? null : QTY_LAST.exec(main);
+      const qty = first ? Number(first[1]) : last ? Number(last[2]) : null;
+      const name = (first ? first[2] : last ? last[1] : main).trim().slice(0, 300);
+      return { name, qty, unit: unit?.trim().slice(0, 40) || null };
+    })
+    .filter((g) => g.name);
+  return lines.length ? lines : null;
+}
+
+/** The reverse of parseGoods: one line per item. */
+export function formatGoods(goods: GoodsLine[]) {
+  return goods.map((g) => `${g.qty !== null ? `${g.qty} × ` : ""}${g.name}${g.unit ? ` · ${g.unit}` : ""}`).join("\n");
 }
 
 /** Full address for the geocoder: appends suburb/postcode if the address line doesn't already contain them. */

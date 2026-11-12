@@ -1,27 +1,39 @@
 "use client";
 
-import { ArrowDown, ArrowUp, CheckCircle2, ChevronDown, CloudOff, Clock, History, ListOrdered, LocateFixed, LocateOff, LogOut, MapPin, MessageSquareText, Navigation, Package, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CloudOff, Clock, History, ListOrdered, LocateFixed, LocateOff, LogOut, MapPin, MessageSquareText, Navigation, Package, Phone, PlayCircle, RefreshCcw, Route, StickyNote, TriangleAlert, Truck, Warehouse, X } from "lucide-react";
 import Link from "@/components/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
+import { flushSync } from "react-dom";
 import { logout } from "@/app/actions/auth";
 import { reorderStops, startRoute, tellCustomerArriving } from "@/app/actions/driver";
 import { Modal, Toast, type ToastMessage } from "@/components/client-ui";
 import { LanguageSwitch } from "@/components/language-switch";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { Badge, btn, cx, Spinner } from "@/components/ui";
-import { prettyDate } from "@/lib/dates";
+import { prettyDate, shiftDate } from "@/lib/dates";
 import { multiStopNavigation, navigationUrls } from "@/lib/orders";
 import type { RouteView, StopView } from "@/lib/planning";
 import { formatClock, formatMinutesClock } from "@/lib/time";
 import { OutcomeForm } from "./outcome-form";
-import { addToOutbox, discardFromOutbox, type OutboxItem, retryFromOutbox, sendOutbox, useOutbox } from "./outbox";
+import { compressPhoto } from "./proof-inputs";
+import { addPhotosToOutbox, addToOutbox, discardFromOutbox, type OutboxItem, retryFromOutbox, sendOutbox, useOutbox } from "./outbox";
 import { readSharePref, useLocationSharing, writeSharePref } from "./use-location-sharing";
 import { Tx, useLocale, useT } from "@/components/i18n";
 import { intlLocale } from "@/lib/i18n";
 
 /** A line to hand over at a stop: `qty` is what's on the van, `waiting` what's still short of stock. */
-export type StopItem = { id: string; sku: string; name: string; packSize: string; unit: string; qty: number; waiting: number };
+export type StopItem = {
+  id: string;
+  sku: string;
+  name: string;
+  packSize: string;
+  unit: string;
+  qty: number;
+  waiting: number;
+  /** From an invoice line without a quantity: show the item, not a made-up count. */
+  noQty?: boolean;
+};
 
 type Props = {
   name: string;
@@ -35,6 +47,8 @@ type Props = {
   route: RouteView | null;
   /** Items per order id; orders without a shop/staff order have none (only a unit count). */
   items: Record<string, StopItem[]>;
+  /** Photos already with the office for each finished stop (stop id → count). */
+  photos: Record<string, number>;
   /** Customer emails are on, so the "about 10 minutes away" button can be offered. */
   canTellCustomer: boolean;
   requirePhoto: boolean;
@@ -46,7 +60,7 @@ function greeting(nowS: number) {
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-export function DriverClient({ name, linked, date, today, days, nowS, depot, route, items, canTellCustomer, requirePhoto, requireSignature }: Props) {
+export function DriverClient({ name, linked, date, today, days, nowS, depot, route, items, photos, canTellCustomer, requirePhoto, requireSignature }: Props) {
   const tr = useT();
   // Clock times read "2:44pm" in English and "14:44" in Chinese.
   const clock = (s: number | null) => tr(formatClock(s));
@@ -67,7 +81,17 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
   const router = useRouter();
   const refresh = useCallback(() => router.refresh(), [router]);
   const outbox = useOutbox(refresh);
-  const queued = useMemo(() => new Map(outbox.items.map((i) => [i.stopId, i])), [outbox.items]);
+  // Finished stops still on the phone (stop id → how it went); added photos are counted apart.
+  const queued = useMemo(
+    () => new Map(outbox.items.flatMap((i) => (i.kind === "photos" ? [] : [[i.stopId, { ...i, kind: i.kind as "delivered" | "failed" }] as const]))),
+    [outbox.items],
+  );
+  // Photos added to finished stops, still on the phone (stop id → count).
+  const queuedPhotos = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of outbox.items) if (i.kind === "photos") m.set(i.stopId, (m.get(i.stopId) ?? 0) + i.files.length);
+    return m;
+  }, [outbox.items]);
   const stops = (route?.stops ?? []).map((s) => {
     const q = s.status === "pending" ? queued.get(s.id) : undefined;
     return q ? { ...s, status: q.kind } : s;
@@ -109,13 +133,28 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
         refresh();
       }
     });
-  const move = (i: number, by: number) =>
-    setArranging((list) => {
-      if (!list || i + by < 0 || i + by >= list.length) return list;
-      const next = [...list];
-      [next[i], next[i + by]] = [next[i + by], next[i]];
-      return next;
+  // The two stops glide past each other (where the browser can animate the swap).
+  const move = (i: number, by: number) => {
+    const swap = () =>
+      setArranging((list) => {
+        if (!list || i + by < 0 || i + by >= list.length) return list;
+        const next = [...list];
+        [next[i], next[i + by]] = [next[i + by], next[i]];
+        return next;
+      });
+    if (typeof document !== "undefined" && "startViewTransition" in document) document.startViewTransition(() => flushSync(swap));
+    else swap();
+  };
+  // Kept on the phone first (like a delivery), so it uploads by itself where there's no signal.
+  const addPhotos = (stopId: string, name: string, input: HTMLInputElement) => {
+    const files = [...(input.files ?? [])].slice(0, 10);
+    input.value = "";
+    if (!files.length) return;
+    startTransition(async () => {
+      await addPhotosToOutbox(await Promise.all(files.map((f) => compressPhoto(f))), { stopId, name });
+      setToast({ id: Date.now(), tone: "ok", text: tr("{n} photo(s) saved · uploading to the office", { n: files.length }) });
     });
+  };
   // A later day's stops can't be running late yet.
   const delay = current && date === today ? Math.max(0, nowS - current.etaS) : 0;
   // A planned depot reload sits between the previous stop and this one.
@@ -156,6 +195,37 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
     </header>
   );
 
+  // Any day, back or forward: past days to look back at (and add a forgotten photo).
+  const dayHref = (d: string) => (d === today ? "/driver" : `/driver?date=${d}`);
+  const dayBar = (
+    <div className="flex items-center gap-1.5 rounded-2xl bg-white p-1.5 shadow-card">
+      <Link href={dayHref(shiftDate(date, -1))} className="grid size-10 shrink-0 place-items-center rounded-xl text-slate-600 transition-colors active:bg-slate-100" aria-label={tr("Previous day")}>
+        <ChevronLeft className="size-5" />
+      </Link>
+      <label className="relative flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold text-slate-900 transition-colors active:bg-slate-100">
+        <Clock className="size-4 text-slate-400" />
+        <span className="truncate">
+          {date === today ? tr("Today") : <Tx>{prettyDate(date, { weekday: "short", day: "numeric", month: "short", year: date.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric" })}</Tx>}
+        </span>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => e.target.value && router.push(dayHref(e.target.value))}
+          className="absolute inset-0 cursor-pointer opacity-0"
+          aria-label={tr("Choose a day")}
+        />
+      </label>
+      {date !== today && (
+        <Link href="/driver" className={btn("secondary", "sm", "shrink-0 rounded-xl")}>
+          {tr("Today")}
+        </Link>
+      )}
+      <Link href={dayHref(shiftDate(date, 1))} className="grid size-10 shrink-0 place-items-center rounded-xl text-slate-600 transition-colors active:bg-slate-100" aria-label={tr("Next day")}>
+        <ChevronRight className="size-5" />
+      </Link>
+    </div>
+  );
+
   // Shipments sent for later days show up as soon as they're sent, not only on the day.
   const dayTabs = (days.some((d) => d.date !== today) || date !== today) && (
     <nav className="flex gap-2 overflow-x-auto pb-1" aria-label={tr("Delivery days")}>
@@ -180,14 +250,17 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
       <div className="min-h-dvh">
         {header}
         <main className="mx-auto -mt-10 max-w-lg space-y-4 px-4">
+          {dayBar}
           {dayTabs}
           <div className="rounded-2xl bg-white p-8 text-center shadow-card">
             <Truck className="mx-auto size-10 text-slate-300" />
-            <p className="mt-3 font-semibold text-slate-900">{linked ? tr("No deliveries dispatched yet") : tr("Account not linked")}</p>
+            <p className="mt-3 font-semibold text-slate-900">{!linked ? tr("Account not linked") : date < today ? tr("No deliveries on this day") : tr("No deliveries dispatched yet")}</p>
             <p className="mt-1 text-sm text-slate-500">
-              {linked
-                ? tr("Your shipment appears here as soon as the office sends it. This page refreshes automatically.")
-                : tr("Ask your dispatcher to link your login to your driver profile.")}
+              {!linked
+                ? tr("Ask your dispatcher to link your login to your driver profile.")
+                : date < today
+                  ? tr("Nothing was sent to you for this day. Pick another day above.")
+                  : tr("Your shipment appears here as soon as the office sends it. This page refreshes automatically.")}
             </p>
             {linked && (
               <Link href="/driver/history" className={btn("secondary", "md", "mt-5 rounded-xl")}>
@@ -217,6 +290,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
     <div className={cx("min-h-dvh", current ? "pb-28" : "pb-10")}>
       {header}
       <main className="mx-auto -mt-12 max-w-lg space-y-4 px-4">
+        {dayBar}
         {dayTabs}
         {date !== today && (
           <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-900 ring-1 ring-blue-200">
@@ -436,7 +510,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                   const s = pendingStops.find((x) => x.id === id);
                   if (!s) return null;
                   return (
-                    <li key={id} className="flex items-center gap-3 py-2 pl-4 pr-2">
+                    <li key={id} className="flex items-center gap-3 bg-white py-2 pl-4 pr-2" style={{ viewTransitionName: `stop-${id}` }}>
                       <span className="grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: route.color }}>
                         {doneCount + i + 1}
                       </span>
@@ -468,12 +542,12 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
             </div>
           ) : (
           <ol className="divide-y divide-line">
-            {pendingStops.map((s) => {
+            {pendingStops.map((s, i) => {
               const isCurrent = s.id === current?.id;
               const reload = route.reloads.find((r) => r.afterSeq === s.seq);
               return (
-                <li key={s.id}>
-                  <div className={cx("flex items-center", isCurrent && "bg-blue-50")}>
+                <li key={s.id} className="stagger" style={{ "--i": Math.min(i, 12) } as React.CSSProperties}>
+                  <div className={cx("flex items-center transition-colors duration-300", isCurrent && "bg-blue-50")}>
                   <button
                     disabled={s.status !== "pending"}
                     onClick={() => {
@@ -555,14 +629,34 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
                 {visibleDone.length > 0 && (
                   <ol className="divide-y divide-line border-t border-line">
                     {visibleDone.map((s) => (
-                      <li key={s.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <li key={s.id} className="flex animate-rise items-center gap-3 px-4 py-2.5">
                         <span className={cx("grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white", s.status === "delivered" ? "bg-emerald-500" : "bg-red-500")}>
                           {s.status === "delivered" ? "✓" : "!"}
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm text-slate-500">{s.order.customerName || s.order.orderNumber}</span>
                           <span className="block truncate text-xs text-slate-400">{s.order.address}</span>
+                          {!queued.has(s.id) && (
+                            <span className={cx("mt-0.5 flex items-center gap-1 text-[11px]", photos[s.id] || queuedPhotos.has(s.id) ? "text-slate-400" : "text-amber-700")}>
+                              <Camera className="size-3" />
+                              {photos[s.id] ? tr("{n} photo(s)", { n: photos[s.id] }) : queuedPhotos.has(s.id) ? null : tr("No photo")}
+                              {queuedPhotos.has(s.id) && <span className="text-amber-700">{tr("+{n} uploading", { n: queuedPhotos.get(s.id)! })}</span>}
+                            </span>
+                          )}
                         </span>
+                        <label
+                          className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full bg-blue-50 text-blue-600 transition-transform active:scale-90"
+                          aria-label={tr("Add photos to {name}", { name: s.order.customerName || s.order.orderNumber })}
+                        >
+                          <Camera className="size-4" />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="sr-only"
+                            onChange={(e) => addPhotos(s.id, s.order.customerName || s.order.orderNumber, e.target)}
+                          />
+                        </label>
                         {queued.has(s.id) ? (
                           <Badge tone="amber">{tr("Waiting to upload")}</Badge>
                         ) : (
@@ -598,7 +692,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
 
       {/* Delivered / Problem always within thumb reach, however long the stop card gets. */}
       {current && (
-        <div className="no-print fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-line bg-white/95 px-4 py-2.5 backdrop-blur">
+        <div className="no-print fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 animate-rise border-t border-line bg-white/95 px-4 py-2.5 backdrop-blur">
           <div className="mx-auto max-w-lg">
             <p className="mb-1.5 truncate text-xs text-slate-500">
               {tr("Stop")}{" "}{current.seq} · <span className="font-medium text-slate-800">{current.order.customerName || current.order.orderNumber}</span>
@@ -642,6 +736,8 @@ function OutboxBanner({ items, busy, persistent }: { items: OutboxItem[]; busy: 
   const tr = useT();
   if (!items.length) return null;
   const waiting = items.filter((i) => !i.rejected);
+  const waitingStops = waiting.filter((i) => i.kind !== "photos").length;
+  const waitingPhotos = waiting.filter((i) => i.kind === "photos").reduce((t, i) => t + i.files.length, 0);
   const rejected = items.filter((i) => i.rejected);
   return (
     <section className="space-y-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 shadow-card ring-1 ring-amber-200">
@@ -650,7 +746,10 @@ function OutboxBanner({ items, busy, persistent }: { items: OutboxItem[]; busy: 
           {busy ? <Spinner className="mt-0.5 size-5 shrink-0" /> : <CloudOff className="mt-0.5 size-5 shrink-0 text-amber-600" />}
           <div className="min-w-0 flex-1">
             <p className="font-semibold">
-              {waiting.length === 1 ? tr("1 delivery saved on this phone, not uploaded yet") : tr("{n} deliveries saved on this phone, not uploaded yet", { n: waiting.length })}
+              {waitingStops > 0 &&
+                (waitingStops === 1 ? tr("1 delivery saved on this phone, not uploaded yet") : tr("{n} deliveries saved on this phone, not uploaded yet", { n: waitingStops }))}
+              {waitingStops > 0 && waitingPhotos > 0 && " · "}
+              {waitingPhotos > 0 && tr("{n} added photo(s) not uploaded yet", { n: waitingPhotos })}
             </p>
             <p className="mt-0.5 text-xs text-amber-800">
               {tr("Signatures and photos are kept. They upload by themselves when there's signal, so carry on with your next stop.")}
@@ -673,7 +772,10 @@ function OutboxBanner({ items, busy, persistent }: { items: OutboxItem[]; busy: 
             </button>
             <button
               type="button"
-              onClick={() => confirm(tr("Remove this delivery from the phone? Its signature and photo will be lost.")) && void discardFromOutbox(i.id)}
+              onClick={() =>
+                confirm(i.kind === "photos" ? tr("Remove these photos from the phone?") : tr("Remove this delivery from the phone? Its signature and photo will be lost.")) &&
+                void discardFromOutbox(i.id)
+              }
               className={btn("ghost", "sm", "text-red-600")}
             >
               {tr("Remove")}
@@ -803,15 +905,17 @@ function ItemChecklist({ items, demand, ticked, onToggle }: { items: StopItem[];
           const on = ticked.has(i.id);
           return (
             <li key={i.id}>
-              <label className={cx("flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 ring-1", on ? "bg-emerald-50 ring-emerald-200" : "ring-line")}>
+              <label
+                className={cx(
+                  "flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 ring-1 transition-[background-color,box-shadow] duration-200 active:scale-[0.99]",
+                  on ? "animate-pop bg-emerald-50 ring-emerald-200" : "ring-line",
+                )}
+              >
                 <input type="checkbox" className="size-5 shrink-0 accent-emerald-600" checked={on} onChange={() => onToggle(i.id)} />
-                <span className="w-10 shrink-0 text-right text-base font-semibold tabular-nums text-slate-900">{i.qty}×</span>
-                <span className={cx("min-w-0 flex-1 text-sm", on ? "text-slate-500 line-through" : "text-slate-800")}>
+                <span className="w-10 shrink-0 text-right text-base font-semibold tabular-nums text-slate-900">{i.noQty ? "•" : `${i.qty}×`}</span>
+                <span className={cx("min-w-0 flex-1 text-sm transition-colors duration-200", on ? "text-slate-500 line-through" : "text-slate-800")}>
                   {i.name}
-                  <span className="block text-[11px] text-slate-400">
-                    {i.packSize ? `${i.packSize} · ` : ""}
-                    {i.unit} · {i.sku}
-                  </span>
+                  {(i.packSize || i.unit || i.sku) && <span className="block text-[11px] text-slate-400">{[i.packSize, i.unit, i.sku].filter(Boolean).join(" · ")}</span>}
                 </span>
               </label>
             </li>

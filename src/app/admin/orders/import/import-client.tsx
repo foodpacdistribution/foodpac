@@ -12,7 +12,7 @@ import { Tx, useT } from "@/components/i18n";
 
 type Sheet = { headers: string[]; rows: string[][]; name: string };
 type Mapping = Partial<Record<ImportField, number>>;
-type Result = { inserted: number; ids: string[]; duplicates: string[]; errors: { row: number; message: string }[] };
+type Result = { inserted: number; ids: string[]; duplicates: string[]; errors: { row: number; message: string }[]; goodsUpdated?: number };
 /** Placing the imported addresses on the map, which starts by itself after an import. */
 type Locate = { done: number; total: number; failed: number; error?: string };
 
@@ -208,6 +208,7 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
               <p>
                 {result.duplicates.length} {" "}{tr("skipped as duplicates (same order number and date already in the system).")}</p>
             )}
+            {!!result.goodsUpdated && <p>{tr("Goods list added to {n} order(s) already in the system.", { n: result.goodsUpdated })}</p>}
             {result.errors.length > 0 && <p>{result.errors.length} {" "}{tr("rows had problems and were not imported.")}</p>}
           </div>
           {result.errors.length > 0 && (
@@ -347,7 +348,7 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
             />
             {mapping.address === undefined && <p className="px-4 pt-3 text-sm text-red-600">{tr("Choose which column holds the delivery address.")}</p>}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-xs">
+              <table className="w-full min-w-[960px] text-xs">
                 <thead>
                   <tr className="border-b border-line text-left font-semibold uppercase tracking-wide text-slate-500">
                     <th className="px-3 py-2">#</th>
@@ -357,6 +358,7 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
                     <th className="px-3 py-2">{tr("Date")}</th>
                     <th className="px-3 py-2">{tr("Window")}</th>
                     <th className="px-3 py-2">{tr("Qty")}</th>
+                    <th className="px-3 py-2">{tr("Goods")}</th>
                     <th className="px-3 py-2">{tr("Check")}</th>
                   </tr>
                 </thead>
@@ -374,6 +376,9 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
                         {mapped[i].timeWindow || [mapped[i].windowStart, mapped[i].windowEnd].filter(Boolean).join(" – ") || "—"}
                       </td>
                       <td className="px-3 py-2">{c.ok ? c.value.demand : mapped[i].demand}</td>
+                      <td className="max-w-48 truncate px-3 py-2 text-slate-600" title={mapped[i].goods}>
+                        {c.ok && c.value.goods ? `${c.value.goods.length} · ${c.value.goods[0].name}${c.value.goods.length > 1 ? "…" : ""}` : "—"}
+                      </td>
                       <td className="px-3 py-2">{c.ok ? <Badge tone="green">{tr("OK")}</Badge> : <span className="text-red-600">{c.error}</span>}</td>
                     </tr>
                   ))}

@@ -1,4 +1,5 @@
-import { guessMapping } from "./orders";
+import { formatGoods, guessMapping } from "./orders";
+import type { GoodsLine } from "./db/schema";
 
 /**
  * Turns the text of an order PDF back into spreadsheet rows (header row first),
@@ -9,7 +10,8 @@ import { guessMapping } from "./orders";
  *    order per row, possibly over several pages and with wrapped cells), and
  *  - one order per document (delivery orders, dockets, invoices) laid out as labelled
  *    fields — "Order #: …", "DATE: …", a "SHIP TO:" block — in one or more columns.
- *    A PDF may hold several such documents back to back; each becomes one row.
+ *    A PDF may hold several such documents back to back; each becomes one row, with the
+ *    goods from its item table ("# | ITEM | PRICE | QTY") in a "Goods" column.
  */
 
 /** One run of text, in page units with y growing downwards; y is the baseline. */
@@ -322,10 +324,15 @@ function readLabelledDocs(lines: Line[], pageCount: number): string[][] | null {
   };
   // A page with an order number or delivery address starts a new document; other pages continue the one before.
   const docs: (typeof cells)[] = [];
+  const docPages: number[][] = [];
   for (let p = 0; p < pageCount; p++) {
     const pageCells = cells.filter((c) => c.page === p);
-    if (!docs.length || pageCells.some(keyLabel)) docs.push([]);
+    if (!docs.length || pageCells.some(keyLabel)) {
+      docs.push([]);
+      docPages.push([]);
+    }
     docs[docs.length - 1].push(...pageCells);
+    docPages[docPages.length - 1].push(p);
   }
 
   const headers: string[] = [];
@@ -336,7 +343,7 @@ function readLabelledDocs(lines: Line[], pageCount: number): string[][] | null {
     if (!headers.includes(h)) headers.push(h);
   };
 
-  for (const doc of docs) {
+  for (const [docIndex, doc] of docs.entries()) {
     // The sender's own name (letterhead "FOODPAC DISTRIBUTION PTY LTD" across the top of the
     // page): never the customer. A customer can be a Pty Ltd too, further down.
     const own = new Set(
@@ -430,9 +437,93 @@ function readLabelledDocs(lines: Line[], pageCount: number): string[][] | null {
       put(record, labelOf(f), f.lines.join(", "));
     }
     if (!placed) putAddress();
+    const goods = readGoods(lines.filter((l) => docPages[docIndex].includes(l.page)));
+    if (goods.length) put(record, "Goods", formatGoods(goods));
     if (ship) rows.push(record);
   }
   const m = guessMapping(headers);
   if (!rows.length || m.address === undefined) return null;
   return [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ""))];
+}
+
+// ---------------------------------------------------------------------------
+// The goods on a document: its item table
+
+const QTY_HEAD = /^(qty|qty\.|quantity|qnty)$/i;
+const NAME_HEAD = /^(item|items|name|description|product|product\s+name|item\s+description|goods)$/i;
+const UNIT_HEAD = /^(unit|units|uom)$/i;
+const LINE_HEAD = /^(#|no\.?|line)$/i;
+/** Where the item table stops: its totals, or the payment details under it. */
+const TABLE_END = /^(sub\s*-?\s*total|total|gst|tax|balance(\s+due)?|amount\s+due|freight|payment|thank\s+you)\b/i;
+const PAGE_MARK = /^page\s*\d+\s*(of|\/)\s*\d+$/i;
+const QTY_VALUE = /^\d+(?:\.\d+)?$/;
+
+/**
+ * Reads the item table of one document ("# | ITEM | PRICE | QTY" on an invoice, "# | NAME |
+ * UNIT | QTY" on a delivery order), over as many pages as it runs. A line under an item
+ * without its own number is the rest of that item's name (often the Chinese description).
+ */
+function readGoods(lines: Line[]): GoodsLine[] {
+  const hi = lines.findIndex((l) => l.cells.some((c) => QTY_HEAD.test(c.text)) && l.cells.some((c) => NAME_HEAD.test(c.text)));
+  if (hi < 0) return [];
+  const head = lines[hi];
+  const cols = [...head.cells].sort((a, b) => a.x0 - b.x0);
+  const bounds = cols.map((c, i) => ({
+    lo: i === 0 ? -Infinity : (cols[i - 1].x1 + c.x0) / 2,
+    hi: i === cols.length - 1 ? Infinity : (c.x1 + cols[i + 1].x0) / 2,
+  }));
+  const colOf = (cell: Cell) => {
+    let best = 0;
+    let bestOverlap = -Infinity;
+    bounds.forEach((b, i) => {
+      const overlap = Math.min(cell.x1, b.hi) - Math.max(cell.x0, b.lo);
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        best = i;
+      }
+    });
+    return best;
+  };
+  const find = (re: RegExp) => cols.findIndex((c) => re.test(c.text));
+  const nameCol = find(NAME_HEAD);
+  const qtyCol = find(QTY_HEAD);
+  const unitCol = find(UNIT_HEAD);
+  const lineCol = find(LINE_HEAD);
+
+  const out: (GoodsLine & { rest: string[] })[] = [];
+  let prev = head;
+  for (const line of lines.slice(hi + 1)) {
+    const texts = line.cells.map((c) => c.text);
+    if (texts.some((t) => PAGE_MARK.test(t))) continue;
+    // The heading again at the top of a later page.
+    if (texts.some((t) => QTY_HEAD.test(t)) && texts.some((t) => NAME_HEAD.test(t))) {
+      prev = line;
+      continue;
+    }
+    if (texts.some((t) => TABLE_END.test(t))) break;
+    // Payment details or other labelled lines under the table, at its left edge.
+    if (line.cells.some((c) => LABEL.test(c.text) && colOf(c) !== nameCol)) break;
+    // A wide gap on the same page: the table is over.
+    if (line.page === prev.page && line.y - prev.y > Math.max(line.h, prev.h) * 8) break;
+
+    const byCol = new Map<number, string>();
+    for (const c of line.cells) {
+      const i = colOf(c);
+      byCol.set(i, byCol.has(i) ? `${byCol.get(i)} ${c.text}` : c.text);
+    }
+    const name = byCol.get(nameCol) ?? "";
+    const qtyText = qtyCol >= 0 ? (byCol.get(qtyCol) ?? "").replace(/,/g, "") : "";
+    const starts = lineCol >= 0 ? /^\d+$/.test(byCol.get(lineCol) ?? "") : QTY_VALUE.test(qtyText);
+    if (starts && name) {
+      const unit = unitCol >= 0 ? (byCol.get(unitCol) ?? "").replace(/\s*\[[^\]]*\]\s*/g, "").trim() : "";
+      const qty = QTY_VALUE.test(qtyText) ? Number(qtyText) : null;
+      out.push({ name, qty, unit: unit && !/^unit\(?s?\)?$/i.test(unit) ? unit : null, rest: [] });
+    } else if (out.length && name && byCol.size === 1) {
+      out[out.length - 1].rest.push(name);
+    } else if (!out.length && !name) {
+      continue;
+    }
+    prev = line;
+  }
+  return out.map(({ rest, ...g }) => ({ ...g, name: [g.name, ...rest].join(" ").slice(0, 300) }));
 }

@@ -1,14 +1,14 @@
 import "server-only";
-import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { assertUser } from "./auth/dal";
 import { type DB, getDb } from "./db";
 import { emailDelivered, emailHeadsUp, emailNextStop, emailRouteStarted } from "./delivery-emails";
-import { deliveryEvents, orders, plans, routes, routeStops } from "./db/schema";
+import { deliveryEvents, deliveryProofs, orders, plans, routes, routeStops } from "./db/schema";
 import type { Outcome } from "./outcome";
 import { getSettings, refreshPlanSummary, UserError, writeStopTimes } from "./planning";
-import { saveProof } from "./proofs";
+import { saveProof, sha256 } from "./proofs";
 import { buildShipment } from "./shipments";
 import { nowSecondsIn, todayIn } from "./time";
 import { retimeStops } from "./vrp/retime";
@@ -263,4 +263,43 @@ export async function reorderDriverRoute(routeId: string, stopIds: string[] | nu
   const order = listed && [...pending.map((p) => p.orderId).filter((id) => !listed.includes(id)), ...listed];
   await buildShipment(db, row.plan.deliveryDate, user.driverId, [], [], { order, keepStart: true });
   revalidateDriverPages();
+}
+
+/** Photos one delivery can carry, the ones taken at the door included. */
+export const MAX_STOP_PHOTOS = 10;
+
+/**
+ * Adds photos to a stop the driver already finished (forgot one, or the customer asked for
+ * another), on the same delivery record the office sees. Safe to send twice: a photo already
+ * saved (same image) isn't saved again. Returns how many were added.
+ */
+export async function addStopPhotos(stopId: string, photos: { mime: string; data: Uint8Array }[]) {
+  const { db, stop, route } = await ownStop(stopId);
+  if (stop.status === "pending") throw new UserError("Confirm the delivery first, then add photos.");
+  if (!photos.length) return 0;
+  // The record made when the stop was finished: same order, same driver, the moment it was done.
+  const [event] = await db
+    .select({ id: deliveryEvents.id })
+    .from(deliveryEvents)
+    .where(and(eq(deliveryEvents.orderId, stop.orderId), eq(deliveryEvents.driverId, route.driverId), inArray(deliveryEvents.type, ["delivered", "failed"])))
+    .orderBy(sql`abs(extract(epoch from ${deliveryEvents.createdAt} - ${stop.completedAt ?? new Date()}))`)
+    .limit(1);
+  if (!event) throw new UserError("This stop's delivery record wasn't found. Call the office.");
+  const existing = await db
+    .select({ sha256: deliveryProofs.sha256 })
+    .from(deliveryProofs)
+    .where(and(eq(deliveryProofs.eventId, event.id), eq(deliveryProofs.kind, "photo")));
+  const have = new Set(existing.map((p) => p.sha256));
+  const fresh = photos.filter((p, i) => {
+    const h = sha256(p.data);
+    // Also a photo picked twice in the same upload.
+    return !have.has(h) && photos.findIndex((q) => sha256(q.data) === h) === i;
+  });
+  if (!fresh.length) return 0;
+  if (existing.length + fresh.length > MAX_STOP_PHOTOS) throw new UserError(`A delivery can have up to ${MAX_STOP_PHOTOS} photos.`);
+  await db.transaction(async (tx) => {
+    for (const p of fresh) await saveProof(tx, { orderId: stop.orderId, eventId: event.id, kind: "photo", mime: p.mime, data: p.data });
+  });
+  revalidateDriverPages();
+  return fresh.length;
 }

@@ -87,12 +87,13 @@ function deliveryOrder(n: number): PdfPage[] {
 }
 
 describe("pdfToMatrix — delivery orders", () => {
-  const headers = ["Customer", "SHIP TO", "Suburb", "Postcode", "Notes", "DELIVERY ORDER #", "DATE", "SALES ORDER #", "Email"];
+  const headers = ["Customer", "SHIP TO", "Suburb", "Postcode", "Notes", "DELIVERY ORDER #", "DATE", "SALES ORDER #", "Email", "Goods"];
+  const goods = "5 × PAPER BOWL 750ml Bamboo print 竹纹纸碗 50PC*12PK/CTN · PKT\n2 × XYW-05 sushi container";
 
   it("reads one delivery order spread over two pages as one order", () => {
     expect(pdfToMatrix(deliveryOrder(7))).toEqual([
       headers,
-      ["Noodle House 7 (West End)", "7 Boundary St, West End QLD 4101", "West end", "4101", "Attn: Jane Citizen", "DO007", "Nov 09, 2026", "SO007", "jane@example.com"],
+      ["Noodle House 7 (West End)", "7 Boundary St, West End QLD 4101", "West end", "4101", "Attn: Jane Citizen", "DO007", "Nov 09, 2026", "SO007", "jane@example.com", goods],
     ]);
   });
 
@@ -104,7 +105,9 @@ describe("pdfToMatrix — delivery orders", () => {
   it("maps to the right import columns, with a date the importer reads", () => {
     const [h, row] = pdfToMatrix(deliveryOrder(7));
     const m = guessMapping(h);
-    expect(m).toMatchObject({ customerName: 0, address: 1, suburb: 2, postcode: 3, notes: 4, orderNumber: 5, deliveryDate: 6 });
+    expect(m).toMatchObject({ customerName: 0, address: 1, suburb: 2, postcode: 3, notes: 4, orderNumber: 5, deliveryDate: 6, goods: 9 });
+    // The quantity column is the order's units, not the goods list.
+    expect(m.demand).toBeUndefined();
     expect(parseDate(row[m.deliveryDate!])).toBe("2026-11-09");
   });
 });
@@ -234,6 +237,11 @@ describe("pdfToMatrix — invoices", () => {
       notes: "WWS门口，Shopping Centre · Attn: Blair",
     });
     expect(read(invoice("Soraya Foods Pty Ltd", ["4/26 Felix St ，Brisbane City", "Brisbane, QLD, Australia, 4000", "Lindy"])).customer).toBe("Soraya Foods Pty Ltd");
+  });
+
+  it("reads the goods from the item table, up to the payment details", () => {
+    const [h, row] = pdfToMatrix(invoice("Shikii Sushi (Redbank)", ["1 Collingwood Dr, Redbank QLD 4301"]));
+    expect(row[h.indexOf("Goods")]).toBe("8 × Obento Sushi Rice 10KG");
   });
 
   it("delivers to the billing address when the ship-to block only names a person", () => {

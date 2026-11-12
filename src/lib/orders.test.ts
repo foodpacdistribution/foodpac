@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { stripUnit } from "./geo/geocode";
-import { geocodeQuery, guessMapping, multiStopNavigation, navigationUrls, needsAttention, parseDate, validateImportRow } from "./orders";
+import { formatGoods, geocodeQuery, guessMapping, multiStopNavigation, navigationUrls, needsAttention, parseDate, parseGoods, validateImportRow } from "./orders";
 
 describe("guessMapping", () => {
   it("maps common spreadsheet headers", () => {
@@ -87,5 +87,26 @@ describe("needsAttention", () => {
     expect(needsAttention({ geocodeStatus: "ok", status: "pending" })).toBe(false);
     expect(needsAttention({ geocodeStatus: "approximate", status: "delivered" })).toBe(false);
     expect(needsAttention({ geocodeStatus: "failed", status: "failed" })).toBe(false);
+  });
+});
+
+describe("parseGoods", () => {
+  it("reads the goods lines an import writes, with quantities and units", () => {
+    expect(parseGoods("5 × PAPER BOWL 750ml · PKT\n2 × XYW-05 sushi container")).toEqual([
+      { name: "PAPER BOWL 750ml", qty: 5, unit: "PKT" },
+      { name: "XYW-05 sushi container", qty: 2, unit: null },
+    ]);
+  });
+  it("takes the quantity before or after the name, and a plain list", () => {
+    expect(parseGoods("3x Rice 10kg; Soy sauce x 2; Napkins")).toEqual([
+      { name: "Rice 10kg", qty: 3, unit: null },
+      { name: "Soy sauce", qty: 2, unit: null },
+      { name: "Napkins", qty: null, unit: null },
+    ]);
+    expect(parseGoods("  ")).toBeNull();
+  });
+  it("round-trips through formatGoods", () => {
+    const g = [{ name: "Rice 10kg", qty: 1.5, unit: "CTN" }];
+    expect(parseGoods(formatGoods(g))).toEqual(g);
   });
 });

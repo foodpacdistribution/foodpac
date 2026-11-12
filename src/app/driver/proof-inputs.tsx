@@ -6,7 +6,7 @@ import { btn, cx, Spinner } from "@/components/ui";
 import { useT } from "@/components/i18n";
 
 /** Resizes a camera photo on the phone so uploads stay small (~100–300 KB). */
-async function compressPhoto(file: File, maxSide = 1600, quality = 0.75): Promise<File> {
+export async function compressPhoto(file: File, maxSide = 1600, quality = 0.75): Promise<File> {
   try {
     const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
