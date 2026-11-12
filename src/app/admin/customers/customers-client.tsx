@@ -4,8 +4,9 @@ import { Building2, FileText, KeyRound, Mail, MapPin, Package, Pencil, Phone, Pl
 import Link from "@/components/link";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { deleteCustomer, removeCustomerLogin, saveCustomer } from "@/app/actions/customers";
-import { FormError, Modal, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
-import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
+import { setSalesStage } from "@/app/actions/pipeline";
+import { FormError, Modal, SubmitButton, KeptForm, Toast, type ToastMessage, useKeptForm } from "@/components/client-ui";
+import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader, Spinner } from "@/components/ui";
 import type { PaymentTerms, SalesStage } from "@/lib/db/schema";
 import { SALES_STAGES, STAGE_INFO } from "@/lib/sales-stage";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
@@ -46,6 +47,9 @@ const FILTERS = [
 export function CustomersClient({ customers, isAdmin, readOnly }: { customers: Customer[]; isAdmin: boolean; /** Sales staff: look, don't change (they add customers from the pipeline). */ readOnly?: boolean }) {
   const tr = useT();
   const [editing, setEditing] = useState<Customer | "new" | null>(null);
+  // Sales staff: the customer whose stage they're changing.
+  const [staging, setStaging] = useState<Customer | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number][0]>("all");
   const deferredQ = useDeferredValue(q);
@@ -124,7 +128,11 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
           <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
             {shown.slice(0, limit).map((c, i) => (
               <div key={c.id} className="stagger flex min-w-0" style={{ "--i": Math.min(i, 8) } as React.CSSProperties}>
-              <Card className={cx("flex w-full min-w-0 flex-col p-3.5 sm:p-4", !c.active && "opacity-60")}>
+              <Card className={cx("relative flex w-full min-w-0 flex-col p-3.5 sm:p-4", !c.active && "opacity-60", readOnly && "transition-shadow hover:shadow-pop")}>
+                {readOnly && (
+                  // The whole card opens the stage picker; the phone / email / map links sit above it.
+                  <button type="button" className="absolute inset-0 z-0 rounded-xl" onClick={() => setStaging(c)} aria-label={`${tr("Change status")}: ${c.name}`} />
+                )}
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 font-semibold leading-snug break-words text-slate-900">{c.name}</p>
@@ -142,15 +150,15 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
                     </button>
                   )}
                 </div>
-                {(c.salesStage !== "won" || !c.approved || !c.active || c.login) && (
+                {(readOnly || c.salesStage !== "won" || !c.approved || !c.active || c.login) && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {c.salesStage !== "won" && <Badge tone={STAGE_INFO[c.salesStage].tone}>{tr(STAGE_INFO[c.salesStage].label)}</Badge>}
+                    {(readOnly || c.salesStage !== "won") && <Badge tone={STAGE_INFO[c.salesStage].tone}>{tr(STAGE_INFO[c.salesStage].label)}</Badge>}
                     {!c.approved && <Badge tone="amber">{tr("Needs approval")}</Badge>}
                     {!c.active && <Badge>{tr("Inactive")}</Badge>}
                     {c.login && <Badge tone="green">{tr("Portal on")}</Badge>}
                   </div>
                 )}
-                <ul className="mt-2.5 space-y-0.5 text-[13px] text-slate-600">
+                <ul className="relative z-10 mt-2.5 space-y-0.5 text-[13px] text-slate-600">
                   {c.phone && (
                     <li>
                       <a href={`tel:${c.phone.replace(/\s+/g, "")}`} className="-mx-1.5 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 hover:bg-slate-50 active:bg-slate-100">
@@ -201,6 +209,11 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
                   {tr(PAYMENT_TERMS_LABEL[c.paymentTerms])}
                   {c.creditLimitCents !== null && <> · {tr("limit {amount}", { amount: aud(c.creditLimitCents) })}</>}
                 </p>
+                {readOnly && (
+                  <button type="button" onClick={() => setStaging(c)} className={btn("secondary", "sm", "relative z-10 mt-3 h-9 w-full")}>
+                    <span className={cx("size-2 rounded-full", STAGE_INFO[c.salesStage].dot)} /> {tr("Change status")}
+                  </button>
+                )}
                 {!readOnly && (
                   <div className="mt-auto grid grid-cols-2 gap-2 pt-3">
                     <Link href={`/admin/customers/${c.id}`} className={btn("secondary", "sm", "h-9")}>
@@ -225,6 +238,19 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
           )}
         </>
       )}
+      <Modal open={staging !== null} onClose={() => setStaging(null)} title={staging ? staging.name : tr("Change status")}>
+        {staging && (
+          <StagePicker
+            current={staging.salesStage}
+            onPick={async (stage) => {
+              const r = await setSalesStage(staging.id, stage);
+              setStaging(null);
+              setToast({ id: Date.now(), tone: r.ok ? "ok" : "warn", text: r.ok ? `${staging.name}: ${tr(STAGE_INFO[stage].label)}` : r.error });
+            }}
+          />
+        )}
+      </Modal>
+      <Toast toast={toast} onDone={() => setToast(null)} />
       <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? tr("Add customer") : tr("Edit customer")}>
         {editing !== null && (
           <CustomerForm
@@ -353,5 +379,42 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
           {tr("Delete customer")}</button>
       )}
     </KeptForm>
+  );
+}
+
+/** The pipeline stages as big buttons, the current one marked; tapping one saves it. */
+function StagePicker({ current, onPick }: { current: SalesStage; onPick: (stage: SalesStage) => Promise<void> }) {
+  const tr = useT();
+  const [saving, setSaving] = useState<SalesStage | null>(null);
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-slate-500">{tr("Where is this customer now?")}</p>
+      {SALES_STAGES.map((st) => {
+        const on = st === current;
+        return (
+          <button
+            key={st}
+            type="button"
+            disabled={saving !== null}
+            onClick={async () => {
+              if (on) return;
+              setSaving(st);
+              await onPick(st);
+            }}
+            className={cx(
+              "flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left ring-1 transition-[background-color,transform] active:scale-[0.99] disabled:opacity-70",
+              on ? "bg-blue-50 ring-blue-300" : "ring-line hover:bg-slate-50",
+            )}
+          >
+            <span className={cx("size-3 shrink-0 rounded-full", STAGE_INFO[st].dot)} />
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium text-slate-900">{tr(STAGE_INFO[st].label)}</span>
+              <span className="block text-xs text-slate-500">{tr(STAGE_INFO[st].hint)}</span>
+            </span>
+            {saving === st ? <Spinner className="size-4" /> : on && <span className="text-xs font-medium text-blue-700">{tr("Now")}</span>}
+          </button>
+        );
+      })}
+    </div>
   );
 }
