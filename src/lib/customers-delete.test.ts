@@ -52,7 +52,15 @@ describe("applyCustomerImport with a sales stage", () => {
     expect(made.salesStage).toBe("new");
   });
 
-  it("finds a customer by name when the file's code is new to the system, keeping its code", async () => {
+  it("gives a customer added with a made-up code the file's code", async () => {
+    const c = await add("Auto Coded Sushi", { code: "C10999" });
+    const { result } = await applyCustomerImport(db, [{ code: "Auto Coded Sushi (Old)", name: "auto coded sushi" }]);
+    expect(result).toMatchObject({ created: 0, updated: 1 });
+    const [after] = await db.select().from(customers).where(eq(customers.id, c.id));
+    expect(after.code).toBe("Auto Coded Sushi (Old)");
+  });
+
+  it("finds a customer by name when the file's code is new to the system, keeping its own code", async () => {
     const c = await add("Code Later Sushi", { code: "C-KEEP" });
     const { result } = await applyCustomerImport(db, [{ code: "OLDSYS1", name: "Code Later Sushi", email: "a@b.test" }]);
     expect(result).toMatchObject({ created: 0, updated: 1 });

@@ -77,7 +77,10 @@ describe("customer import", () => {
   });
 
   it("checks rows and spots the same customer twice", () => {
-    expect(checkCustomerRow({ code: "ab 12", name: "X", creditLimit: "$3,000", active: "inactive" })).toEqual({ ok: true, value: { code: "ab-12", name: "X", creditLimitCents: 300000, active: false } });
+    expect(checkCustomerRow({ code: " ab  12 ", name: "X", creditLimit: "$3,000", active: "inactive" })).toEqual({ ok: true, value: { code: "ab 12", name: "X", creditLimitCents: 300000, active: false } });
+    // The old system's codes as they are: brackets, Chinese, long names.
+    expect(checkCustomerRow({ code: "Charcoal Champ/火焰山((Calamvale)" })).toMatchObject({ ok: true, value: { code: "Charcoal Champ/火焰山((Calamvale)" } });
+    expect(checkCustomerRow({ code: "x".repeat(101) }).ok).toBe(false);
     expect(checkCustomerRow({ email: "nope" }).ok).toBe(false);
     expect(checkCustomerRow({ name: "X", email: "nope" })).toMatchObject({ ok: false });
     expect([...duplicateCustomers([{ code: "A1" }, { code: "a1" }, { name: "Shop" }, { name: " shop " }]).entries()]).toEqual([

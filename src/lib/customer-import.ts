@@ -43,13 +43,21 @@ export const MAX_CUSTOMER_ROWS = 5000;
 export const codeKey = (code: string) => code.trim().toLowerCase();
 export const nameKey = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ");
 
-/** A customer code as typed: letters, numbers and - _ . / only, up to 30 characters. Throws the reason. */
+/**
+ * A customer code as the old system wrote it, kept as it is ("Sushi Paradise (Fortitude
+ * Valley)", "MUVZJQNDMV"), only with runs of spaces made one. Up to 100 characters. Throws the reason.
+ */
 export function cleanCode(raw: string): string {
-  const code = raw.trim().replace(/\s+/g, "-");
-  if (code.length > 30) throw new Error(`Customer code "${raw.trim()}" is longer than 30 characters`);
-  if (!/^[\p{L}\p{N}._/-]+$/u.test(code)) throw new Error(`Customer code "${raw.trim()}" can only use letters, numbers and - _ . /`);
+  const code = raw.trim().replace(/\s+/g, " ");
+  if (code.length > MAX_CODE_LENGTH) throw new Error(`Customer code "${code.slice(0, 40)}…" is longer than ${MAX_CODE_LENGTH} characters`);
+  if (/[\u0000-\u001f\u007f]/.test(code)) throw new Error(`Customer code "${code}" has a hidden character in it`);
   return code;
 }
+
+export const MAX_CODE_LENGTH = 100;
+
+/** Codes the system makes up for customers added without one (C10050). */
+export const isAutoCode = (code: string) => /^C\d+$/i.test(code.trim());
 
 /**
  * Payment terms as old systems write them: "COD", "Prepaid", "7 days", "Net 14", "30 days EOM"…

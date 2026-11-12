@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { codeTaken, syncCustomerCodes } from "./customer-code";
-import { checkCustomerRow, codeKey, type CustomerImportRow, type CustomerValues, duplicateCustomers, nameKey } from "./customer-import";
+import { checkCustomerRow, codeKey, isAutoCode, type CustomerImportRow, type CustomerValues, duplicateCustomers, nameKey } from "./customer-import";
 import type { DB } from "./db";
 import { type SalesStage, customerCreditAccounts, customerCreditTransactions, customerReturns, customers, orders, quotes, salesOrders } from "./db/schema";
 import { UserError } from "./planning";
@@ -59,11 +59,11 @@ export async function applyCustomerImport(db: DB, rows: CustomerImportRow[], opt
     const byItsCode = v.code ? byCode.get(codeKey(v.code)) : undefined;
     const match = byItsCode ?? (v.name ? byName.get(nameKey(v.name)) : undefined);
     if (!match && !v.name) errors.push({ row, message: `New customer ${v.code} needs a business name` });
-    // Matched by name: the name is the same apart from case and spaces, so keep how it's written now,
-    // and the code it already has.
+    // Matched by name: the name is the same apart from case and spaces, so keep how it's written now.
+    // Its code stays, unless it's one the system made up: then the file's code is the real one.
     if (match && !byItsCode) {
       delete v.name;
-      delete v.code;
+      if (!isAutoCode(match.code)) delete v.code;
     }
     return { v, match };
   });
