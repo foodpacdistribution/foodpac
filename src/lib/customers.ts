@@ -3,7 +3,8 @@ import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { codeTaken, syncCustomerCodes } from "./customer-code";
 import { checkCustomerRow, codeKey, type CustomerImportRow, type CustomerValues, duplicateCustomers, nameKey } from "./customer-import";
 import type { DB } from "./db";
-import { customers, orders } from "./db/schema";
+import { type SalesStage, customerCreditAccounts, customerCreditTransactions, customerReturns, customers, orders, quotes, salesOrders } from "./db/schema";
+import { UserError } from "./planning";
 
 const digits = (v: string | null) => (v ?? "").replace(/\D/g, "");
 
@@ -37,7 +38,7 @@ export type CustomerImportResult = { created: number; updated: number; errors: {
  * system, not leads). Empty cells leave the current value alone. Every row is checked; nothing is
  * saved if any row has a problem.
  */
-export async function applyCustomerImport(db: DB, rows: CustomerImportRow[]) {
+export async function applyCustomerImport(db: DB, rows: CustomerImportRow[], opts: { stage?: SalesStage } = {}) {
   const errors: CustomerImportResult["errors"] = [];
   const checked: { row: number; v: CustomerValues }[] = [];
   const dupes = duplicateCustomers(rows);
@@ -53,10 +54,17 @@ export async function applyCustomerImport(db: DB, rows: CustomerImportRow[]) {
   const byName = new Map<string, (typeof existing)[number]>();
   for (const c of existing) if (!byName.has(nameKey(c.name))) byName.set(nameKey(c.name), c);
   const plan = checked.map(({ row, v }) => {
-    const match = v.code ? byCode.get(codeKey(v.code)) : byName.get(nameKey(v.name!));
+    // By code; a code the system doesn't have yet still finds the same business by name (it was
+    // added before under another code), so it isn't added twice.
+    const byItsCode = v.code ? byCode.get(codeKey(v.code)) : undefined;
+    const match = byItsCode ?? (v.name ? byName.get(nameKey(v.name)) : undefined);
     if (!match && !v.name) errors.push({ row, message: `New customer ${v.code} needs a business name` });
-    // Matched by name: the name is the same apart from case and spaces, so keep how it's written now.
-    if (match && !v.code) delete v.name;
+    // Matched by name: the name is the same apart from case and spaces, so keep how it's written now,
+    // and the code it already has.
+    if (match && !byItsCode) {
+      delete v.name;
+      delete v.code;
+    }
     return { v, match };
   });
   const created: { id: string; name: string; phone: string | null }[] = [];
@@ -70,17 +78,40 @@ export async function applyCustomerImport(db: DB, rows: CustomerImportRow[]) {
       for (let i = 0; i < toCreate.length; i += 200) {
         const ins = await tx
           .insert(customers)
-          .values(toCreate.slice(i, i + 200).map(({ v }) => ({ ...v, name: v.name!, approved: true, salesStage: "won" as const })))
+          .values(toCreate.slice(i, i + 200).map(({ v }) => ({ ...v, name: v.name!, approved: true, salesStage: opts.stage ?? ("won" as const) })))
           .returning({ id: customers.id, name: customers.name, phone: customers.phone });
         created.push(...ins);
       }
+      // Chosen on the import page: every customer in the file moves to that stage.
+      const stage = opts.stage ? { salesStage: opts.stage, salesStageAt: new Date() } : {};
       for (const { v, match } of plan) {
-        if (!match || !Object.keys(v).length) continue;
-        await tx.update(customers).set(v).where(eq(customers.id, match.id));
+        if (!match || !Object.keys({ ...v, ...stage }).length) continue;
+        await tx.update(customers).set({ ...v, ...stage }).where(eq(customers.id, match.id));
         updated++;
       }
     })
     .catch((err) => codeTaken(err));
   await syncCustomerCodes(db);
   return { result: { created: created.length, updated, errors: [] }, created };
+}
+
+/**
+ * Deletes a customer with their quotes (offers, nothing owed). Shop orders, returns and store
+ * credit (an account is never deleted) are records for the books: a customer with any of them is
+ * kept, and can be turned off (Active) instead. Returns the customer's name.
+ */
+export async function removeCustomer(db: DB, id: string) {
+  const count = async (table: typeof salesOrders | typeof customerReturns | typeof customerCreditTransactions | typeof customerCreditAccounts) =>
+    (await db.select({ n: sql<number>`count(*)::int` }).from(table).where(eq(table.customerId, id)))[0].n;
+  const shopOrders = await count(salesOrders);
+  if (shopOrders) throw new UserError(`This customer has ${shopOrders} shop order${shopOrders === 1 ? "" : "s"}. Delete those in Sales Orders first, or turn off Active to hide the customer.`);
+  const kept = (await count(customerReturns)) + (await count(customerCreditTransactions)) + (await count(customerCreditAccounts));
+  if (kept) throw new UserError("This customer has returns or store credit history, which is kept for the books. Turn off Active to hide the customer instead.");
+  return db.transaction(async (t) => {
+    const tx = t as unknown as DB;
+    const gone = await tx.delete(quotes).where(eq(quotes.customerId, id)).returning({ id: quotes.id });
+    const [c] = await tx.delete(customers).where(eq(customers.id, id)).returning({ name: customers.name });
+    if (!c) throw new UserError("Customer not found.");
+    return { name: c.name, quotes: gone.length };
+  });
 }

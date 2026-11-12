@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { attempt } from "@/lib/action";
@@ -8,11 +8,11 @@ import { assertUser, STAFF } from "@/lib/auth/dal";
 import { hashPassword } from "@/lib/auth/password";
 import { codeTaken, syncCustomerCodes } from "@/lib/customer-code";
 import { cleanCode, type CustomerImportRow, MAX_CUSTOMER_ROWS } from "@/lib/customer-import";
-import { applyCustomerImport, type CustomerImportResult, linkOrdersToCustomer } from "@/lib/customers";
+import { applyCustomerImport, type CustomerImportResult, linkOrdersToCustomer, removeCustomer } from "@/lib/customers";
 import { locateCustomersLater } from "@/lib/customer-locations";
 import { getDb } from "@/lib/db";
 import { accountApproved } from "@/lib/notify";
-import { customers, type PaymentTerms, salesOrders, users } from "@/lib/db/schema";
+import { customers, type PaymentTerms, users } from "@/lib/db/schema";
 import { parseDollars } from "@/lib/money";
 import { isSalesStage } from "@/lib/sales-stage";
 import { UserError } from "@/lib/planning";
@@ -106,13 +106,10 @@ export async function deleteCustomer(id: string) {
   return attempt(async () => {
     const user = await assertUser(STAFF);
     if (user.role !== "admin") throw new UserError("Only an admin can delete customers.");
-    const db = await getDb();
-    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(salesOrders).where(eq(salesOrders.customerId, id));
-    if (n > 0) throw new UserError(`This customer has ${n} shop order${n === 1 ? "" : "s"}. Delete those in Sales Orders first.`);
-    const [c] = await db.delete(customers).where(eq(customers.id, id)).returning({ name: customers.name });
-    if (!c) throw new UserError("Customer not found.");
+    const c = await removeCustomer(await getDb(), id);
     revalidatePath("/admin/customers");
-    return { message: `${c.name} deleted` };
+    revalidatePath("/admin/pipeline");
+    return { message: c.quotes ? `${c.name} deleted, with ${c.quotes} quote${c.quotes === 1 ? "" : "s"}` : `${c.name} deleted` };
   });
 }
 
@@ -122,13 +119,14 @@ export type { CustomerImportResult };
  * Adds and updates customers from a spreadsheet (see applyCustomerImport). Nothing is saved if
  * any row has a problem.
  */
-export async function importCustomers(rows: CustomerImportRow[]) {
+export async function importCustomers(rows: CustomerImportRow[], stage?: string) {
   return attempt<CustomerImportResult>(async () => {
     await assertUser(STAFF);
     if (!Array.isArray(rows) || !rows.length) throw new UserError("The file has no rows.");
     if (rows.length > MAX_CUSTOMER_ROWS) throw new UserError(`Import at most ${MAX_CUSTOMER_ROWS} customers at a time.`);
+    if (stage && !isSalesStage(stage)) throw new UserError("Unknown sales stage.");
     const db = await getDb();
-    const { result, created } = await applyCustomerImport(db, rows);
+    const { result, created } = await applyCustomerImport(db, rows, { stage: stage && isSalesStage(stage) ? stage : undefined });
     if (result.errors.length) return { data: result };
     // Delivery orders already in the system find their customer by name or phone.
     after(async () => {

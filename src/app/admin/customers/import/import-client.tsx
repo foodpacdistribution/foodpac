@@ -20,6 +20,8 @@ import {
   nameKey,
 } from "@/lib/customer-import";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
+import { SALES_STAGES, STAGE_INFO } from "@/lib/sales-stage";
+import type { SalesStage } from "@/lib/db/schema";
 import { guessMapping, toCsv } from "@/lib/product-import";
 import { downloadCsv, readSpreadsheet, type Sheet } from "@/lib/spreadsheet";
 
@@ -37,6 +39,8 @@ export function CustomerImportClient({ existing }: { existing: { code: string; n
   const [mapping, setMapping] = useState<CustomerMapping>({});
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CustomerImportResult | null>(null);
+  // "" = new customers are Won (they buy from us), existing ones keep their stage.
+  const [stage, setStage] = useState<SalesStage | "">("");
   const [pending, start] = useTransition();
 
   async function onFile(file: File) {
@@ -62,7 +66,8 @@ export function CustomerImportClient({ existing }: { existing: { code: string; n
     });
   }, [sheet, mapping]);
 
-  const isUpdate = (v: { code?: string; name?: string }) => (v.code ? codes.has(codeKey(v.code)) : !!v.name && names.has(nameKey(v.name)));
+  // Same matching as the server: the code, or else (a code the system doesn't have yet too) the name.
+  const isUpdate = (v: { code?: string; name?: string }) => (!!v.code && codes.has(codeKey(v.code))) || (!!v.name && names.has(nameKey(v.name)));
   const checks = useMemo(() => {
     const dupes = duplicateCustomers(rows);
     return rows.map((r, i) => {
@@ -80,7 +85,7 @@ export function CustomerImportClient({ existing }: { existing: { code: string; n
   function submit() {
     setError(null);
     start(async () => {
-      const r = await importCustomers(rows);
+      const r = await importCustomers(rows, stage || undefined);
       if (!r.ok) return setError(r.error);
       setResult(r.data!);
     });
@@ -216,6 +221,21 @@ export function CustomerImportClient({ existing }: { existing: { code: string; n
                   </ul>
                 </Card>
               )}
+
+              <Card className="flex flex-wrap items-center gap-3 p-4">
+                <label htmlFor="import-stage" className="text-sm font-medium text-slate-700">
+                  {tr("Sales stage")}
+                </label>
+                <select id="import-stage" value={stage} onChange={(e) => setStage(e.target.value as SalesStage | "")} className={cx(inputCls, "w-auto")}>
+                  <option value="">{tr("Keep as is (new customers: Won)")}</option>
+                  {SALES_STAGES.map((s) => (
+                    <option key={s} value={s}>
+                      {tr("Set all to: {stage}", { stage: tr(STAGE_INFO[s].label) })}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-slate-500">{tr("Applies to every customer in the file, new and existing.")}</span>
+              </Card>
 
               <div className="flex items-center justify-end gap-3">
                 {noKey && <span className="text-sm text-amber-700">{tr("Choose which column holds the customer code or business name.")}</span>}
