@@ -34,6 +34,8 @@ export type StopItem = {
   waiting: number;
   /** From an invoice line without a quantity: show the item, not a made-up count. */
   noQty?: boolean;
+  /** What it looks like: the product's photo, or the one printed on the invoice. */
+  image?: string;
 };
 
 type Props = {
@@ -916,7 +918,15 @@ function ItemChecklist({ items, demand, ticked, onToggle }: { items: StopItem[];
                 )}
               >
                 <input type="checkbox" className="size-5 shrink-0 accent-emerald-600" checked={on} onChange={() => onToggle(i.id)} />
-                <span className="w-10 shrink-0 text-right text-base font-semibold tabular-nums text-slate-900">{i.noQty ? "•" : `${i.qty}×`}</span>
+                {i.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- small signed-in thumbnail
+                  <img src={i.image} alt="" loading="lazy" className="size-11 shrink-0 rounded-md bg-white object-contain ring-1 ring-line" />
+                ) : (
+                  <span className="grid size-11 shrink-0 place-items-center rounded-md bg-slate-50 text-slate-300 ring-1 ring-line">
+                    <Package className="size-5" />
+                  </span>
+                )}
+                <span className="w-9 shrink-0 text-right text-base font-semibold tabular-nums text-slate-900">{i.noQty ? "•" : `${i.qty}×`}</span>
                 <span className={cx("min-w-0 flex-1 text-sm transition-colors duration-200", on ? "text-slate-500 line-through" : "text-slate-800")}>
                   {i.name}
                   {(i.packSize || i.unit || i.sku) && <span className="block text-[11px] text-slate-400">{[i.packSize, i.unit, i.sku].filter(Boolean).join(" · ")}</span>}

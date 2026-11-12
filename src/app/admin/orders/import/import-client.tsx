@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardPaste, FileSpreadsheet
 import Link from "@/components/link";
 import Papa from "papaparse";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { geocodeOrders, importOrders } from "@/app/actions/orders";
+import { geocodeOrders, importOrders, saveGoodsPhotos } from "@/app/actions/orders";
 import { FormError } from "@/components/client-ui";
 import { Badge, btn, Card, CardHeader, cx, Field, inputCls, PageHeader, Spinner } from "@/components/ui";
 import { guessMapping, IMPORT_FIELDS, type ImportField, type ImportRow, validateImportRow } from "@/lib/orders";
@@ -93,6 +93,9 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  // Product photos cut from the invoice PDFs read, saved once the import goes through.
+  const photos = useRef<{ name: string; dataUrl: string }[]>([]);
+  const [photosSaved, setPhotosSaved] = useState<number | null>(null);
   const [locate, setLocate] = useState<Locate | null>(null);
   const [pending, startTransition] = useTransition();
   // Stop locating if the user leaves the page; what's left can be checked from Orders.
@@ -131,9 +134,17 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
       return (await readSheet(file)) as unknown[][];
     }
     if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") {
-      const [{ readPdfPages }, { pdfToMatrix, PdfReadError }] = await Promise.all([import("@/lib/pdf-read"), import("@/lib/pdf-table")]);
+      const [{ readPdfPages, readPdfPhotos }, { goodsAnchors, pdfToMatrix, PdfReadError }] = await Promise.all([import("@/lib/pdf-read"), import("@/lib/pdf-table")]);
       try {
-        return pdfToMatrix(await readPdfPages(file));
+        const pages = await readPdfPages(file);
+        const matrix = pdfToMatrix(pages);
+        // The photo beside each line of goods; a PDF without any is still read.
+        try {
+          photos.current.push(...(await readPdfPhotos(file, goodsAnchors(pages))));
+        } catch (e) {
+          console.warn("[import] couldn't read the product photos:", e);
+        }
+        return matrix;
       } catch (e) {
         throw new Error(e instanceof PdfReadError ? tr(e.message) : `${tr("Couldn't read that file:")} ${(e as Error).message}`);
       }
@@ -146,6 +157,8 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
   async function onFiles(files: File[]) {
     if (!files.length) return;
     setError(null);
+    photos.current = [];
+    setPhotosSaved(null);
     setReading(true);
     try {
       const sheets: Sheet[] = [];
@@ -185,6 +198,14 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
       if (!r.ok) return setError(r.error);
       setResult(r.data!);
       if (r.data!.ids.length) void locateAll(r.data!.ids);
+      // One photo per product, in batches small enough for one request each.
+      const unique = [...new Map(photos.current.map((p) => [p.name.toLowerCase(), p])).values()];
+      let saved = 0;
+      for (let i = 0; i < unique.length; i += 20) {
+        const res = await saveGoodsPhotos(unique.slice(i, i + 20));
+        if (res.ok) saved += res.data?.saved ?? 0;
+      }
+      if (unique.length) setPhotosSaved(saved);
     });
   }
 
@@ -209,6 +230,7 @@ export function ImportClient({ defaultDate }: { defaultDate: string }) {
                 {result.duplicates.length} {" "}{tr("skipped as duplicates (same order number and date already in the system).")}</p>
             )}
             {!!result.goodsUpdated && <p>{tr("Goods list added to {n} order(s) already in the system.", { n: result.goodsUpdated })}</p>}
+            {photosSaved !== null && <p>{tr("{n} new product photo(s) from the invoices.", { n: photosSaved })}</p>}
             {result.errors.length > 0 && <p>{result.errors.length} {" "}{tr("rows had problems and were not imported.")}</p>}
           </div>
           {result.errors.length > 0 && (

@@ -450,6 +450,19 @@ export const deliveryProofs = pgTable(
   (t) => [index("delivery_proofs_order_idx").on(t.orderId)],
 );
 
+/**
+ * Product photos printed on imported invoices, one per product (by name), so the driver sees
+ * what each line of goods looks like. `id` is the SHA-256 of the name as goodsKey() writes it.
+ */
+export const goodsPhotos = pgTable("goods_photos", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  mime: text("mime").notNull(),
+  bytes: integer("bytes").notNull(),
+  data: bytea("data").notNull(),
+  createdAt: createdAt(),
+});
+
 /** Keys for the /api/v1 order API. Only a SHA-256 hash of the key is stored. */
 export const apiKeys = pgTable("api_keys", {
   id: id(),

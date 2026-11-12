@@ -2,8 +2,10 @@ import { and, asc, eq, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { requireUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { deliveryEvents, deliveryProofs, orders, plans, routes, routeStops, salesOrderItems, salesOrders } from "@/lib/db/schema";
+import { deliveryEvents, deliveryProofs, orders, plans, products, routes, routeStops, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { customerEmailsOn } from "@/lib/delivery-emails";
+import { goodsPhotoUrls } from "@/lib/goods-photos";
+import { productImageUrl } from "@/lib/product-image";
 import { depotFor, getDepots, getPlanView, getSettings } from "@/lib/planning";
 import { nowSecondsIn, todayIn } from "@/lib/time";
 import { DriverClient, type StopItem } from "./driver-client";
@@ -60,18 +62,36 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
     orderIds.length ? db.select({ id: orders.id, goods: orders.goods }).from(orders).where(inArray(orders.id, orderIds)) : [],
   ]);
   const photos = Object.fromEntries(photoRows.map((r) => [r.stopId, r.n]));
+  // What each item looks like: the catalogue photo for shop orders, the invoice's for imported ones.
+  const productIds = [...new Set(lines.map((l) => l.item.productId).filter((id): id is string => !!id))];
+  const [productPics, goodsPics] = await Promise.all([
+    productIds.length
+      ? db.select({ id: products.id, updatedAt: products.updatedAt }).from(products).where(and(inArray(products.id, productIds), isNotNull(products.image)))
+      : [],
+    goodsPhotoUrls(db, goodsRows.flatMap((o) => (o.goods ?? []).map((g) => g.name))),
+  ]);
+  const productPic = new Map(productPics.map((p) => [p.id, productImageUrl(p)]));
   const depot = depotFor(depotList, route?.depotId);
   const items: Record<string, StopItem[]> = {};
   for (const { orderId, item } of lines) {
     if (!orderId) continue;
     // Like the pick list: what's still waiting for stock isn't on the van.
-    (items[orderId] ??= []).push({ id: item.id, sku: item.sku, name: item.name, packSize: item.packSize, unit: item.unit, qty: item.qty - item.backorderQty, waiting: item.backorderQty });
+    (items[orderId] ??= []).push({
+      id: item.id,
+      sku: item.sku,
+      name: item.name,
+      packSize: item.packSize,
+      unit: item.unit,
+      qty: item.qty - item.backorderQty,
+      waiting: item.backorderQty,
+      image: item.productId ? productPic.get(item.productId) : undefined,
+    });
   }
   // Orders without a shop or staff order: the goods listed on their invoice. Ticks are kept by
   // id, so each line's id is the order's plus its place on the invoice.
   for (const o of goodsRows) {
     if (items[o.id] || !o.goods?.length) continue;
-    items[o.id] = o.goods.map((g, i) => ({ id: `${o.id}:${i}`, sku: "", name: g.name, packSize: "", unit: g.unit ?? "", qty: g.qty ?? 1, waiting: 0, noQty: g.qty === null }));
+    items[o.id] = o.goods.map((g, i) => ({ id: `${o.id}:${i}`, sku: "", name: g.name, packSize: "", unit: g.unit ?? "", qty: g.qty ?? 1, waiting: 0, noQty: g.qty === null, image: goodsPics.get(g.name) }));
   }
 
   return (

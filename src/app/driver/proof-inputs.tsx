@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Check, Eraser, PenLine, Undo2, X } from "lucide-react";
+import { Camera, Check, Eraser, Image as ImageIcon, PenLine, Undo2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { btn, cx, Spinner } from "@/components/ui";
 import { useT } from "@/components/i18n";
@@ -45,24 +45,26 @@ export function PhotoCapture({ value, onChange, required }: { value: File | null
       </div>
     );
   }
+  const pick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setBusy(true);
+    onChange(await compressPhoto(f));
+    setBusy(false);
+  };
+  // The camera straight away, or a photo already on the phone (taken earlier, or sent by the customer).
   return (
-    <label className={cx(btn("secondary", "lg", "w-full cursor-pointer rounded-xl border-dashed"), busy && "opacity-60")}>
-      {busy ? <Spinner className="size-5" /> : <Camera className="size-5" />} {busy ? tr("Processing…") : `Take photo${required ? " (required)" : ""}`}
-      <input
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        onChange={async (e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          if (!f) return;
-          setBusy(true);
-          onChange(await compressPhoto(f));
-          setBusy(false);
-        }}
-      />
-    </label>
+    <div className={cx("grid grid-cols-2 gap-2", busy && "opacity-60")}>
+      <label className={btn("secondary", "lg", "h-auto min-h-12 w-full cursor-pointer gap-1.5 rounded-xl border-dashed px-2 py-2 text-center text-sm leading-tight whitespace-normal [&>svg]:shrink-0")}>
+        {busy ? <Spinner className="size-5" /> : <Camera className="size-5" />} {busy ? tr("Processing…") : tr(required ? "Take photo (required)" : "Take photo")}
+        <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={pick} />
+      </label>
+      <label className={btn("secondary", "lg", "h-auto min-h-12 w-full cursor-pointer gap-1.5 rounded-xl border-dashed px-2 py-2 text-center text-sm leading-tight whitespace-normal [&>svg]:shrink-0")}>
+        <ImageIcon className="size-5" /> {tr("Choose from album")}
+        <input type="file" accept="image/*" className="sr-only" onChange={pick} />
+      </label>
+    </div>
   );
 }
 

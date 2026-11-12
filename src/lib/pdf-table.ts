@@ -315,25 +315,36 @@ export function splitAddress(lines: string[], { wrapped = false }: { wrapped?: b
   return out;
 }
 
-function readLabelledDocs(lines: Line[], pageCount: number): string[][] | null {
-  const cells = lines.flatMap((l) => l.cells.map((c) => ({ ...c, page: l.page })));
+/** The pages of each document in a PDF: a page with an order number or delivery address starts a new one. */
+function splitDocs(lines: Line[], pageCount: number): number[][] {
   const keyLabel = (c: Cell) => {
     const m = LABEL.exec(c.text);
     const f = m && fieldOf(m[1]);
     return f === "orderNumber" || f === "address";
   };
-  // A page with an order number or delivery address starts a new document; other pages continue the one before.
-  const docs: (typeof cells)[] = [];
   const docPages: number[][] = [];
   for (let p = 0; p < pageCount; p++) {
-    const pageCells = cells.filter((c) => c.page === p);
-    if (!docs.length || pageCells.some(keyLabel)) {
-      docs.push([]);
-      docPages.push([]);
-    }
-    docs[docs.length - 1].push(...pageCells);
+    if (!docPages.length || lines.some((l) => l.page === p && l.cells.some(keyLabel))) docPages.push([]);
     docPages[docPages.length - 1].push(p);
   }
+  return docPages;
+}
+
+/**
+ * Where each line of goods is printed (page, top and bottom of its rows, and the left edge of the
+ * price column), so the product photo printed beside it can be matched to it.
+ */
+export function goodsAnchors(pages: PdfPage[]): GoodsAnchor[] {
+  const lines = pages.flatMap((p, i) => toLines(p, i));
+  return splitDocs(lines, pages.length).flatMap((docPages) => readGoods(lines.filter((l) => docPages.includes(l.page))).map(({ anchor, ...g }) => ({ ...g, ...anchor })));
+}
+
+export type GoodsAnchor = GoodsLine & { page: number; top: number; bottom: number; nameRight: number };
+
+function readLabelledDocs(lines: Line[], pageCount: number): string[][] | null {
+  const cells = lines.flatMap((l) => l.cells.map((c) => ({ ...c, page: l.page })));
+  const docPages = splitDocs(lines, pageCount);
+  const docs = docPages.map((pages) => cells.filter((c) => pages.includes(c.page)));
 
   const headers: string[] = [];
   const rows: Record<string, string>[] = [];
@@ -438,7 +449,7 @@ function readLabelledDocs(lines: Line[], pageCount: number): string[][] | null {
     }
     if (!placed) putAddress();
     const goods = readGoods(lines.filter((l) => docPages[docIndex].includes(l.page)));
-    if (goods.length) put(record, "Goods", formatGoods(goods));
+    if (goods.length) put(record, "Goods", formatGoods(goods.map(({ anchor: _anchor, ...g }) => g)));
     if (ship) rows.push(record);
   }
   const m = guessMapping(headers);
@@ -453,17 +464,24 @@ const QTY_HEAD = /^(qty|qty\.|quantity|qnty)$/i;
 const NAME_HEAD = /^(item|items|name|description|product|product\s+name|item\s+description|goods)$/i;
 const UNIT_HEAD = /^(unit|units|uom)$/i;
 const LINE_HEAD = /^(#|no\.?|line)$/i;
+/** Columns whose words never end the table: an item's "GST(10%)" in the tax column isn't the totals. */
+const CHARGE_HEAD = /^(tax|gst|vat|disc\.?|discount)$/i;
 /** Where the item table stops: its totals, or the payment details under it. */
 const TABLE_END = /^(sub\s*-?\s*total|total|gst|tax|balance(\s+due)?|amount\s+due|freight|payment|thank\s+you)\b/i;
+/** A heading inside the table grouping the lines under it ("SALES ORDER SO002305"), not part of a name. */
+const SECTION = /^(sales\s+order|purchase\s+order|order|delivery|section)\b.*\d/i;
 const PAGE_MARK = /^page\s*\d+\s*(of|\/)\s*\d+$/i;
 const QTY_VALUE = /^\d+(?:\.\d+)?$/;
 
+type Anchor = { page: number; top: number; bottom: number; nameRight: number };
+
 /**
- * Reads the item table of one document ("# | ITEM | PRICE | QTY" on an invoice, "# | NAME |
- * UNIT | QTY" on a delivery order), over as many pages as it runs. A line under an item
- * without its own number is the rest of that item's name (often the Chinese description).
+ * Reads the item table of one document ("# | ITEM | PRICE | UNIT | QTY | DISC. | TAX | AMOUNT" on
+ * an invoice, "# | NAME | UNIT | QTY" on a delivery order), over as many pages as it runs. Lines
+ * under an item without their own number are the rest of its name (often in Chinese, and the
+ * pack size). Each item also says where it's printed, for the product photo beside it.
  */
-function readGoods(lines: Line[]): GoodsLine[] {
+function readGoods(lines: Line[]): (GoodsLine & { anchor: Anchor })[] {
   const hi = lines.findIndex((l) => l.cells.some((c) => QTY_HEAD.test(c.text)) && l.cells.some((c) => NAME_HEAD.test(c.text)));
   if (hi < 0) return [];
   const head = lines[hi];
@@ -489,8 +507,10 @@ function readGoods(lines: Line[]): GoodsLine[] {
   const qtyCol = find(QTY_HEAD);
   const unitCol = find(UNIT_HEAD);
   const lineCol = find(LINE_HEAD);
+  const chargeCols = new Set(cols.flatMap((c, i) => (CHARGE_HEAD.test(c.text) ? [i] : [])));
+  const nameRight = bounds[nameCol].hi;
 
-  const out: (GoodsLine & { rest: string[] })[] = [];
+  const out: (GoodsLine & { rest: string[]; anchor: Anchor })[] = [];
   let prev = head;
   for (const line of lines.slice(hi + 1)) {
     const texts = line.cells.map((c) => c.text);
@@ -500,11 +520,15 @@ function readGoods(lines: Line[]): GoodsLine[] {
       prev = line;
       continue;
     }
-    if (texts.some((t) => TABLE_END.test(t))) break;
+    if (line.cells.some((c) => TABLE_END.test(c.text) && !chargeCols.has(colOf(c)))) break;
     // Payment details or other labelled lines under the table, at its left edge.
     if (line.cells.some((c) => LABEL.test(c.text) && colOf(c) !== nameCol)) break;
     // A wide gap on the same page: the table is over.
     if (line.page === prev.page && line.y - prev.y > Math.max(line.h, prev.h) * 8) break;
+    if (texts.length === 1 && SECTION.test(texts[0])) {
+      prev = line;
+      continue;
+    }
 
     const byCol = new Map<number, string>();
     for (const c of line.cells) {
@@ -517,13 +541,14 @@ function readGoods(lines: Line[]): GoodsLine[] {
     if (starts && name) {
       const unit = unitCol >= 0 ? (byCol.get(unitCol) ?? "").replace(/\s*\[[^\]]*\]\s*/g, "").trim() : "";
       const qty = QTY_VALUE.test(qtyText) ? Number(qtyText) : null;
-      out.push({ name, qty, unit: unit && !/^unit\(?s?\)?$/i.test(unit) ? unit : null, rest: [] });
-    } else if (out.length && name && byCol.size === 1) {
-      out[out.length - 1].rest.push(name);
-    } else if (!out.length && !name) {
-      continue;
+      out.push({ name, qty, unit: unit && !/^unit\(?s?\)?$/i.test(unit) ? unit : null, rest: [], anchor: { page: line.page, top: line.y - line.h, bottom: line.y, nameRight } });
+    } else if (out.length && name && !starts) {
+      // The rest of the item's name, wrapped onto the lines under it (whatever else sits on them).
+      const last = out[out.length - 1];
+      last.rest.push(name);
+      if (line.page === last.anchor.page) last.anchor.bottom = line.y;
     }
     prev = line;
   }
-  return out.map(({ rest, ...g }) => ({ ...g, name: [g.name, ...rest].join(" ").slice(0, 300) }));
+  return out.map(({ rest, ...g }) => ({ ...g, name: [g.name, ...rest].join(" ").replace(/\s+/g, " ").slice(0, 300) }));
 }

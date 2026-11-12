@@ -6,7 +6,9 @@ import { attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { insertDemoOrders } from "@/lib/db/seed";
-import { depots, orders, routeStops, salesOrders } from "@/lib/db/schema";
+import { depots, goodsPhotos, orders, routeStops, salesOrders } from "@/lib/db/schema";
+import { goodsPhotoId, MAX_GOODS_PHOTO_BYTES } from "@/lib/goods-photos";
+import { sniffImage } from "@/lib/proofs";
 import { geocodeAddress } from "@/lib/geo/geocode";
 import { getT } from "@/lib/i18n/server";
 import { pruneEmptyRoutes } from "@/lib/shipments";
@@ -279,6 +281,30 @@ export async function importOrders(rows: ImportRow[], defaultDate: string) {
     }
     revalidateAll();
     return { data: { inserted: ids.length, ids, duplicates, errors, goodsUpdated } };
+  });
+}
+
+/**
+ * Product photos cut from imported invoice PDFs (by the import page), one per product name. A
+ * product that already has one keeps it. Returns how many were new.
+ */
+export async function saveGoodsPhotos(photos: { name: string; dataUrl: string }[]) {
+  return attempt(async () => {
+    await assertUser(STAFF);
+    if (!Array.isArray(photos) || photos.length > 25) throw new UserError("Send at most 25 photos at a time.");
+    const rows = [];
+    for (const p of photos) {
+      const name = String(p?.name ?? "").trim().slice(0, 300);
+      const m = /^data:image\/[a-z]+;base64,([A-Za-z0-9+/=]+)$/.exec(String(p?.dataUrl ?? ""));
+      if (!name || !m) continue;
+      const data = new Uint8Array(Buffer.from(m[1], "base64"));
+      const mime = sniffImage(data);
+      if (!mime || data.byteLength > MAX_GOODS_PHOTO_BYTES) continue;
+      rows.push({ id: goodsPhotoId(name), name, mime, bytes: data.byteLength, data });
+    }
+    if (!rows.length) return { data: { saved: 0 } };
+    const saved = await (await getDb()).insert(goodsPhotos).values(rows).onConflictDoNothing().returning({ id: goodsPhotos.id });
+    return { data: { saved: saved.length } };
   });
 }
 

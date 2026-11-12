@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { guessMapping, parseDate } from "./orders";
-import { pdfToMatrix, PdfReadError, splitAddress, type PdfPage, type PdfText } from "./pdf-table";
+import { goodsAnchors, pdfToMatrix, PdfReadError, splitAddress, type PdfPage, type PdfText } from "./pdf-table";
 
 // Text runs as pdf.js reports them: x/y in points, y down, ~6pt per character at 10pt.
 const t = (str: string, x: number, y: number, h = 10): PdfText => ({ str, x, y, w: str.length * h * 0.5, h });
@@ -250,5 +250,56 @@ describe("pdfToMatrix — invoices", () => {
       postcode: "4350",
       notes: "Attn: sean",
     });
+  });
+});
+
+// INV002239 as the old system prints it (positions from the real one): a product photo before
+// each name, the name wrapping over several lines, "GST(10%)" under each line's tax, and the
+// sales order as a heading row inside the table.
+function invoiceWithPhotos(): PdfPage[] {
+  const label = (s: string, y: number) => t(s, 535, y, 9);
+  const value = (s: string, y: number) => ({ ...t(s, 0, y, 9), x: 877 - s.length * 4.5 });
+  const item = (n: string, y: number, name: string[], price: string, unit: string, qty: string, tax: string, amount: string) => [
+    t(n, 47, y, 9),
+    ...name.map((l, i) => t(l, 135, y + i * 16, 9)),
+    t(price, 350, y, 9), t(unit, 407, y, 9), t(qty, 541, y, 9), t("--", 645, y, 9), t(tax, 735, y, 9), t("GST(10%)", 707, y + 16, 9), t(amount, 840, y, 9),
+  ];
+  return [
+    [
+      t("FOODPAC DISTRIBUTION PTY LTD", 567, 55, 11),
+      t("INVOICE", 750, 207, 22),
+      t("New Alley (Woolloongabba)", 49, 262, 15),
+      t("BILL TO:", 47, 297, 9), t("joe zhou", 47, 331, 9),
+      t("SHIP TO:", 294, 297, 9), t("Princess Plaza Shopping Centre", 294, 314, 9), t("Shop 4/14 Annerley Rd,", 294, 331, 9), t("Woolloongabba QLD 4102", 294, 348, 9),
+      label("INVOICE #:", 301), value("INV002239", 301),
+      label("DATE:", 320), value("Nov 12, 2026", 320),
+      t("#", 47, 517, 9), t("ITEM", 72, 517, 9), t("PRICE", 345, 517, 9), t("UNIT", 448, 517, 9), t("QTY", 541, 517, 9), t("DISC.", 630, 517, 9), t("TAX", 726, 517, 9), t("AMOUNT (AUD)", 773, 517, 9),
+      t("SALES ORDER SO002305", 58, 551, 9),
+      ...item("1", 578, ["Fortune Pak round", "container 打包圆盒", "20oz (600ml)", "50pc*10pk/ctn"], "44.00", "CTN [10.00]", "1.00", "4.40", "44.00"),
+      ...item("2", 657, ["Fortune Pak round", "container 打包圆盒 8oz", "(225ml) 50pc*20pk/ctn"], "2.67", "PKT [1.00]", "4.00", "1.07", "10.68"),
+      t("TOTAL QUANTITY", 47, 720, 9), t("5.00", 540, 720, 9),
+      t("Sub Total", 513, 751, 9), t("54.68", 850, 751, 9),
+      t("GST (10%)", 515, 772, 9), t("5.47", 855, 772, 9),
+      t("NAME: Foodpac Distribution", 47, 907, 7), t("BSB: 014-269", 47, 927, 7),
+      t("INV002239", 47, 1240, 9), t("Page 1 of 1", 787, 1240, 9),
+    ],
+  ];
+}
+
+describe("pdfToMatrix — goods on an invoice with photos and wrapped names", () => {
+  it("reads every line with its whole name, quantity and unit, as on the invoice", () => {
+    const [h, row] = pdfToMatrix(invoiceWithPhotos());
+    expect(row[h.indexOf("Goods")]).toBe(
+      "1 × Fortune Pak round container 打包圆盒 20oz (600ml) 50pc*10pk/ctn · CTN\n4 × Fortune Pak round container 打包圆盒 8oz (225ml) 50pc*20pk/ctn · PKT",
+    );
+  });
+
+  it("says where each line is printed, so its photo can be matched", () => {
+    const a = goodsAnchors(invoiceWithPhotos());
+    expect(a.map((g) => [g.page, Math.round(g.top), Math.round(g.bottom)])).toEqual([
+      [0, 569, 626],
+      [0, 648, 689],
+    ]);
+    expect(a[0].nameRight).toBeLessThan(345);
   });
 });
