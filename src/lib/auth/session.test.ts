@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { rolesOf } from "./roles";
+import { salesMayOpen } from "./sales-pages";
 import { afterLogin } from "./session";
 
 describe("afterLogin", () => {
@@ -18,12 +20,32 @@ describe("afterLogin", () => {
     expect(afterLogin("sales", "/admin/pipeline?stage=won")).toBe("/admin/pipeline?stage=won");
     expect(afterLogin("sales", "/account")).toBe("/account");
     expect(afterLogin("sales", "/admin/customer-map")).toBe("/admin/customer-map");
-    expect(afterLogin("sales", "/admin/customers")).toBe("/admin/pipeline");
+    expect(afterLogin("sales", "/admin/customers")).toBe("/admin/customers");
+    expect(afterLogin("sales", "/admin/customers/import")).toBe("/admin/pipeline");
   });
   it("rejects external and malformed targets", () => {
     expect(afterLogin("admin", "https://evil.example")).toBe("/admin");
     expect(afterLogin("admin", "//evil.example")).toBe("/admin");
     expect(afterLogin("admin", "/\\evil.example")).toBe("/admin");
     expect(afterLogin("customer", null)).toBe("/portal");
+  });
+});
+
+describe("salesMayOpen", () => {
+  it("lets sales staff see the customer list, but not the office pages under it", () => {
+    expect(salesMayOpen("/admin/customers")).toBe(true);
+    expect(salesMayOpen("/admin/customers/import")).toBe(false);
+    expect(salesMayOpen("/admin/customers/0a6084c0-0000-0000-0000-000000000000")).toBe(false);
+    expect(salesMayOpen("/admin/customer-map")).toBe(true);
+    expect(salesMayOpen("/admin/pipeline")).toBe(true);
+    expect(salesMayOpen("/admin/orders")).toBe(false);
+  });
+});
+
+describe("rolesOf", () => {
+  it("is the login's own role first, then the extra jobs, never a customer", () => {
+    expect(rolesOf({ role: "driver", extraRoles: ["sales"] })).toEqual(["driver", "sales"]);
+    expect(rolesOf({ role: "driver", extraRoles: ["driver", "customer", "sales", "sales"] })).toEqual(["driver", "sales"]);
+    expect(rolesOf({ role: "admin", extraRoles: [] })).toEqual(["admin"]);
   });
 });

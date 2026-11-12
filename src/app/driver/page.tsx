@@ -86,6 +86,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
       route={route}
       items={items}
       photos={photos}
+      roles={user.roles}
       canTellCustomer={await customerEmailsOn(db)}
       requirePhoto={s.requirePhoto}
       requireSignature={s.requireSignature}

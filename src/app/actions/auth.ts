@@ -46,6 +46,20 @@ export async function login(_prev: { error?: string } | undefined, form: FormDat
   redirect(afterLogin(user.role, String(form.get("next") ?? "")));
 }
 
+/**
+ * Switches the login to another job this person does (a driver who also sells), and opens that
+ * role's pages. Only roles an admin has given them.
+ */
+export async function switchRole(role: string) {
+  const me = await getCurrentUser();
+  if (!me) redirect("/login");
+  const to = me.roles.find((r) => r === role);
+  if (!to) redirect(homeFor(me.role));
+  const token = await signSession({ sub: me.id, role: to, name: me.name, driverId: me.driverId });
+  (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
+  redirect(homeFor(to));
+}
+
 export async function logout(form?: FormData) {
   const jar = await cookies();
   const session = await verifySession(jar.get(SESSION_COOKIE)?.value);

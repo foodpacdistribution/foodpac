@@ -22,7 +22,7 @@ export default async function SettingsPage() {
   const db = await getDb();
   const [s, userRows, depotRows, keyRows, feedRows, emailDomain] = await Promise.all([
     getSettings(db),
-    db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).where(ne(users.role, "customer")).orderBy(asc(users.role), asc(users.name)),
+    db.select({ id: users.id, name: users.name, email: users.email, role: users.role, extraRoles: users.extraRoles, driverId: users.driverId }).from(users).where(ne(users.role, "customer")).orderBy(asc(users.role), asc(users.name)),
     db.select().from(depots).orderBy(asc(depots.createdAt)),
     db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt)),
     db.select().from(orderFeeds).orderBy(asc(orderFeeds.createdAt)),

@@ -2,7 +2,7 @@
 
 import { Building2, Camera, Mail, MapPin, Pencil, Plug, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import { useEffect, useOptimistic, useState, useTransition } from "react";
-import { createStaffUser, deleteUser, saveDepot, saveSettings } from "@/app/actions/settings";
+import { createStaffUser, deleteUser, saveDepot, saveSettings, setExtraRoles } from "@/app/actions/settings";
 import { FormError, KeptForm, Modal, SubmitButton, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, CardHeader, cx, Field, inputCls, PageHeader } from "@/components/ui";
 import type { settings as settingsTable } from "@/lib/db/schema";
@@ -11,7 +11,14 @@ import { useT } from "@/components/i18n";
 import { AddressInput } from "@/components/address-input";
 
 type Settings = typeof settingsTable.$inferSelect;
-type U = { id: string; name: string; email: string; role: string; saving?: boolean };
+type U = { id: string; name: string; email: string; role: string; extraRoles?: string[]; driverId?: string | null; saving?: boolean };
+
+/** Jobs a login can take on besides its own, with how they read. */
+const EXTRA_ROLE_LABELS: [string, string][] = [
+  ["sales", "Salesperson"],
+  ["dispatcher", "Dispatcher"],
+  ["driver", "Driver"],
+];
 type Depot = { id: string; name: string; address: string; located: boolean; active: boolean };
 
 const TIMEZONES = [
@@ -140,7 +147,7 @@ export function SettingsClient({
 
         <div className="space-y-4">
           <Card>
-            <CardHeader title={<span className="flex items-center gap-2"><Users className="size-4 text-slate-400" /> {" "}{tr("Staff logins")}</span>} subtitle={tr("Sales staff only see the Sales Pipeline and the Customer Map. Driver logins are managed on the Drivers page.")} />
+            <CardHeader title={<span className="flex items-center gap-2"><Users className="size-4 text-slate-400" /> {" "}{tr("Staff logins")}</span>} subtitle={tr("Sales staff see the Sales Pipeline, Customers and the Customer Map. Driver logins are managed on the Drivers page. Tap + to give someone another job they can switch to from their own login.")} />
             {notice && <p className="border-b border-line bg-slate-50 px-4 py-2 text-xs text-slate-600">{notice}</p>}
             <ul className="divide-y divide-line">
               {shownUsers.map((u) => (
@@ -148,6 +155,37 @@ export function SettingsClient({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-800">{u.name}</p>
                     <p className="truncate text-xs text-slate-500">{u.email}</p>
+                    {!u.saving && (
+                      // More jobs this person does: they switch between them from their own login.
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        <span className="text-[11px] text-slate-400">{tr("Also works as")}</span>
+                        {EXTRA_ROLE_LABELS.filter(([r]) => r !== u.role && (r !== "driver" || u.driverId) && (u.role !== "admin" || r === "driver")).map(([r, label]) => {
+                          const on = u.extraRoles?.includes(r) ?? false;
+                          return (
+                            <button
+                              key={r}
+                              type="button"
+                              disabled={pending}
+                              aria-pressed={on}
+                              onClick={() =>
+                                startTransition(async () => {
+                                  const next = on ? (u.extraRoles ?? []).filter((x) => x !== r) : [...(u.extraRoles ?? []), r];
+                                  const res = await setExtraRoles(u.id, next);
+                                  setNotice(res.ok ? (res.message ?? null) : res.error);
+                                })
+                              }
+                              className={cx(
+                                "rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 transition-colors active:scale-95",
+                                on ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "text-slate-500 ring-line hover:bg-slate-50",
+                              )}
+                            >
+                              {on ? "✓ " : "+ "}
+                              {tr(label)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                   <Badge tone={u.role === "admin" ? "violet" : u.role === "dispatcher" ? "blue" : u.role === "sales" ? "green" : "slate"}>{tr(u.role)}</Badge>
                   {u.saving && <span className="text-xs text-slate-400">{tr("Saving…")}</span>}

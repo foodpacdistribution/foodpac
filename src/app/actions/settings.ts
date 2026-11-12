@@ -74,6 +74,27 @@ export async function createStaffUser(_prev: unknown, form: FormData) {
   });
 }
 
+/** Jobs that can be added to a login on top of its own (never admin or customer). */
+const EXTRA_ROLES = ["dispatcher", "sales", "driver"] as const;
+
+/**
+ * Gives a staff or driver login more jobs to switch between (e.g. a driver who also sells).
+ * Driving needs the login to be linked to a driver profile.
+ */
+export async function setExtraRoles(userId: string, roles: string[]) {
+  return attempt(async () => {
+    await assertUser(["admin"]);
+    const db = await getDb();
+    const [u] = await db.select({ role: users.role, driverId: users.driverId, name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!u || u.role === "customer") throw new UserError("Login not found.");
+    const extra = EXTRA_ROLES.filter((r) => roles.includes(r) && r !== u.role);
+    if (extra.includes("driver") && !u.driverId) throw new UserError("Only a login linked to a driver profile can drive. Add them on the Drivers page first.");
+    await db.update(users).set({ extraRoles: extra }).where(eq(users.id, userId));
+    revalidatePath("/admin/settings");
+    return { message: "Roles saved" };
+  });
+}
+
 export async function deleteUser(userId: string) {
   return attempt(async () => {
     const me = await assertUser(["admin"]);

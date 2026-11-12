@@ -1,6 +1,6 @@
 import { and, asc, count, eq, max, ne, sql } from "drizzle-orm";
 import type { Metadata } from "next";
-import { requireUser, STAFF } from "@/lib/auth/dal";
+import { PIPELINE, requireUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { customers, orders, salesOrders, users } from "@/lib/db/schema";
 import { CustomersClient } from "./customers-client";
@@ -8,7 +8,8 @@ import { CustomersClient } from "./customers-client";
 export const metadata: Metadata = { title: "Customers" };
 
 export default async function CustomersPage() {
-  const me = await requireUser(STAFF);
+  // Sales staff see the customers too, without changing them.
+  const me = await requireUser(PIPELINE);
   const db = await getDb();
   const [rows, logins, counts, sales] = await Promise.all([
     db.select().from(customers).orderBy(asc(customers.approved), asc(customers.name)),
@@ -28,6 +29,7 @@ export default async function CustomersPage() {
   return (
     <CustomersClient
       isAdmin={me.role === "admin"}
+      readOnly={me.role === "sales"}
       customers={rows.map((c) => ({
         ...c,
         createdAt: undefined,

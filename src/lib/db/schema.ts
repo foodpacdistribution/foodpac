@@ -151,6 +151,11 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
   role: text("role").$type<Role>().notNull(),
+  /**
+   * More jobs the same person does (a driver who also sells): they can switch to each from their
+   * own login. The login uses one role at a time; `role` is the one they start in.
+   */
+  extraRoles: text("extra_roles").array().$type<Role[]>().notNull().default(sql`'{}'::text[]`),
   driverId: uuid("driver_id").references(() => drivers.id, { onDelete: "set null" }),
   /** Customer logins only: the business whose orders they can see. */
   customerId: uuid("customer_id").references(() => customers.id, { onDelete: "cascade" }),

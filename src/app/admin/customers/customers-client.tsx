@@ -40,7 +40,7 @@ const FILTERS = [
   ["inactive", "Inactive"],
 ] as const;
 
-export function CustomersClient({ customers, isAdmin }: { customers: Customer[]; isAdmin: boolean }) {
+export function CustomersClient({ customers, isAdmin, readOnly }: { customers: Customer[]; isAdmin: boolean; /** Sales staff: look, don't change (they add customers from the pipeline). */ readOnly?: boolean }) {
   const tr = useT();
   const [editing, setEditing] = useState<Customer | "new" | null>(null);
   const [q, setQ] = useState("");
@@ -72,7 +72,7 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
         title={tr("Customers")}
         subtitle={tr("Give a customer a portal login and they can follow their own orders, see the delivery photo and signature.")}
         actions={
-          <>
+          readOnly ? undefined : <>
             <Link href="/admin/customers/import" className={btn("secondary")}>
               <Upload className="size-4" /> {tr("Import")}
             </Link>
@@ -125,9 +125,11 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
                   {!c.approved && <Badge tone="amber">{tr("Needs approval")}</Badge>}
                   {!c.active && <Badge>{tr("Inactive")}</Badge>}
                   {c.login ? <Badge tone="green">{tr("Portal on")}</Badge> : <Badge>{tr("No login")}</Badge>}
-                  <button className={btn("ghost", "icon")} onClick={() => setEditing(c)} aria-label={`Edit ${c.name}`}>
-                    <Pencil className="size-3.5" />
-                  </button>
+                  {!readOnly && (
+                    <button className={btn("ghost", "icon")} onClick={() => setEditing(c)} aria-label={`Edit ${c.name}`}>
+                      <Pencil className="size-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
               <ul className="mt-3 space-y-1.5 text-xs text-slate-600">
@@ -170,14 +172,14 @@ export function CustomersClient({ customers, isAdmin }: { customers: Customer[];
                   <dd className="font-semibold text-slate-900">{c.lastOrderAt ? tr(new Date(c.lastOrderAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })) : "—"}</dd>
                 </div>
               </dl>
-              <div className="mt-3 flex flex-wrap gap-2">
+              {!readOnly && <div className="mt-3 flex flex-wrap gap-2">
                 <Link href={`/admin/customers/${c.id}`} className={btn("secondary", "sm")}>
                   <Tags className="size-3.5" /> {tr("Price list")}
                 </Link>
                 <Link href={`/admin/quotes/new?customer=${c.id}`} className={btn("secondary", "sm")}>
                   <FileText className="size-3.5" /> {tr("New quote")}
                 </Link>
-              </div>
+              </div>}
             </Card>
           ))}
         </div>

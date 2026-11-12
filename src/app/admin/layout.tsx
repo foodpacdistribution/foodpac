@@ -18,6 +18,7 @@ import { AdminLive } from "./admin-live";
 import { AdminSearch } from "./admin-search";
 import { SideNav } from "./side-nav";
 import { T } from "@/components/i18n";
+import { RoleSwitch } from "@/components/role-switch";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   // Pages check their own roles too; sales staff only get the pipeline and the customer map.
@@ -85,6 +86,12 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           <LanguageSwitch tone="dark" />
         </div>
         <div className="mt-auto border-t border-white/10 p-3">
+          {/* Someone who also drives (or sells): switch jobs without signing out. */}
+          {user.roles.length > 1 && (
+            <div className="mb-2 px-1">
+              <RoleSwitch roles={user.roles} current={user.role} />
+            </div>
+          )}
           <div className="flex items-center gap-1 rounded-lg">
             <Link href="/account" title="Profile & password" className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-white/5">
               <span className="grid size-8 shrink-0 place-items-center rounded-full bg-navy-700 text-xs font-semibold text-white">{initials(user.name)}</span>
@@ -110,6 +117,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           </Link>
           <div className="flex items-center gap-1.5">
             <AdminSearch role={user.role} variant="icon" />
+            {user.roles.length > 1 && <RoleSwitch roles={user.roles} current={user.role} compact />}
             <LanguageSwitch tone="dark" />
             <Link href="/account" aria-label="Profile & password" className="grid size-8 place-items-center rounded-full bg-navy-700 text-xs font-semibold text-white">
               {initials(user.name)}

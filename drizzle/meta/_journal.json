@@ -204,6 +204,13 @@
       "when": 1794458400001,
       "tag": "0028_order_goods",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794458400002,
+      "tag": "0029_user_extra_roles",
+      "breakpoints": true
     }
   ]
 }

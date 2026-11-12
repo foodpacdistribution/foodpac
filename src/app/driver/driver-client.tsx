@@ -9,6 +9,7 @@ import { logout } from "@/app/actions/auth";
 import { reorderStops, startRoute, tellCustomerArriving } from "@/app/actions/driver";
 import { Modal, Toast, type ToastMessage } from "@/components/client-ui";
 import { LanguageSwitch } from "@/components/language-switch";
+import { RoleSwitch } from "@/components/role-switch";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { Badge, btn, cx, Spinner } from "@/components/ui";
 import { prettyDate, shiftDate } from "@/lib/dates";
@@ -49,6 +50,8 @@ type Props = {
   items: Record<string, StopItem[]>;
   /** Photos already with the office for each finished stop (stop id → count). */
   photos: Record<string, number>;
+  /** Every job this login does: more than one shows a switch (e.g. to sales). */
+  roles: string[];
   /** Customer emails are on, so the "about 10 minutes away" button can be offered. */
   canTellCustomer: boolean;
   requirePhoto: boolean;
@@ -60,7 +63,7 @@ function greeting(nowS: number) {
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-export function DriverClient({ name, linked, date, today, days, nowS, depot, route, items, photos, canTellCustomer, requirePhoto, requireSignature }: Props) {
+export function DriverClient({ name, linked, date, today, days, nowS, depot, route, items, photos, roles, canTellCustomer, requirePhoto, requireSignature }: Props) {
   const tr = useT();
   // Clock times read "2:44pm" in English and "14:44" in Chinese.
   const clock = (s: number | null) => tr(formatClock(s));
@@ -184,6 +187,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          <RoleSwitch roles={roles} current="driver" compact />
           <LanguageSwitch tone="dark" />
           <form action={logout}>
             <button className="grid size-9 place-items-center rounded-full bg-white/10 text-slate-300" aria-label={tr("Sign out")}>

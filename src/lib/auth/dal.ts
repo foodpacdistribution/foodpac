@@ -5,9 +5,23 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { getDb } from "../db";
 import { customers, type Role, users } from "../db/schema";
+import { rolesOf } from "./roles";
 import { homeFor, SESSION_COOKIE, verifySession } from "./session";
 
-export type CurrentUser = { id: string; name: string; email: string; role: Role; driverId: string | null; customerId: string | null };
+export type CurrentUser = {
+  id: string;
+  name: string;
+  email: string;
+  /** The role in use right now: their own, or another job they do that they switched to. */
+  role: Role;
+  /** Every role this login may use, the one they start in first. */
+  roles: Role[];
+  driverId: string | null;
+  customerId: string | null;
+  /** The login was switched to a role that has since been taken away. */
+  staleRole: boolean;
+};
+
 
 /** Verifies the cookie and re-reads the user, so deleted users / role changes take effect immediately. */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
@@ -16,13 +30,18 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const db = await getDb();
   const [u] = await db.select().from(users).where(eq(users.id, session.sub)).limit(1);
   if (!u) return null;
-  return { id: u.id, name: u.name, email: u.email, role: u.role, driverId: u.driverId, customerId: u.customerId };
+  const roles = rolesOf(u);
+  // The role the login was switched to, as long as this person still has it.
+  const role = roles.includes(session.role) ? session.role : u.role;
+  return { id: u.id, name: u.name, email: u.email, role, roles, driverId: u.driverId, customerId: u.customerId, staleRole: role !== session.role };
 });
 
 /** For pages: redirects when not signed in or not allowed. */
 export async function requireUser(roles?: Role[]): Promise<CurrentUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  // Switched to a job that was taken away: the cookie still says it, so reset it to their own role.
+  if (user.staleRole) redirect("/api/auth/role");
   if (roles && !roles.includes(user.role)) redirect(homeFor(user.role));
   return user;
 }
