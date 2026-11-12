@@ -129,8 +129,10 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
                   </td>
                   <td className="px-2 py-2.5 text-right whitespace-nowrap tabular-nums">
                     {it.qty} {it.unit}
+                    <span className="block text-xs text-slate-400 sm:hidden">@ {aud(it.unitPriceCents)}</span>
                   </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums text-slate-500">{aud(it.unitPriceCents)}</td>
+                  {/* Phones: the unit price sits under the quantity, leaving room for the name. */}
+                  <td className="hidden px-2 py-2.5 text-right tabular-nums text-slate-500 sm:table-cell">{aud(it.unitPriceCents)}</td>
                   <td className="px-4 py-2.5 text-right font-medium tabular-nums">{aud(it.lineCents)}</td>
                 </tr>
               ))}

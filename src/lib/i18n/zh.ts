@@ -1771,6 +1771,8 @@ export const ZH: Record<string, string> = {
   "No end date": "长期展示",
   "Move up": "上移",
   "Change order": "调整顺序",
+  "Show more": "显示更多",
+  "Showing {n} of {total}": "已显示 {n} / {total}",
   "Also works as": "兼任",
   "Roles saved": "职位已保存",
   "Sales staff see the Sales Pipeline, Customers and the Customer Map. Driver logins are managed on the Drivers page. Tap + to give someone another job they can switch to from their own login.": "销售人员可以看到\"销售跟进\"、\"客户\"和\"客户地图\"页面。司机账号在\"司机\"页面管理。点 + 给员工加一个兼任职位,他们可以在自己的账号里切换。",

@@ -32,6 +32,9 @@ type Customer = {
   lastOrderAt: string | null;
 };
 
+/** Customers drawn at a time. */
+const PAGE = 60;
+
 const FILTERS = [
   ["all", "All"],
   ["approval", "Needs approval"],
@@ -46,6 +49,14 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number][0]>("all");
   const deferredQ = useDeferredValue(q);
+  // Hundreds of customers: draw them a page at a time, starting again when the search changes.
+  const [limit, setLimit] = useState(PAGE);
+  const listKey = `${deferredQ}|${filter}`;
+  const [prevKey, setPrevKey] = useState(listKey);
+  if (prevKey !== listKey) {
+    setPrevKey(listKey);
+    setLimit(PAGE);
+  }
   const shown = useMemo(() => {
     const s = deferredQ.trim().toLowerCase();
     return customers.filter(
@@ -88,10 +99,10 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
             <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-slate-400" />
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search code, name, phone, email, address")} className={cx(inputCls, "pl-9")} />
           </div>
-          <div className="flex flex-wrap gap-1">
+          <div className="-mx-4 flex w-[calc(100%+2rem)] gap-1 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:w-auto sm:flex-wrap sm:overflow-visible sm:px-0">
             {FILTERS.map(([f, label]) =>
               f === "all" || counts[f] > 0 ? (
-                <button key={f} onClick={() => setFilter(f)} className={btn(filter === f ? "primary" : "ghost", "sm")}>
+                <button key={f} onClick={() => setFilter(f)} className={btn(filter === f ? "primary" : "ghost", "sm", "shrink-0")}>
                   {tr(label)} <span className="opacity-60">{counts[f]}</span>
                 </button>
               ) : null,
@@ -109,80 +120,110 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
           <EmptyState icon={Search} title={tr("No customers match")}>{tr("Try another search or filter.")}</EmptyState>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {shown.map((c) => (
-            <Card key={c.id} className={cx("p-4", !c.active && "opacity-60")}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-slate-900">{c.name}</p>
-                  <p className="font-mono text-[11px] text-slate-500">{c.code}</p>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
-                    <Package className="size-3.5" /> {tr(c.orderCount === 1 ? "{n} linked order" : "{n} linked orders", { n: c.orderCount })}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  {c.salesStage !== "won" && <Badge tone={STAGE_INFO[c.salesStage].tone}>{tr(STAGE_INFO[c.salesStage].label)}</Badge>}
-                  {!c.approved && <Badge tone="amber">{tr("Needs approval")}</Badge>}
-                  {!c.active && <Badge>{tr("Inactive")}</Badge>}
-                  {c.login ? <Badge tone="green">{tr("Portal on")}</Badge> : <Badge>{tr("No login")}</Badge>}
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+            {shown.slice(0, limit).map((c, i) => (
+              <div key={c.id} className="stagger flex min-w-0" style={{ "--i": Math.min(i, 8) } as React.CSSProperties}>
+              <Card className={cx("flex w-full min-w-0 flex-col p-3.5 sm:p-4", !c.active && "opacity-60")}>
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 font-semibold leading-snug break-words text-slate-900">{c.name}</p>
+                    <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500">
+                      <span className="truncate font-mono">{c.code}</span>
+                      <span className="shrink-0 text-slate-300">·</span>
+                      <span className="flex shrink-0 items-center gap-1">
+                        <Package className="size-3" /> {tr(c.orderCount === 1 ? "{n} linked order" : "{n} linked orders", { n: c.orderCount })}
+                      </span>
+                    </p>
+                  </div>
                   {!readOnly && (
-                    <button className={btn("ghost", "icon")} onClick={() => setEditing(c)} aria-label={`Edit ${c.name}`}>
-                      <Pencil className="size-3.5" />
+                    <button className={btn("ghost", "icon", "-mt-1 -mr-1 size-9 shrink-0")} onClick={() => setEditing(c)} aria-label={`Edit ${c.name}`}>
+                      <Pencil className="size-4" />
                     </button>
                   )}
                 </div>
-              </div>
-              <ul className="mt-3 space-y-1.5 text-xs text-slate-600">
-                {c.phone && (
-                  <li className="flex items-center gap-1.5">
-                    <Phone className="size-3.5 text-slate-400" /> {c.phone}
-                  </li>
+                {(c.salesStage !== "won" || !c.approved || !c.active || c.login) && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {c.salesStage !== "won" && <Badge tone={STAGE_INFO[c.salesStage].tone}>{tr(STAGE_INFO[c.salesStage].label)}</Badge>}
+                    {!c.approved && <Badge tone="amber">{tr("Needs approval")}</Badge>}
+                    {!c.active && <Badge>{tr("Inactive")}</Badge>}
+                    {c.login && <Badge tone="green">{tr("Portal on")}</Badge>}
+                  </div>
                 )}
-                {c.email && (
-                  <li className="flex items-center gap-1.5">
-                    <Mail className="size-3.5 text-slate-400" /> {c.email}
-                  </li>
-                )}
-                {c.address && (
-                  <li className="flex items-center gap-1.5">
-                    <MapPin className="size-3.5 text-slate-400" /> <span className="truncate">{c.address}</span>
-                  </li>
-                )}
-                {c.login && (
-                  <li className="flex items-center gap-1.5">
-                    <KeyRound className="size-3.5 text-slate-400" /> {" "}{tr("Login:")}{" "}{c.login.email}
-                  </li>
-                )}
-                <li className="text-slate-500">
+                <ul className="mt-2.5 space-y-0.5 text-[13px] text-slate-600">
+                  {c.phone && (
+                    <li>
+                      <a href={`tel:${c.phone.replace(/\s+/g, "")}`} className="-mx-1.5 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 hover:bg-slate-50 active:bg-slate-100">
+                        <Phone className="size-3.5 shrink-0 text-slate-400" /> <span className="truncate">{c.phone}</span>
+                      </a>
+                    </li>
+                  )}
+                  {c.email && (
+                    <li>
+                      <a href={`mailto:${c.email}`} className="-mx-1.5 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 hover:bg-slate-50 active:bg-slate-100">
+                        <Mail className="size-3.5 shrink-0 text-slate-400" /> <span className="truncate">{c.email}</span>
+                      </a>
+                    </li>
+                  )}
+                  {c.address && (
+                    <li>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.address)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="-mx-1.5 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 hover:bg-slate-50 active:bg-slate-100"
+                      >
+                        <MapPin className="size-3.5 shrink-0 text-slate-400" /> <span className="truncate">{c.address}</span>
+                      </a>
+                    </li>
+                  )}
+                  {c.login && (
+                    <li className="flex min-w-0 items-center gap-2 py-1">
+                      <KeyRound className="size-3.5 shrink-0 text-slate-400" /> <span className="truncate">{tr("Login:")}{" "}{c.login.email}</span>
+                    </li>
+                  )}
+                </ul>
+                <dl className="mt-2.5 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 px-3 py-2 text-[11px] sm:text-xs">
+                  <div className="min-w-0">
+                    <dt className="truncate text-slate-500">{tr("90-day sales")}</dt>
+                    <dd className="font-semibold tabular-nums text-slate-900">{aud(c.spend90Cents)}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="truncate text-slate-500">{tr("Unpaid")}</dt>
+                    <dd className={cx("font-semibold tabular-nums", c.unpaidCents > 0 ? "text-amber-700" : "text-slate-900")}>{aud(c.unpaidCents)}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="truncate text-slate-500">{tr("Last order")}</dt>
+                    <dd className="font-semibold text-slate-900">{c.lastOrderAt ? tr(new Date(c.lastOrderAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })) : "—"}</dd>
+                  </div>
+                </dl>
+                <p className="mt-2 truncate text-[11px] text-slate-500">
                   {tr(PAYMENT_TERMS_LABEL[c.paymentTerms])}
                   {c.creditLimitCents !== null && <> · {tr("limit {amount}", { amount: aud(c.creditLimitCents) })}</>}
-                </li>
-              </ul>
-              <dl className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs">
-                <div>
-                  <dt className="text-slate-500">{tr("90-day sales")}</dt>
-                  <dd className="font-semibold tabular-nums text-slate-900">{aud(c.spend90Cents)}</dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">{tr("Unpaid")}</dt>
-                  <dd className={cx("font-semibold tabular-nums", c.unpaidCents > 0 ? "text-amber-700" : "text-slate-900")}>{aud(c.unpaidCents)}</dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">{tr("Last order")}</dt>
-                  <dd className="font-semibold text-slate-900">{c.lastOrderAt ? tr(new Date(c.lastOrderAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })) : "—"}</dd>
-                </div>
-              </dl>
-              {!readOnly && <div className="mt-3 flex flex-wrap gap-2">
-                <Link href={`/admin/customers/${c.id}`} className={btn("secondary", "sm")}>
-                  <Tags className="size-3.5" /> {tr("Price list")}
-                </Link>
-                <Link href={`/admin/quotes/new?customer=${c.id}`} className={btn("secondary", "sm")}>
-                  <FileText className="size-3.5" /> {tr("New quote")}
-                </Link>
-              </div>}
-            </Card>
-          ))}
-        </div>
+                </p>
+                {!readOnly && (
+                  <div className="mt-auto grid grid-cols-2 gap-2 pt-3">
+                    <Link href={`/admin/customers/${c.id}`} className={btn("secondary", "sm", "h-9")}>
+                      <Tags className="size-3.5" /> {tr("Price list")}
+                    </Link>
+                    <Link href={`/admin/quotes/new?customer=${c.id}`} className={btn("secondary", "sm", "h-9")}>
+                      <FileText className="size-3.5" /> {tr("New quote")}
+                    </Link>
+                  </div>
+                )}
+              </Card>
+              </div>
+            ))}
+          </div>
+          {shown.length > limit && (
+            <div className="mt-4 flex flex-col items-center gap-1.5">
+              <button className={btn("secondary", "md", "w-full sm:w-auto")} onClick={() => setLimit((n) => n + PAGE)}>
+                {tr("Show more")} <span className="opacity-60">({shown.length - limit})</span>
+              </button>
+              <p className="text-xs text-slate-400">{tr("Showing {n} of {total}", { n: limit, total: shown.length })}</p>
+            </div>
+          )}
+        </>
       )}
       <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? tr("Add customer") : tr("Edit customer")}>
         {editing !== null && (

@@ -57,7 +57,41 @@ export function InventoryClient({ tab, filters, stock, ledger }: { tab: "stock" 
               {tr("Low stock ({n})", { n: lowCount })}
             </button>
           </div>
-          <Card className="overflow-x-auto">
+          {/* Phones: one row per product, what's free to sell first. */}
+          <Card className="divide-y divide-line md:hidden">
+            {shown.map((p) => {
+              const extra = [
+                p.reserved ? `${tr("Reserved for orders")} ${p.reserved}` : null,
+                p.waiting ? `${tr("Customers waiting")} ${p.waiting}` : null,
+                p.onOrder ? `${tr("On order")} ${qtyText(p.onOrder)}` : null,
+                p.toReturn ? `${tr("To return")} ${qtyText(p.toReturn)}` : null,
+              ].filter(Boolean);
+              return (
+                <div key={p.id} className="px-4 py-3">
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium leading-snug text-slate-900">
+                        {p.name} {!p.active && <Badge tone="slate">{tr("Hidden")}</Badge>}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">{p.sku} · {tr(p.category)}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className={cx("text-lg font-semibold leading-tight tabular-nums", p.active && p.stock <= LOW_STOCK ? "text-red-600" : "text-slate-900")}>{p.stock}</p>
+                      <p className="text-[11px] text-slate-500">{tr("Available")}</p>
+                    </div>
+                  </div>
+                  {extra.length > 0 && <p className={cx("mt-1 text-xs", p.waiting ? "text-red-600" : "text-slate-500")}>{extra.join(" · ")}</p>}
+                  <div className="mt-2 flex gap-2">
+                    <Link href={`/admin/inventory?tab=ledger&product=${p.id}`} className={btn("secondary", "sm", "h-9 flex-1")}>{tr("History")}</Link>
+                    <button className={btn("secondary", "sm", "h-9 flex-1")} onClick={() => setAdjusting(p)}>
+                      <SlidersHorizontal className="size-3.5" /> {tr("Adjust")}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </Card>
+          <Card className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[820px] text-sm">
               <thead className="border-b border-line bg-slate-50 text-left text-xs text-slate-500">
                 <tr>
