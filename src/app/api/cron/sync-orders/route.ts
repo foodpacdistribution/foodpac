@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { getDb } from "@/lib/db";
 import { orderFeeds } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
+import { reportError } from "@/lib/report-error";
 import { geocodeOrderIds, runFeed } from "@/lib/sync";
 
 export const maxDuration = 300;
@@ -24,6 +25,7 @@ export async function GET(req: Request) {
     const r = await runFeed(db, f.id, s.timezone);
     geocode.push(...r.geocodeIds);
     results.push({ feed: f.name, ok: r.ok, inserted: r.inserted, updated: r.updated, skipped: r.skipped, message: r.message });
+    if (!r.ok) await reportError(new Error(r.message ?? "The feed failed"), { area: "Order sync", detail: `Feed "${f.name}": tonight's orders from it may be missing.` });
   }
   if (geocode.length) after(() => geocodeOrderIds(db, geocode));
   return Response.json({ feeds: results });

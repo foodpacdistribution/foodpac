@@ -2,6 +2,7 @@ import { AuthError, getCurrentUser } from "@/lib/auth/dal";
 import { addStopPhotos, MAX_STOP_PHOTOS } from "@/lib/driver-stops";
 import { UserError } from "@/lib/planning";
 import { readUpload } from "@/lib/proofs";
+import { reportError } from "@/lib/report-error";
 
 // Photos added to a stop after it was finished. Sent from the phone's outbox like a delivery,
 // so one taken where there's no signal uploads later by itself. Same answers as
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof UserError || err instanceof AuthError) return answer({ ok: false, error: err.message, retry: false }, 422);
     console.error("[driver photos]", err);
+    await reportError(err, { area: "Driver photos", path: "POST /api/driver/photos" });
     return answer({ ok: false, error: "The server couldn't save it.", retry: true }, 500);
   }
 }

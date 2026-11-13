@@ -5,6 +5,7 @@ import { type DB, getDb } from "./db";
 import { restoreMissingDeliveries } from "./shop";
 import { checkDayLocations } from "./geo/geocode";
 import { geocodeOrderIds } from "./sync";
+import { reportError } from "./report-error";
 import { todayIn } from "./time";
 
 /**
@@ -22,6 +23,7 @@ export const restoreDeliveries = cache(async (_db: DB, timezone: string) => {
       if (ids.length) await geocodeOrderIds(db, ids);
     } catch (err) {
       console.error("[admin] couldn't restore missing deliveries:", err);
+      await reportError(err, { area: "Restoring missing deliveries" });
     }
   });
 });
@@ -36,6 +38,7 @@ export function checkLocationsLater(date: string) {
       await checkDayLocations(await getDb(), date);
     } catch (err) {
       console.error("[admin] couldn't check order locations:", err);
+      await reportError(err, { area: "Locating orders", detail: date });
     }
   });
 }

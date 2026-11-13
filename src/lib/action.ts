@@ -1,5 +1,6 @@
 import { AuthError } from "./auth/dal";
 import { UserError } from "./planning";
+import { reportError } from "./report-error";
 
 export type ActionResult<T = undefined> = { ok: true; message?: string; data?: T } | { ok: false; error: string };
 
@@ -13,6 +14,7 @@ export async function attempt<T>(fn: () => Promise<{ message?: string; data?: T 
     // redirect()/notFound() throw special errors that must propagate.
     if (err && typeof err === "object" && "digest" in err) throw err;
     console.error(err);
+    await reportError(err, { area: "Action" });
     return { ok: false, error: "Something went wrong. Please try again." };
   }
 }

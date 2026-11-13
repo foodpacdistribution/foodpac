@@ -71,6 +71,10 @@ async function init(): Promise<DB> {
       if (globalForDb.__dpClient !== client) return; // already replaced
       // Names the query that hung; the others failing right after it are only cut off with it.
       console.error(`Database query got no answer in ${QUERY_TIMEOUT_MS / 1000}s; dropping the connections and reconnecting. Stuck query: ${query}`);
+      // Loaded when needed: the database module stays free of the email code.
+      void import("../report-error").then((m) =>
+        m.reportError(new Error(`Database query got no answer in ${QUERY_TIMEOUT_MS / 1000}s`), { area: "Database", detail: `Stuck query: ${query.slice(0, 500)}` }),
+      );
       dropPool();
       void endAbandonedTransactions(postgres, transactionPoolerUrl(url));
     };

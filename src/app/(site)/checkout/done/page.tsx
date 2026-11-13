@@ -10,6 +10,7 @@ import { salesOrders } from "@/lib/db/schema";
 import { aud } from "@/lib/money";
 import { confirmCardReturn } from "@/lib/payments";
 import { T, Tx } from "@/components/i18n";
+import { reportError } from "@/lib/report-error";
 
 export const metadata: Metadata = { title: "Order placed" };
 
@@ -19,7 +20,11 @@ export default async function DonePage({ searchParams }: { searchParams: Promise
   if (!viewer) redirect(`/login?next=${encodeURIComponent(`/checkout/done?order=${sp.order ?? ""}`)}`);
   if (!sp.order || !/^[0-9a-f-]{36}$/i.test(sp.order)) redirect("/portal/orders");
   const db = await getDb();
-  if (sp.session_id) await confirmCardReturn(sp.order, sp.session_id).catch((e) => console.error(e));
+  if (sp.session_id)
+    await confirmCardReturn(sp.order, sp.session_id).catch(async (e) => {
+      console.error(e);
+      await reportError(e, { area: "Card payment confirmation", detail: `Order ${sp.order} — check it was paid in Stripe.` });
+    });
   const [so] = await db
     .select()
     .from(salesOrders)

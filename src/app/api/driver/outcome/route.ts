@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { doneAt, finishStop } from "@/lib/driver-stops";
 import { readOutcome } from "@/lib/outcome";
 import { getSettings, UserError } from "@/lib/planning";
+import { reportError } from "@/lib/report-error";
 
 // A finished stop from the driver app: delivered or failed, with photo, signature and location.
 // The phone keeps each one until this answers, so a signature taken where there's no signal is
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof UserError || err instanceof AuthError) return answer({ ok: false, error: err.message, retry: false }, 422);
     console.error("[driver outcome]", err);
+    await reportError(err, { area: "Driver delivery", path: "POST /api/driver/outcome", detail: "The driver's phone keeps it and tries again." });
     return answer({ ok: false, error: "The server couldn't save it.", retry: true }, 500);
   }
 }
