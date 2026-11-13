@@ -139,7 +139,7 @@ export async function setCustomerPrice(customerId: string, productId: string, pr
         .values({ customerId, productId, priceCents: cents })
         .onConflictDoUpdate({ target: [customerPrices.customerId, customerPrices.productId], set: { priceCents: cents } });
     }
-    revalidatePath(`/admin/customers/${customerId}`);
+    revalidatePath(`/admin/customers/${customerId}/prices`);
     return { message: price.trim() === "" ? "Back to list price" : "Price saved" };
   });
 }
@@ -156,7 +156,7 @@ export async function setCustomerDiscount(customerId: string, productIds: string
     const ids = productIds.slice(0, 2000);
     if (percent === null) {
       await db.delete(customerPrices).where(and(eq(customerPrices.customerId, customerId), inArray(customerPrices.productId, ids)));
-      revalidatePath(`/admin/customers/${customerId}`);
+      revalidatePath(`/admin/customers/${customerId}/prices`);
       revalidatePath("/", "layout");
       return { message: `${ids.length} products back to list price` };
     }
@@ -168,7 +168,7 @@ export async function setCustomerDiscount(customerId: string, productIds: string
       .insert(customerPrices)
       .values(list.map((p) => ({ customerId, productId: p.id, priceCents: Math.max(1, Math.round(p.priceCents * (1 - pct / 100))) })))
       .onConflictDoUpdate({ target: [customerPrices.customerId, customerPrices.productId], set: { priceCents: sql`excluded.price_cents` } });
-    revalidatePath(`/admin/customers/${customerId}`);
+    revalidatePath(`/admin/customers/${customerId}/prices`);
     revalidatePath("/", "layout");
     return { message: `${pct}% off ${list.length} products` };
   });

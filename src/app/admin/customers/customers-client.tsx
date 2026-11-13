@@ -13,7 +13,7 @@ import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { useT } from "@/components/i18n";
 import { AddressInput } from "@/components/address-input";
 
-type Customer = {
+export type Customer = {
   id: string;
   code: string;
   name: string;
@@ -137,14 +137,12 @@ export function CustomersClient({
           <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
             {shown.slice(0, limit).map((c, i) => (
               <div key={c.id} className="stagger flex min-w-0" style={{ "--i": Math.min(i, 8) } as React.CSSProperties}>
-              <Card className={cx("relative flex w-full min-w-0 flex-col p-3.5 sm:p-4", !c.active && "opacity-60", sales && "transition-shadow hover:shadow-pop")}>
-                {sales && (
-                  // The whole card opens the stage picker; the phone / email / map links sit above it.
-                  <button type="button" className="absolute inset-0 z-0 rounded-xl" onClick={() => setStaging(c)} aria-label={`${tr("Change status")}: ${c.name}`} />
-                )}
+              <Card className={cx("group relative flex w-full min-w-0 flex-col p-3.5 transition-[box-shadow,border-color] duration-150 hover:border-slate-300 hover:shadow-pop sm:p-4", !c.active && "opacity-60")}>
+                {/* The whole card opens the customer's page; the phone / email / map links and buttons sit above it. */}
+                <Link href={`/admin/customers/${c.id}`} className="absolute inset-0 z-0 rounded-xl" aria-label={tr("View {name}", { name: c.name })} />
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 font-semibold leading-snug break-words text-slate-900">{c.name}</p>
+                    <p className="line-clamp-2 font-semibold leading-snug break-words text-slate-900 group-hover:text-blue-700">{c.name}</p>
                     <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500">
                       <span className="truncate font-mono">{c.code}</span>
                       <span className="shrink-0 text-slate-300">·</span>
@@ -223,8 +221,8 @@ export function CustomersClient({
                   </button>
                 )}
                 {!sales && (
-                  <div className="mt-auto grid grid-cols-2 gap-2 pt-3">
-                    <Link href={`/admin/customers/${c.id}`} className={btn("secondary", "sm", "h-9")}>
+                  <div className="relative z-10 mt-auto grid grid-cols-2 gap-2 pt-3">
+                    <Link href={`/admin/customers/${c.id}/prices`} className={btn("secondary", "sm", "h-9")}>
                       <Tags className="size-3.5" /> {tr("Price list")}
                     </Link>
                     <Link href={`/admin/quotes/new?customer=${c.id}`} className={btn("secondary", "sm", "h-9")}>
@@ -273,7 +271,20 @@ export function CustomersClient({
   );
 }
 
-function CustomerForm({ customer, onDone, isAdmin, sales }: { customer: Customer | null; onDone: () => void; isAdmin: boolean; sales: boolean }) {
+export function CustomerForm({
+  customer,
+  onDone,
+  onDeleted,
+  isAdmin,
+  sales,
+}: {
+  customer: Customer | null;
+  onDone: () => void;
+  /** After deleting (else onDone): the customer's own page has nowhere to stay. */
+  onDeleted?: () => void;
+  isAdmin: boolean;
+  sales: boolean;
+}) {
   const tr = useT();
   // Sales staff see the office's fields but can't change them (the server ignores them from sales too).
   const office = sales ? tr("Set by the office.") : undefined;
@@ -383,7 +394,7 @@ function CustomerForm({ customer, onDone, isAdmin, sales }: { customer: Customer
             if (!confirm(`Delete ${customer.name}?\n\nTheir portal login, saved addresses, cart and price list are removed. Delivery orders stay but are no longer linked to them.`)) return;
             startRemove(async () => {
               const r = await deleteCustomer(customer.id);
-              if (r.ok) onDone();
+              if (r.ok) (onDeleted ?? onDone)();
               else setDeleteError(r.error);
             });
           }}

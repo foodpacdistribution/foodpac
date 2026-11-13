@@ -9,7 +9,7 @@ import { CustomerMapClient, type MapCustomer } from "./customer-map-client";
 export const metadata: Metadata = { title: "Customer Map" };
 
 export default async function CustomerMapPage() {
-  const me = await requireUser(PIPELINE);
+  await requireUser(PIPELINE);
   const db = await getDb();
   const rows = await db
     .select({
@@ -31,7 +31,6 @@ export default async function CustomerMapPage() {
     .orderBy(asc(customers.name));
 
   // Sales staff only have the pipeline, so customer names link to the full page for office staff.
-  const canOpen = me.role !== "sales";
   const list: MapCustomer[] = rows.map((c) => {
     const address = c.address?.trim() ?? "";
     const current = !!address && c.geocodedAddress === c.address;
@@ -51,7 +50,7 @@ export default async function CustomerMapPage() {
       approximate: c.geocodeStatus === "approximate",
       areaKey: area.key,
       areaName: area.name,
-      href: canOpen ? `/admin/customers/${c.id}` : null,
+      href: `/admin/customers/${c.id}`,
     };
   });
   return <CustomerMapClient customers={list} />;

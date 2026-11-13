@@ -35,7 +35,9 @@ describe("salesMayOpen", () => {
   it("lets sales staff see the customer list, but not the office pages under it", () => {
     expect(salesMayOpen("/admin/customers")).toBe(true);
     expect(salesMayOpen("/admin/customers/import")).toBe(false);
-    expect(salesMayOpen("/admin/customers/0a6084c0-0000-0000-0000-000000000000")).toBe(false);
+    // A customer's page, but not the price list under it.
+    expect(salesMayOpen("/admin/customers/0a6084c0-0000-0000-0000-000000000000")).toBe(true);
+    expect(salesMayOpen("/admin/customers/0a6084c0-0000-0000-0000-000000000000/prices")).toBe(false);
     expect(salesMayOpen("/admin/customer-map")).toBe(true);
     expect(salesMayOpen("/admin/pipeline")).toBe(true);
     expect(salesMayOpen("/admin/orders")).toBe(false);
