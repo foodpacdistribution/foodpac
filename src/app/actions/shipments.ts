@@ -8,7 +8,7 @@ import { getDb } from "@/lib/db";
 import { plans, routes } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
 import { UserError } from "@/lib/planning";
-import { buildShipment, deleteShipment as removeShipment, recallShipment as recall, sendShipment as send, splitIntoShipments } from "@/lib/shipments";
+import { buildShipment, deleteShipment as removeShipment, recallShipment as recall, sendShipment as send, splitIntoShipments, transferOrder as transfer } from "@/lib/shipments";
 
 function revalidate() {
   for (const p of ["/admin/shipments", "/admin/orders", "/admin/planner", "/admin", "/admin/sales", "/admin/tracking", "/driver"]) revalidatePath(p);
@@ -100,6 +100,22 @@ export async function removeFromShipment(routeId: string, orderId: string) {
     await buildShipment(db, date, route.driverId, [], [orderId]);
     revalidate();
     return { message: "Order taken off the shipment" };
+  });
+}
+
+/** Moves an order not yet delivered to another driver, also once it's on the first driver's phone. */
+export async function transferToDriver(routeId: string, orderId: string, toDriverId: string) {
+  return attempt(async () => {
+    await assertUser(STAFF);
+    if (typeof toDriverId !== "string" || !toDriverId) throw new UserError("Choose a driver.");
+    const r = await transfer(await getDb(), routeId, orderId, toDriverId);
+    revalidate();
+    const t = await getT();
+    return {
+      message: r.sent
+        ? t("Moved to {driver} ({number}) and on their phone", { driver: r.driver, number: r.number })
+        : t("Moved to {driver} ({number}). Send {number} to put it on their phone.", { driver: r.driver, number: r.number }),
+    };
   });
 }
 

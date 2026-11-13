@@ -1,9 +1,9 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, MapPinOff, PackageCheck, Printer, RefreshCcw, Send, Split, Trash2, Truck, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CheckCircle2, MapPinOff, PackageCheck, Printer, RefreshCcw, Send, Split, Trash2, Truck, Undo2, X } from "lucide-react";
 import Link from "@/components/link";
 import { useMemo, useState, useTransition } from "react";
-import { createShipment, deleteShipment, recallShipment, removeFromShipment, reoptimiseShipment, sendShipment, splitShipments } from "@/app/actions/shipments";
+import { createShipment, deleteShipment, recallShipment, removeFromShipment, reoptimiseShipment, sendShipment, splitShipments, transferToDriver } from "@/app/actions/shipments";
 import { Toast, type ToastMessage } from "@/components/client-ui";
 import { DateNav } from "@/components/date-nav";
 import { DeliveryMap, type MapStop } from "@/components/map";
@@ -466,7 +466,7 @@ export function ShipmentsClient(props: {
                 {tr("Tick orders on the left, choose a driver and create a shipment.")}</EmptyState>
             </Card>
           ) : (
-            props.shipments.map((s) => <ShipmentCard key={s.id} s={s} busy={busy} pending={pending} run={run} />)
+            props.shipments.map((s) => <ShipmentCard key={s.id} s={s} drivers={props.drivers} shipments={props.shipments} busy={busy} pending={pending} run={run} />)
           )}
         </div>
       </div>
@@ -477,11 +477,15 @@ export function ShipmentsClient(props: {
 
 function ShipmentCard({
   s,
+  drivers,
+  shipments,
   busy,
   pending,
   run,
 }: {
   s: Shipment;
+  drivers: Driver[];
+  shipments: Shipment[];
   busy: string | null;
   pending: boolean;
   run: (key: string, fn: () => Promise<{ ok: true; message?: string } | { ok: false; error: string }>) => void;
@@ -499,6 +503,7 @@ function ShipmentCard({
           ? { label: "Sent to driver", tone: "blue" as const }
           : { label: "Draft", tone: "slate" as const };
   const editable = s.status === "planned";
+  const otherDrivers = drivers.filter((d) => d.id !== s.driverId);
 
   return (
     <Card className="animate-rise overflow-hidden">
@@ -615,6 +620,20 @@ function ShipmentCard({
               )}
             </span>
             <span className="hidden w-10 text-right text-xs tabular-nums text-slate-500 sm:block">×{x.demand}</span>
+            {x.status === "pending" && otherDrivers.length > 0 && (
+              <MoveToDriver
+                label={tr("Move {order} to another driver", { order: x.orderNumber })}
+                busy={busy === `mv-${x.orderId}`}
+                disabled={pending}
+                drivers={otherDrivers}
+                shipments={shipments}
+                onPick={(d) =>
+                  (!s.dispatchedAt ||
+                    confirm(tr("Move {order} to {driver}? It comes off {from}'s phone.", { order: x.orderNumber, driver: d.name, from: s.driverName }))) &&
+                  run(`mv-${x.orderId}`, () => transferToDriver(s.id, x.orderId, d.id))
+                }
+              />
+            )}
             {editable && (
               <button
                 className={btn("ghost", "icon-sm", "text-slate-400 hover:text-red-600")}
@@ -629,5 +648,41 @@ function ShipmentCard({
         ))}
       </ol>
     </Card>
+  );
+}
+
+/** An icon that opens the list of other drivers; picking one moves the stop to them. */
+function MoveToDriver(props: { label: string; busy: boolean; disabled: boolean; drivers: Driver[]; shipments: Shipment[]; onPick: (d: Driver) => void }) {
+  const tr = useT();
+  return (
+    <label
+      className={cx(btn("ghost", "icon-sm", "relative text-slate-400 hover:text-blue-600"), props.disabled && "pointer-events-none opacity-50")}
+      title={props.label}
+    >
+      {props.busy ? <Spinner className="size-3" /> : <ArrowRightLeft className="size-3.5" />}
+      <select
+        className="absolute inset-0 cursor-pointer opacity-0"
+        aria-label={props.label}
+        disabled={props.disabled}
+        value=""
+        onChange={(e) => {
+          const d = props.drivers.find((x) => x.id === e.target.value);
+          if (d) props.onPick(d);
+        }}
+      >
+        <option value="" disabled>
+          {tr("Move to driver…")}
+        </option>
+        {props.drivers.map((d) => {
+          const sh = props.shipments.find((x) => x.driverId === d.id);
+          return (
+            <option key={d.id} value={d.id}>
+              {d.name}
+              {sh ? ` (${sh.number}${sh.dispatchedAt ? "" : `, ${tr("not sent")}`})` : ""}
+            </option>
+          );
+        })}
+      </select>
+    </label>
   );
 }

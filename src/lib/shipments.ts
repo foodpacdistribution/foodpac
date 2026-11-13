@@ -205,25 +205,28 @@ export async function buildShipment(
       legDistanceM: st.legDistance,
       legDriveS: st.legDuration,
     }));
-    // Same stops, new order: they keep their ids, which a delivery still uploading from the
-    // driver's phone points at.
+    // Stops that stay keep their ids, which a delivery still uploading from the driver's phone
+    // points at: they're re-ordered and re-timed in place. Stops taken off go; new ones are added.
+    // Delivered and failed stops are the record of what happened and aren't touched.
     const stopIdOf = new Map(stopRows.filter((x) => x.stop.status === "pending").map((x) => [x.stop.orderId, x.stop.id]));
-    if (stopIdOf.size === newStops.length && newStops.every((st) => stopIdOf.has(st.orderId))) {
+    const kept = newStops.filter((st) => stopIdOf.has(st.orderId));
+    const added = newStops.filter((st) => !stopIdOf.has(st.orderId));
+    const keptOrders = new Set(kept.map((st) => st.orderId));
+    const gone = [...stopIdOf].filter(([orderId]) => !keptOrders.has(orderId)).map(([, id]) => id);
+    if (gone.length) await tx.delete(routeStops).where(inArray(routeStops.id, gone));
+    if (kept.length) {
       await tx.execute(sql`
         update route_stops as s set seq = v.seq, trip = v.trip, eta_s = v.eta, etd_s = v.etd, wait_s = v.wait, late_s = v.late, leg_distance_m = v.dist, leg_drive_s = v.drive
         from (values ${sql.join(
-          newStops.map(
+          kept.map(
             (st) =>
               sql`(${stopIdOf.get(st.orderId)}::uuid, ${st.seq}::int, ${st.trip}::int, ${st.etaS}::int, ${st.etdS}::int, ${st.waitS}::int, ${st.lateS}::int, ${st.legDistanceM}::int, ${st.legDriveS}::int)`,
           ),
           sql`, `,
         )}) as v(id, seq, trip, eta, etd, wait, late, dist, drive)
         where s.id = v.id`);
-    } else {
-      // Delivered and failed stops are the record of what happened; only the stops still to do are replaced.
-      await tx.delete(routeStops).where(and(eq(routeStops.routeId, r.id), eq(routeStops.status, "pending")));
-      await tx.insert(routeStops).values(newStops);
     }
+    if (added.length) await tx.insert(routeStops).values(added);
     await tx
       .update(orders)
       .set({ status: r.dispatchedAt ? "dispatched" : "planned", driverId: driver.id, updatedAt: new Date() })
@@ -306,6 +309,74 @@ export async function recallShipment(db: DB, routeId: string) {
     // The day as a whole is no longer fully dispatched.
     await tx.update(plans).set({ status: "draft" }).where(and(eq(plans.id, r.planId), eq(plans.status, "dispatched")));
   });
+}
+
+/**
+ * Hands an order still to be delivered from one driver's shipment to another driver's, also
+ * after it has been sent to the first driver's phone or they've set off. The first driver's
+ * other stops keep their order (just re-timed); the order is added to the other driver's
+ * shipment for the day (made if they have none). If the first shipment had been sent, the
+ * order goes onto the other driver's phone too: straight away when their shipment is already
+ * sent or holds only this order. A shipment of theirs not yet sent, with other orders on it,
+ * stays unsent: sending it is the office's call (`sent` says which happened).
+ */
+export async function transferOrder(db: DB, routeId: string, orderId: string, toDriverId: string) {
+  const [row] = await db
+    .select({ route: routes, date: plans.deliveryDate })
+    .from(routes)
+    .innerJoin(plans, eq(plans.id, routes.planId))
+    .where(eq(routes.id, routeId))
+    .limit(1);
+  if (!row) throw new UserError("Shipment not found. Reload the page.");
+  const { route: from, date } = row;
+  if (from.driverId === toDriverId) throw new UserError("The order is already with this driver.");
+
+  const stops = await db.select().from(routeStops).where(eq(routeStops.routeId, from.id)).orderBy(asc(routeStops.seq));
+  const stop = stops.find((st) => st.orderId === orderId);
+  if (!stop) throw new UserError("That order is no longer on this shipment. Reload the page.");
+  if (stop.status !== "pending") throw new UserError("That stop has already been completed.");
+
+  // Check the other driver can take it before taking it off the first one.
+  const [to] = await db.select().from(drivers).where(eq(drivers.id, toDriverId)).limit(1);
+  if (!to || !to.active) throw new UserError("Choose an active driver.");
+  if (!depotFor(await getDepots(db), to.depotId)) throw new UserError("Add a depot address in Settings first: shipments start from the depot.");
+  const [toRoute] = await db.select().from(routes).where(and(eq(routes.planId, from.planId), eq(routes.driverId, toDriverId))).limit(1);
+  if (toRoute) {
+    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(routeStops).where(eq(routeStops.routeId, toRoute.id));
+    if (n + 1 > MAX_SHIPMENT_STOPS) throw new UserError(`A shipment can hold up to ${MAX_SHIPMENT_STOPS} stops.`);
+  }
+
+  const wasSent = !!from.dispatchedAt;
+  const fromOrder = stops.filter((st) => st.status === "pending").map((st) => st.orderId);
+  // The first driver's remaining stops stay in the order they have them (they may have arranged it).
+  await buildShipment(db, date, from.driverId, [], [orderId], { order: fromOrder.filter((id) => id !== orderId), keepStart: true });
+
+  let target: Awaited<ReturnType<typeof buildShipment>>;
+  try {
+    target = await buildShipment(db, date, toDriverId, [orderId]);
+  } catch (e) {
+    // Never leave the order off every route: put it back where it was.
+    const back = await buildShipment(db, date, from.driverId, [orderId], [], { order: fromOrder, keepStart: true }).catch(() => null);
+    if (back && wasSent && !back.dispatchedAt) await sendShipment(db, back.id).catch(() => {});
+    throw e;
+  }
+  if (!target) throw new UserError("The order couldn't be added to the driver's shipment. Reload the page.");
+
+  // Pinned to the first driver: it now belongs with the second, so re-planning doesn't move it back.
+  await db.update(orders).set({ pinnedDriverId: toDriverId }).where(and(eq(orders.id, orderId), eq(orders.pinnedDriverId, from.driverId)));
+
+  let sent = !!target.dispatchedAt;
+  if (wasSent && !sent) {
+    const [{ others }] = await db
+      .select({ others: sql<number>`count(*)::int` })
+      .from(routeStops)
+      .where(and(eq(routeStops.routeId, target.id), sql`${routeStops.orderId} <> ${orderId}`));
+    if (others === 0) {
+      await sendShipment(db, target.id);
+      sent = true;
+    }
+  }
+  return { number: target.number, driver: to.name, sent };
 }
 
 /** "12 Smith St, Fortitude Valley QLD 4006" → "Fortitude Valley". Null when the address doesn't say. */
