@@ -14,7 +14,7 @@ import {
   RefreshCcw,
   RotateCcw,
   Send,
-  Sparkles,
+  Route as RouteIcon,
   Trash2,
   Undo2,
   X,
@@ -529,7 +529,7 @@ export function PlannerClient(props: Props) {
                       <Spinner /> {" "}{tr("Optimising…")}</>
                   ) : (
                     <>
-                      <Sparkles className="size-4" /> {plan ? tr("Re-optimise routes") : tr("Optimise routes")}
+                      <RouteIcon className="size-4" /> {plan ? tr("Re-optimise routes") : tr("Optimise routes")}
                     </>
                   )}
                 </button>
@@ -618,7 +618,7 @@ export function PlannerClient(props: Props) {
         <div className="space-y-4">
           {!plan ? (
             <Card className="p-6 text-center">
-              <Sparkles className="mx-auto size-8 text-blue-500" />
+              <RouteIcon className="mx-auto size-8 text-blue-500" />
               <p className="mt-3 text-sm font-semibold text-slate-900">{tr("No routes yet")}</p>
               <p className="mt-1 text-sm text-slate-500">
                 {blocker ? (

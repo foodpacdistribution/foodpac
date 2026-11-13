@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { PackagePlus } from "lucide-react";
 import { useTransition } from "react";
 import { addDemoOrders } from "@/app/actions/orders";
 import { btn, Spinner } from "@/components/ui";
@@ -21,7 +21,7 @@ export function DemoOrdersButton({ date }: { date: string }) {
         })
       }
     >
-      {pending ? <Spinner className="size-3.5" /> : <Sparkles className="size-3.5" />} {pending ? tr("Adding…") : tr("Try it with demo orders")}
+      {pending ? <Spinner className="size-3.5" /> : <PackagePlus className="size-3.5" />} {pending ? tr("Adding…") : tr("Try it with demo orders")}
     </button>
   );
 }

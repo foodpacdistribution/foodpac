@@ -13,7 +13,10 @@ import {
   Phone,
   RotateCcw,
   ShoppingCart,
-  Sparkles,
+  Coins,
+  Flag,
+  History,
+  UserPlus,
   Tags,
   Truck,
   UserRound,
@@ -99,7 +102,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       {/* ---------------------------------------------------------------- header */}
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-4">
-          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-lg font-semibold text-white shadow-sm">{initials}</span>
+          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-navy-800 text-lg font-semibold text-white">{initials}</span>
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight break-words text-slate-900 sm:text-2xl">{c.name}</h1>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
@@ -185,7 +188,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           }
         />
         <Figure icon={CalendarClock} label="Next delivery" value={st.nextDelivery ? day(st.nextDelivery) : "—"} hint={<T vars={{ date: day(st.lastDelivery) }}>{"Last delivered {date}"}</T>} />
-        <Figure icon={Sparkles} label="Store credit" value={money(p.account.balance)} hint={<T vars={{ amount: money(p.account.totalIssued) }}>{"{amount} given in total"}</T>} />
+        <Figure icon={Coins} label="Store credit" value={money(p.account.balance)} hint={<T vars={{ amount: money(p.account.totalIssued) }}>{"{amount} given in total"}</T>} />
       </div>
 
       {/* ---------------------------------------------------------------- body */}
@@ -251,7 +254,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <Card>
             <CardHeader title={<T>{"Sales"}</T>} />
             <dl className="divide-y divide-line text-sm">
-              <Row icon={Sparkles} label="Stage">
+              <Row icon={Flag} label="Stage">
                 <Badge tone={stage.tone}>{stage.label}</Badge>
                 <span className="mt-0.5 block text-xs text-slate-500">
                   <T vars={{ date: at(c.salesStageAt) }}>{"Since {date}"}</T>
@@ -352,7 +355,7 @@ function Table({ head, children }: { head: string[]; children: React.ReactNode }
 }
 
 const TIMELINE_ICON: Record<TimelineEvent["kind"], { icon: typeof Wallet; tone: string }> = {
-  joined: { icon: Sparkles, tone: "bg-violet-50 text-violet-600" },
+  joined: { icon: UserPlus, tone: "bg-slate-100 text-slate-600" },
   portal: { icon: KeyRound, tone: "bg-blue-50 text-blue-600" },
   order: { icon: ShoppingCart, tone: "bg-blue-50 text-blue-600" },
   paid: { icon: CircleDollarSign, tone: "bg-emerald-50 text-emerald-600" },
@@ -362,11 +365,11 @@ const TIMELINE_ICON: Record<TimelineEvent["kind"], { icon: typeof Wallet; tone: 
   quote: { icon: FileText, tone: "bg-slate-100 text-slate-600" },
   quote_accepted: { icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-600" },
   return: { icon: RotateCcw, tone: "bg-amber-50 text-amber-600" },
-  credit: { icon: Wallet, tone: "bg-violet-50 text-violet-600" },
+  credit: { icon: Coins, tone: "bg-slate-100 text-slate-600" },
 };
 
 function Timeline({ events, at, office }: { events: TimelineEvent[]; at: (d: string) => string; office: boolean }) {
-  if (events.length <= 1) return <Empty icon={Sparkles}>{"No activity yet"}</Empty>;
+  if (events.length <= 1) return <Empty icon={History}>{"No activity yet"}</Empty>;
   return (
     <Card className="px-4 py-2">
       <ol className="relative">

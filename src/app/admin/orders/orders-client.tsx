@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, FileImage, MapPinCheck, Package, Pencil, Pin, Plus, Search, Send, ShieldAlert, ShieldCheck, Sparkles, Trash2, Upload, Zap } from "lucide-react";
+import { AlertTriangle, PackagePlus, FileImage, MapPinCheck, Package, Pencil, Pin, Plus, Search, Send, ShieldAlert, ShieldCheck, Trash2, Upload, Zap } from "lucide-react";
 import Link from "@/components/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
@@ -273,7 +273,7 @@ export function OrdersClient(props: {
                     disabled={pending}
                     onClick={() => startTransition(async () => report(await addDemoOrders(date)))}
                   >
-                    <Sparkles className="size-3.5" /> {" "}{tr("Load demo orders")}</button>
+                    <PackagePlus className="size-3.5" /> {" "}{tr("Load demo orders")}</button>
                 )}
               </div>
             )}
