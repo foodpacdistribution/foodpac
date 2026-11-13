@@ -9,7 +9,7 @@ import { customerPrices, products } from "@/lib/db/schema";
 import { parseDollars } from "@/lib/money";
 import { MAX_IMPORT_ROWS, type ProductImportRow } from "@/lib/product-import";
 import { UserError } from "@/lib/planning";
-import { codeFromFileName, goodsKey } from "@/lib/goods-photos";
+import { saveProductPhotoByFileName } from "@/lib/goods-photos";
 import { applyProductImport, type ProductImportResult } from "@/lib/product-import-apply";
 import { readUpload } from "@/lib/proofs";
 import { fillWaiting } from "@/lib/stock-allocation";
@@ -30,19 +30,8 @@ export async function uploadProductPhoto(form: FormData) {
     const fileName = String(form.get("fileName") ?? "").slice(0, 300);
     const image = await readUpload(form.get("photo"), "Photo");
     if (!fileName || !image) throw new UserError("No photo.");
-    const db = await getDb();
-    const code = codeFromFileName(fileName);
-    const byName = goodsKey(fileName.replace(/\.[a-z0-9]{2,5}$/i, ""));
-    const [p] =
-      (code ? await db.select({ id: products.id, sku: products.sku, name: products.name }).from(products).where(eq(products.sku, code)).limit(1) : []).concat(
-        await db
-          .select({ id: products.id, sku: products.sku, name: products.name })
-          .from(products)
-          .where(sql`lower(regexp_replace(trim(${products.name}), '\\s+', ' ', 'g')) = ${byName}`)
-          .limit(1),
-      );
+    const p = await saveProductPhotoByFileName(await getDb(), fileName, image);
     if (!p) throw new UserError("No product has this code or name.");
-    await db.update(products).set({ image: image.data, imageMime: image.mime, updatedAt: new Date() }).where(eq(products.id, p.id));
     revalidate();
     return { data: { sku: p.sku, name: p.name } };
   });

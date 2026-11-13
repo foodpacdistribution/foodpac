@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./db";
 import { goodsPhotos, products } from "./db/schema";
 
@@ -56,4 +56,25 @@ export function codeFromFileName(fileName: string) {
     .replace(/[^A-Z0-9._-]+/g, "-")
     .replace(/-{2,}/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+/**
+ * Saves a product photo given the file it came in: the file is named after the product, by code
+ * ("RB-BOWLPA16.jpg", also the old EMERGE code) or exact name. Replaces the current photo.
+ * Returns the product, or null when no product has that code or name.
+ */
+export async function saveProductPhotoByFileName(db: DB, fileName: string, image: { data: Uint8Array; mime: string }) {
+  const code = codeFromFileName(fileName);
+  const byName = goodsKey(fileName.replace(/\.[a-z0-9]{2,5}$/i, ""));
+  const columns = { id: products.id, sku: products.sku, name: products.name };
+  const [p] = (code ? await db.select(columns).from(products).where(eq(products.sku, code)).limit(1) : []).concat(
+    await db
+      .select(columns)
+      .from(products)
+      .where(sql`lower(regexp_replace(trim(${products.name}), '\\s+', ' ', 'g')) = ${byName}`)
+      .limit(1),
+  );
+  if (!p) return null;
+  await db.update(products).set({ image: image.data, imageMime: image.mime, updatedAt: new Date() }).where(eq(products.id, p.id));
+  return { sku: p.sku, name: p.name };
 }
