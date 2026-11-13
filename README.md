@@ -154,3 +154,28 @@ See `.env.example` for every variable.
 
 - Native mobile app for background GPS
 - Pickup + delivery pairs; customer notifications by SMS or email
+
+## Backups
+
+Supabase's free plan keeps no backups, so `.github/workflows/db-backup.yml` backs up the live
+database every night at 3am Brisbane time and keeps each backup for 30 days. The repository is
+public, so every backup is encrypted with `BACKUP_PASSPHRASE` before it is stored.
+
+**Setup (once):** in GitHub → Settings → Secrets and variables → Actions, add `DATABASE_URL` (the
+Supabase pooler address with the password, as in Vercel) and `BACKUP_PASSPHRASE` (a long random
+passphrase, e.g. from `openssl rand -base64 32`). Keep a copy of the passphrase in a password
+manager: without it the backups can't be opened. Run the workflow once by hand (Actions →
+Database backup → Run workflow) to check it works.
+
+**Restore:**
+
+1. Actions → Database backup → the night you want → Artifacts → download it and unzip.
+2. `gpg --decrypt foodpac-db-YYYY-MM-DD.dump.gpg > backup.dump` (asks for the passphrase).
+3. Restore into an **empty** database (a new Supabase project, or a scratch one to look at it
+   first), with the pooler's session port 5432:
+   `pg_restore --no-owner --no-privileges -d "postgresql://…:5432/postgres" backup.dump`.
+   One error, `schema "public" already exists`, is expected and harmless.
+4. Point `DATABASE_URL` in Vercel at that database and redeploy.
+
+The nightly cron also checks the database size and emails the office past 400 MB (the free plan
+stops writes at 500 MB). `DB_SIZE_ALERT_MB` changes the threshold.

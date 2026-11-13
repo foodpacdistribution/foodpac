@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { after } from "next/server";
 import { getDb } from "@/lib/db";
+import { checkDatabaseSize } from "@/lib/db-size";
 import { orderFeeds } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { reportError } from "@/lib/report-error";
@@ -28,5 +29,7 @@ export async function GET(req: Request) {
     if (!r.ok) await reportError(new Error(r.message ?? "The feed failed"), { area: "Order sync", detail: `Feed "${f.name}": tonight's orders from it may be missing.` });
   }
   if (geocode.length) after(() => geocodeOrderIds(db, geocode));
-  return Response.json({ feeds: results });
+  // Once a day is enough to see the database filling up.
+  const databaseMb = await checkDatabaseSize(db);
+  return Response.json({ feeds: results, databaseMb });
 }

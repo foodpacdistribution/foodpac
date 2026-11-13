@@ -1,0 +1,76 @@
+# Nightly backup of the live database (Supabase's free plan keeps none).
+#
+# The repository is public, so anyone can download its workflow files: each backup is encrypted
+# with BACKUP_PASSPHRASE before it's kept, and nothing from the database is printed to the log.
+# Backups are kept 30 days under Actions → this workflow → a run → Artifacts.
+# How to restore one: see "Backups" in README.md.
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   DATABASE_URL       the Supabase pooler address with the password, as in Vercel
+#   BACKUP_PASSPHRASE  a long random passphrase; keep a copy somewhere safe, without it the
+#                      backups can't be opened
+
+name: Database backup
+
+on:
+  schedule:
+    - cron: "0 17 * * *" # 3am Brisbane
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Check the secrets are set
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "::error::Add the DATABASE_URL secret (see the top of this file)."; exit 1; fi
+          if [ "${#BACKUP_PASSPHRASE}" -lt 20 ]; then echo "::error::Add a BACKUP_PASSPHRASE secret of 20+ characters (see the top of this file)."; exit 1; fi
+
+      - name: Install pg_dump
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common > /dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -qq postgresql-client-18 > /dev/null
+
+      - name: Back up, encrypt and check
+        id: dump
+        run: |
+          set -euo pipefail
+          # pg_dump needs a session, so the pooler's session port (5432), not the transaction
+          # port (6543) the app uses; only sslmode is kept from the query string.
+          url="${DATABASE_URL/:6543\//:5432/}"
+          url="${url%%\?*}?sslmode=require"
+          name="foodpac-db-$(TZ=Australia/Brisbane date +%F)"
+          # The app's tables and the record of which migrations ran.
+          /usr/lib/postgresql/18/bin/pg_dump "$url" --format=custom --compress=6 --no-owner --no-privileges \
+            --schema=public --schema=drizzle --file=backup.dump
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 --symmetric --cipher-algo AES256 \
+            --output "$name.dump.gpg" backup.dump 3<<< "$BACKUP_PASSPHRASE"
+          rm backup.dump
+          # Prove the kept file opens and is a complete backup before calling it done.
+          tables=$(gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 3 --decrypt "$name.dump.gpg" 3<<< "$BACKUP_PASSPHRASE" \
+            | /usr/lib/postgresql/18/bin/pg_restore --list | grep -c " TABLE DATA " || true)
+          if [ "$tables" -lt 10 ]; then echo "::error::The backup holds only $tables tables' data."; exit 1; fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "Backup $name: $tables tables, $(du -h "$name.dump.gpg" | cut -f1) encrypted."
+
+      - name: Keep it for 30 days
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.dump.outputs.name }}
+          path: ${{ steps.dump.outputs.name }}.dump.gpg
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
