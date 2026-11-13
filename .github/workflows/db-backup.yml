@@ -59,9 +59,11 @@ jobs:
           gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 --symmetric --cipher-algo AES256 \
             --output "$name.dump.gpg" backup.dump 3<<< "$BACKUP_PASSPHRASE"
           rm backup.dump
-          # Prove the kept file opens and is a complete backup before calling it done.
-          tables=$(gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 3 --decrypt "$name.dump.gpg" 3<<< "$BACKUP_PASSPHRASE" \
-            | /usr/lib/postgresql/18/bin/pg_restore --list | grep -c " TABLE DATA " || true)
+          # Prove the kept file opens and is a complete backup before calling it done: decrypt all
+          # of it (gpg checks every byte), then read its table of contents.
+          gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 3 --decrypt --output check.dump "$name.dump.gpg" 3<<< "$BACKUP_PASSPHRASE"
+          tables=$(/usr/lib/postgresql/18/bin/pg_restore --list check.dump | grep -c " TABLE DATA " || true)
+          rm check.dump
           if [ "$tables" -lt 10 ]; then echo "::error::The backup holds only $tables tables' data."; exit 1; fi
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "Backup $name: $tables tables, $(du -h "$name.dump.gpg" | cut -f1) encrypted."
