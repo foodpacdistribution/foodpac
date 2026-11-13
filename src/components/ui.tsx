@@ -14,13 +14,14 @@ type Size = "sm" | "md" | "lg" | "icon" | "icon-sm";
 export function btn(variant: Variant = "secondary", size: Size = "md", extra?: string) {
   return clsx(
     // active:scale gives a tap a physical "press", which matters most on the driver's phone.
-    "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
+    "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
     {
-      primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm",
-      secondary: "bg-white text-slate-700 border border-line hover:bg-slate-50 shadow-sm",
+      // A faint top highlight gives filled buttons a little depth without a gradient.
+      primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_1px_2px_rgb(15_23_42/0.18)]",
+      secondary: "bg-white text-slate-700 border border-line hover:bg-slate-50 hover:border-slate-300 shadow-sm",
       ghost: "text-slate-600 hover:bg-slate-100",
       danger: "bg-white text-red-600 border border-red-200 hover:bg-red-50",
-      success: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm",
+      success: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_1px_2px_rgb(15_23_42/0.18)]",
     }[variant],
     { sm: "h-8 px-3 text-xs", md: "h-9 px-3.5 text-sm", lg: "h-12 px-5 text-base", icon: "size-8", "icon-sm": "size-6" }[size],
     extra,

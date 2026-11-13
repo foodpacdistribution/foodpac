@@ -271,19 +271,19 @@ export function ShipmentsClient(props: {
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         {/* ---------------------------------------------------------------- ready to ship */}
         <Card className="overflow-hidden xl:sticky xl:top-4">
-          <div className="flex items-center justify-between border-b border-line px-4 py-3">
-            <div>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line px-4 py-3">
+            <div className="min-w-0">
               <h2 className="text-sm font-semibold text-slate-900">{tr("Ready to ship")}</h2>
               <p className="text-xs text-slate-500">{tr("Orders for this day that aren't on a shipment yet.")}</p>
             </div>
             {props.ready.length > 0 && (
-              <div className="flex items-center gap-3">
+              <div className="flex shrink-0 items-center gap-3">
               <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as "direction" | "suburb")} className={cx(inputCls, "h-8 w-auto py-0 text-xs")} aria-label={tr("Group by")}>
                 <option value="direction">{tr("By direction from the depot")}</option>
                 <option value="suburb">{tr("By suburb")}</option>
               </select>
               {locatable.length > 0 && (
-              <label className="flex items-center gap-2 text-xs text-slate-600">
+              <label className="flex items-center gap-2 text-xs whitespace-nowrap text-slate-600">
                 <input
                   type="checkbox"
                   checked={locatable.length > 0 && locatable.every((o) => selected.has(o.id))}

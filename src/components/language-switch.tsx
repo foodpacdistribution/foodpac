@@ -25,7 +25,7 @@ export function LanguageSwitch({ tone = "light", className }: { tone?: "light" |
       role="group"
       aria-label="Language / 语言"
       className={cx(
-        "inline-flex items-center gap-0.5 rounded-full p-0.5 text-xs font-semibold",
+        "inline-flex shrink-0 items-center gap-0.5 rounded-full p-0.5 text-xs font-semibold whitespace-nowrap",
         tone === "dark" ? "bg-white/10 text-slate-300" : "bg-leaf-950/5 text-leaf-900/70",
         pending && "opacity-60",
         className,

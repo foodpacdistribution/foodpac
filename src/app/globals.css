@@ -295,6 +295,16 @@ dialog::backdrop {
   background: rgb(8 17 31 / 0.45);
   backdrop-filter: blur(2px);
 }
+/* The dim background fades in with the window instead of appearing at once. */
+dialog[open]::backdrop {
+  animation: backdrop-in 200ms ease-out both;
+}
+@keyframes backdrop-in {
+  from {
+    background: rgb(8 17 31 / 0);
+    backdrop-filter: blur(0);
+  }
+}
 
 /* Shop: squarer corners than the back office. Tailwind's rounded-* utilities read these
    variables, so everything inside the shop (cart and checkout too) follows. */

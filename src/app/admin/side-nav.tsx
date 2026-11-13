@@ -139,6 +139,11 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
   useEffect(() => {
     queueMicrotask(() => setMenuOpen(false));
   }, [pathname]);
+  // A page low in a long menu (Route Planner, Settings): keep its entry in view.
+  useEffect(() => {
+    if (mobile) return;
+    document.querySelector('[data-side-nav] [aria-current="page"]')?.scrollIntoView({ block: "nearest" });
+  }, [pathname, mobile]);
 
   const list = (opts: { foldable: boolean; roomy?: boolean; onNavigate?: () => void }) => (
     <div className="space-y-2">
@@ -171,13 +176,17 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
                     key={href}
                     href={href}
                     onClick={opts.onNavigate}
+                    aria-current={isActive(href) ? "page" : undefined}
                     className={cx(
-                      "flex items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors",
+                      "relative flex items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors duration-150",
                       opts.roomy ? "py-2.5" : "py-1.5",
-                      isActive(href) ? "bg-blue-600 text-white shadow-sm" : "hover:bg-white/5 hover:text-white",
+                      // The current page: a soft lift and a thin accent bar, not a solid block.
+                      isActive(href)
+                        ? "bg-white/[0.09] text-white ring-1 ring-white/[0.06] ring-inset before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-blue-400"
+                        : "hover:bg-white/5 hover:text-white",
                     )}
                   >
-                    <Icon className="size-4" />
+                    <Icon className={cx("size-4 transition-colors", isActive(href) ? "text-blue-300" : "text-slate-400")} />
                     {tr(label)}
                     {count(href) > 0 && <Badge href={href} n={count(href)} className="ml-auto" />}
                     <LinkPending className="ml-auto" />
@@ -226,5 +235,9 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
     );
   }
 
-  return <nav className="flex-1 overflow-y-auto px-3 py-1">{list({ foldable: true })}</nav>;
+  return (
+    <nav data-side-nav className="flex-1 overflow-y-auto px-3 py-1">
+      {list({ foldable: true })}
+    </nav>
+  );
 }
