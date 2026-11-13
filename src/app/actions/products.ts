@@ -9,6 +9,7 @@ import { customerPrices, products } from "@/lib/db/schema";
 import { parseDollars } from "@/lib/money";
 import { checkProductRow, duplicateSkus, MAX_IMPORT_ROWS, type ProductImportRow, type ProductValues } from "@/lib/product-import";
 import { UserError } from "@/lib/planning";
+import { codeFromFileName, fillProductPhotosFromInvoices, goodsKey } from "@/lib/goods-photos";
 import { readUpload } from "@/lib/proofs";
 import { fillWaiting } from "@/lib/stock-allocation";
 import { changeStock, setStock, withStockContext } from "@/lib/stock-ledger";
@@ -16,6 +17,34 @@ import { changeStock, setStock, withStockContext } from "@/lib/stock-ledger";
 function revalidate() {
   revalidatePath("/admin/products");
   revalidatePath("/", "layout");
+}
+
+/**
+ * One photo from a bulk upload. The file is named after the product: its code ("RB-BOWLPA16.jpg",
+ * also the old EMERGE code, e.g. "RB-BAPAW1/2B") or its exact name. Replaces the current photo.
+ */
+export async function uploadProductPhoto(form: FormData) {
+  return attempt<{ sku: string; name: string }>(async () => {
+    await assertUser(STAFF);
+    const fileName = String(form.get("fileName") ?? "").slice(0, 300);
+    const image = await readUpload(form.get("photo"), "Photo");
+    if (!fileName || !image) throw new UserError("No photo.");
+    const db = await getDb();
+    const code = codeFromFileName(fileName);
+    const byName = goodsKey(fileName.replace(/\.[a-z0-9]{2,5}$/i, ""));
+    const [p] =
+      (code ? await db.select({ id: products.id, sku: products.sku, name: products.name }).from(products).where(eq(products.sku, code)).limit(1) : []).concat(
+        await db
+          .select({ id: products.id, sku: products.sku, name: products.name })
+          .from(products)
+          .where(sql`lower(regexp_replace(trim(${products.name}), '\\s+', ' ', 'g')) = ${byName}`)
+          .limit(1),
+      );
+    if (!p) throw new UserError("No product has this code or name.");
+    await db.update(products).set({ image: image.data, imageMime: image.mime, updatedAt: new Date() }).where(eq(products.id, p.id));
+    revalidate();
+    return { data: { sku: p.sku, name: p.name } };
+  });
 }
 
 export async function saveProduct(_prev: unknown, form: FormData) {
@@ -144,7 +173,7 @@ export async function setCustomerDiscount(customerId: string, productIds: string
   });
 }
 
-export type ProductImportResult = { created: number; updated: number; errors: { row: number; message: string }[] };
+export type ProductImportResult = { created: number; updated: number; errors: { row: number; message: string }[]; /** Products given the photo printed on an invoice. */ photos?: number };
 
 /**
  * Creates new products and updates existing ones, matched by SKU. Empty cells leave the current
@@ -211,8 +240,10 @@ export async function importProducts(rows: ProductImportRow[], opts: { pricesInc
       // Imported stock counts go to waiting customers first.
       await fillWaiting(tx, restocked);
     }));
+    // New products without a photo take the one printed on an imported invoice, if there is one.
+    const photos = await fillProductPhotosFromInvoices(db);
     revalidate();
-    return { data: { created: toCreate.length, updated: toUpdate.length, errors: [] } };
+    return { data: { created: toCreate.length, updated: toUpdate.length, errors: [], photos } };
   });
 }
 

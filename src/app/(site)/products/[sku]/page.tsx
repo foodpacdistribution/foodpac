@@ -42,7 +42,7 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
   const [p, settings] = await Promise.all([getProductBySku(db, viewer?.customer ?? null, decodeURIComponent(sku)), getSettings(db)]);
   if (!p) notFound();
   const promise = deliveryPromise(settings);
-  const related = (await listCatalog(db, viewer?.customer ?? null, { category: p.category, limit: 5 })).filter((x) => x.id !== p.id).slice(0, 4);
+  const related = (await listCatalog(db, viewer?.customer ?? null, { category: p.category, limit: 5, inStockFirst: true })).filter((x) => x.id !== p.id).slice(0, 4);
 
   const base = siteUrl();
 

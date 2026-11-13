@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Download, Eye, EyeOff, FileUp, ImageIcon, PackagePlus, Pencil, Percent, Phone, Plus, Search, Star, Tag, Trash2 } from "lucide-react";
+import { Clock, Download, Eye, EyeOff, FileUp, ImageIcon, ImageUp, PackagePlus, Pencil, Percent, Phone, Plus, Search, Star, Tag, Trash2 } from "lucide-react";
 import Link from "@/components/link";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { adjustStock, bulkProducts, deleteProduct, type ProductBulkOp, saveProduct } from "@/app/actions/products";
@@ -109,6 +109,8 @@ export function ProductsClient({
             )}
             <Link href="/admin/products/import" className={btn("secondary")}>
               <FileUp className="size-4" /> {" "}{tr("Import")}</Link>
+            <Link href="/admin/products/photos" className={btn("secondary")}>
+              <ImageUp className="size-4" /> {" "}{tr("Upload photos")}</Link>
             <button className={btn("primary")} onClick={() => setEditing("new")}>
               <Plus className="size-4" /> {" "}{tr("Add product")}</button>
           </>

@@ -7,7 +7,7 @@ import { assertUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { insertDemoOrders } from "@/lib/db/seed";
 import { depots, goodsPhotos, orders, routeStops, salesOrders } from "@/lib/db/schema";
-import { goodsPhotoId, MAX_GOODS_PHOTO_BYTES } from "@/lib/goods-photos";
+import { fillProductPhotosFromInvoices, goodsPhotoId, MAX_GOODS_PHOTO_BYTES } from "@/lib/goods-photos";
 import { sniffImage } from "@/lib/proofs";
 import { isPlaceholderAddress, locateOrder } from "@/lib/geo/geocode";
 import { getT } from "@/lib/i18n/server";
@@ -305,7 +305,10 @@ export async function saveGoodsPhotos(photos: { name: string; dataUrl: string }[
       rows.push({ id: goodsPhotoId(name), name, mime, bytes: data.byteLength, data });
     }
     if (!rows.length) return { data: { saved: 0 } };
-    const saved = await (await getDb()).insert(goodsPhotos).values(rows).onConflictDoNothing().returning({ id: goodsPhotos.id });
+    const db = await getDb();
+    const saved = await db.insert(goodsPhotos).values(rows).onConflictDoNothing().returning({ id: goodsPhotos.id });
+    // Products of the same name that have no photo yet take these.
+    if (saved.length && (await fillProductPhotosFromInvoices(db))) revalidatePath("/", "layout");
     return { data: { saved: saved.length } };
   });
 }

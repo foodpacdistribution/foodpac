@@ -29,7 +29,7 @@ export default async function HomePage() {
   const [featured, others, counts, recent, [depot], photos, settings, uploaded] = await Promise.all([
     listCatalog(db, customer, { featured: true, limit: 8 }),
     // To top up the shelf when fewer than 8 are featured (loaded alongside, not after).
-    listCatalog(db, customer, { limit: 16 }),
+    listCatalog(db, customer, { limit: 16, inStockFirst: true }),
     categoryCounts(db),
     customer ? recentlyBought(db, customer, 4) : Promise.resolve([]),
     getDepots(db),

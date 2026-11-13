@@ -107,11 +107,9 @@ async function withPrices(
 export const SORTS = { name: "Name A–Z", "price-asc": "Price: low to high", "price-desc": "Price: high to low", newest: "Newest" } as const;
 export type Sort = keyof typeof SORTS;
 
-export async function listCatalog(
-  db: DB,
-  customer: Customer | null,
-  opts: { q?: string; category?: string; featured?: boolean; inStock?: boolean; sort?: Sort; limit?: number } = {},
-) {
+type CatalogFilter = { q?: string; category?: string; featured?: boolean; inStock?: boolean };
+
+function catalogWhere(opts: CatalogFilter) {
   const q = opts.q?.trim();
   const where = [eq(products.active, true)];
   if (opts.inStock) where.push(gte(products.stock, 1));
@@ -121,19 +119,39 @@ export async function listCatalog(
     const like = `%${q.replace(/[%_]/g, "")}%`;
     where.push(or(ilike(products.name, like), ilike(products.sku, like), ilike(products.barcode, like), ilike(products.description, like))!);
   }
+  return and(...where);
+}
+
+/** How many products the shop lists for these filters (the page shows them a batch at a time). */
+export async function countCatalog(db: DB, opts: CatalogFilter = {}) {
+  const [r] = await db.select({ n: sql<number>`count(*)::int` }).from(products).where(catalogWhere(opts));
+  return r?.n ?? 0;
+}
+
+/**
+ * The shop's products. `inStockFirst` lists what can be delivered now before what's sold out,
+ * whatever the sort (the shop shows out-of-stock products too, marked as such).
+ */
+export async function listCatalog(
+  db: DB,
+  customer: Customer | null,
+  opts: CatalogFilter & { sort?: Sort; limit?: number; inStockFirst?: boolean } = {},
+) {
+  const byPrice = opts.sort === "price-asc" || opts.sort === "price-desc";
+  const order = opts.sort === "newest" ? [desc(products.createdAt)] : opts.sort === "name" ? [asc(products.name)] : [asc(products.category), asc(products.name)];
   const rows = await db
     .select(catalogColumns)
     .from(products)
-    .where(and(...where))
-    .orderBy(...(opts.sort === "newest" ? [desc(products.createdAt)] : opts.sort === "name" ? [asc(products.name)] : [asc(products.category), asc(products.name)]))
-    .limit(opts.limit ?? 200);
+    .where(catalogWhere(opts))
+    .orderBy(...(opts.inStockFirst ? [desc(sql`${products.stock} > 0`)] : []), ...order)
+    // Price sorts use each customer's own price, so every match is priced and sorted, then cut.
+    .limit(byPrice ? 20000 : (opts.limit ?? 200));
   const priced = await withPrices(db, rows, customer);
-  // Price sorts use each customer's own price, so they happen after pricing.
-  if (opts.sort === "price-asc" || opts.sort === "price-desc") {
-    const dir = opts.sort === "price-asc" ? 1 : -1;
-    priced.sort((a, b) => dir * ((a.priceCents ?? a.listPriceCents ?? 0) - (b.priceCents ?? b.listPriceCents ?? 0)));
-  }
-  return priced;
+  if (!byPrice) return priced;
+  const dir = opts.sort === "price-asc" ? 1 : -1;
+  const stocked = (p: (typeof priced)[number]) => (opts.inStockFirst && p.stock > 0 ? 0 : 1);
+  priced.sort((a, b) => stocked(a) - stocked(b) || dir * ((a.priceCents ?? a.listPriceCents ?? 0) - (b.priceCents ?? b.listPriceCents ?? 0)));
+  return priced.slice(0, opts.limit ?? 200);
 }
 
 export async function getProductBySku(db: DB, customer: Customer | null, sku: string) {

@@ -4,20 +4,23 @@ import Link from "@/components/link";
 import { cx } from "@/components/ui";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { canSeePrices, listCatalog, listCategories, type Sort, SORTS } from "@/lib/shop";
+import { canSeePrices, countCatalog, listCatalog, listCategories, type Sort, SORTS } from "@/lib/shop";
 import { categoryHref, categoryInfo, SITE } from "../content";
 import { CategorySidebar } from "../category-nav";
 import { ProductCard } from "../shop-ui";
 import { T } from "@/components/i18n";
 import { getT, languageAlternates } from "@/lib/i18n/server";
 
-type Search = { q?: string; category?: string; sort?: string; stock?: string };
+type Search = { q?: string; category?: string; sort?: string; stock?: string; show?: string };
+
+/** Products per batch; "Show more" adds another. */
+const BATCH = 60;
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<Search> }): Promise<Metadata> {
   const sp = await searchParams;
   // Searches and filtered or sorted lists repeat other pages: keep them out of the index.
   const tr = await getT();
-  if (sp.q || sp.sort || sp.stock) return { title: tr("Products"), robots: { index: false, follow: true } };
+  if (sp.q || sp.sort || sp.stock || sp.show) return { title: tr("Products"), robots: { index: false, follow: true } };
   if (sp.category) return { title: tr(sp.category), alternates: { canonical: categoryHref(sp.category) } };
   const description = tr("Takeaway packaging, cups, bags, cutlery, cleaning supplies and dry goods at trade prices, delivered across {area}.", { area: tr(SITE.serviceArea) });
   const alternates = await languageAlternates("/products");
@@ -37,8 +40,14 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const pricesShown = !!viewer && canSeePrices(viewer.customer);
   const sort = (Object.keys(SORTS) as Sort[]).find((k) => k === sp.sort && (pricesShown || !k.startsWith("price")));
   const inStock = sp.stock === "1";
+  // A batch at a time: hundreds of product photos at once would make the page slow on a phone.
+  const show = Math.min(Math.max(BATCH, Math.ceil((Number(sp.show) || BATCH) / BATCH) * BATCH), 5000);
   const db = await getDb();
-  const [items, categories] = await Promise.all([listCatalog(db, viewer?.customer ?? null, { q, category, sort, inStock }), listCategories(db)]);
+  const [items, found, categories] = await Promise.all([
+    listCatalog(db, viewer?.customer ?? null, { q, category, sort, inStock, limit: show, inStockFirst: true }),
+    countCatalog(db, { q, category, inStock }),
+    listCategories(db),
+  ]);
   const qs = (patch: Record<string, string | undefined>) => {
     const u = new URLSearchParams();
     const merged = { q, category, sort, stock: inStock ? "1" : undefined, ...patch };
@@ -67,7 +76,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           <h1 className="font-display text-3xl font-bold tracking-tight">{q ? `Results for “${q}”` : <T>{"All products"}</T>}</h1>
         )}
         <p className={cx("text-sm text-leaf-900/60", category && !q ? "mt-4" : "mt-1")}>
-          <T vars={{ n: items.length }}>{items.length === 1 ? "{n} product" : "{n} products"}</T>
+          <T vars={{ n: found }}>{found === 1 ? "{n} product" : "{n} products"}</T>
           {q && category && ` in ${category}`}
           {pricesShown && (
             <>
@@ -137,6 +146,20 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             {items.map((p) => (
               <ProductCard key={p.id} p={p} signedIn={!!viewer} morph />
             ))}
+          </div>
+        )}
+        {found > items.length && (
+          <div className="mt-8 flex flex-col items-center gap-2">
+            <Link
+              href={qs({ show: String(show + BATCH) })}
+              scroll={false}
+              className="inline-flex h-11 items-center rounded-md bg-white px-6 text-sm font-semibold text-leaf-900 ring-1 ring-leaf-950/20 transition-colors hover:bg-leaf-50 hover:ring-leaf-950/35"
+            >
+              <T vars={{ n: found - items.length }}>{"Show more ({n} more)"}</T>
+            </Link>
+            <p className="text-xs text-leaf-900/55">
+              <T vars={{ n: items.length, total: found }}>{"Showing {n} of {total}"}</T>
+            </p>
           </div>
         )}
       </section>

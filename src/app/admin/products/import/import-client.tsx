@@ -104,6 +104,9 @@ export function ProductImportClient({ existingSkus }: { existingSkus: string[] }
           <p className="mt-3 text-lg font-semibold text-slate-900">
             {result.created} {" "}{tr("added ·")}{" "}{result.updated} {" "}{tr("updated")}</p>
           <p className="mt-1 text-sm text-slate-500">{tr("Your products are live in the online shop.")}</p>
+          {!!result.photos && (
+            <p className="mt-1 text-sm text-slate-500">{tr("{n} took the photo printed on an imported invoice.", { n: result.photos })}</p>
+          )}
           <div className="mt-5 flex justify-center gap-2">
             <Link href="/admin/products" className={btn("primary")}>
               {tr("View products")}</Link>
