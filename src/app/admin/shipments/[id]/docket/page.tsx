@@ -11,6 +11,7 @@ import { requireUser, STAFF } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { drivers, orders, plans, routes, routeStops, salesOrderItems, salesOrders } from "@/lib/db/schema";
+import { shownAddress } from "@/lib/geo/geocode";
 import { depotFor, getDepots, getSettings } from "@/lib/planning";
 import { formatClock, formatKm, formatMinutesClock } from "@/lib/time";
 import { T, Tx } from "@/components/i18n";
@@ -112,7 +113,7 @@ export default async function DocketPage({ params }: { params: Promise<{ id: str
                     <p className="font-semibold">
                       {order.customerName || "—"} <span className="font-mono text-[11px] font-normal text-slate-500">{order.orderNumber}</span>
                     </p>
-                    <p>{order.address}</p>
+                    <p>{shownAddress(order)}</p>
                     {order.phone && <p className="text-slate-600">{order.phone}</p>}
                     {order.notes && <p className="mt-0.5 text-[12px] italic text-slate-600">{order.notes}</p>}
                   </td>

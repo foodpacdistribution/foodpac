@@ -15,7 +15,7 @@ import {
   settings,
   users,
 } from "./db/schema";
-import { checkDayLocations } from "./geo/geocode";
+import { checkDayLocations, shownAddress } from "./geo/geocode";
 import { type LatLng, routeGeometry, travelMatrix } from "./geo/routing";
 import { shiftDate } from "./dates";
 import { nowSecondsIn, todayIn } from "./time";
@@ -264,7 +264,7 @@ export async function getPlanView(db: DB, date: string): Promise<PlanView> {
           order: {
             orderNumber: order.orderNumber,
             customerName: order.customerName,
-            address: order.address,
+            address: shownAddress(order),
             phone: order.phone,
             notes: order.notes,
             lat: order.lat!,

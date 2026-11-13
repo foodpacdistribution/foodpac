@@ -9,12 +9,12 @@ import { insertDemoOrders } from "@/lib/db/seed";
 import { depots, goodsPhotos, orders, routeStops, salesOrders } from "@/lib/db/schema";
 import { goodsPhotoId, MAX_GOODS_PHOTO_BYTES } from "@/lib/goods-photos";
 import { sniffImage } from "@/lib/proofs";
-import { geocodeAddress } from "@/lib/geo/geocode";
+import { isPlaceholderAddress, locateOrder } from "@/lib/geo/geocode";
 import { getT } from "@/lib/i18n/server";
 import { pruneEmptyRoutes } from "@/lib/shipments";
 import { followDeliveryDate } from "@/lib/staff-orders";
 import { UserError } from "@/lib/planning";
-import { geocodeQuery, type ImportRow, validateImportRow } from "@/lib/orders";
+import { type ImportRow, validateImportRow } from "@/lib/orders";
 import { inputToMinutes } from "@/lib/time";
 
 const str = (f: FormData, k: string) => {
@@ -123,7 +123,7 @@ async function geocodeOne(id: string) {
   const db = await getDb();
   const [o] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
   if (!o) return null;
-  const r = await geocodeAddress(db, geocodeQuery(o));
+  const r = await locateOrder(db, o);
   await db
     .update(orders)
     .set({ lat: r.lat, lng: r.lng, geocodeStatus: r.status, geocodeLabel: r.label, updatedAt: new Date() })
@@ -152,10 +152,12 @@ export async function confirmOrderLocation(id: string, lat: number, lng: number)
     await assertUser(STAFF);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw new UserError("That location isn't valid.");
     const db = await getDb();
+    const [prev] = await db.select({ address: orders.address }).from(orders).where(eq(orders.id, id)).limit(1);
     const [o] = await db
       .update(orders)
       // The geocoder's label described its own guess; without one, the pin reads as placed by hand.
-      .set({ lat, lng, geocodeStatus: "ok", geocodeLabel: null, updatedAt: new Date() })
+      // An order with no address keeps it: it's the address the driver sees (the business found by name).
+      .set({ lat, lng, geocodeStatus: "ok", ...(prev && isPlaceholderAddress(prev.address) ? {} : { geocodeLabel: null }), updatedAt: new Date() })
       .where(eq(orders.id, id))
       .returning({ id: orders.id });
     if (!o) throw new UserError("Order not found.");

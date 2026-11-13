@@ -4,9 +4,9 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import Papa from "papaparse";
 import type { DB } from "./db";
 import { apiKeys, depots, type FeedResult, orderFeeds, orders } from "./db/schema";
-import { geocodeAddress } from "./geo/geocode";
+import { locateOrder } from "./geo/geocode";
 import { shiftDate } from "./dates";
-import { geocodeQuery, guessMapping, IMPORT_FIELDS, type ImportField, type ImportRow, validateImportRow } from "./orders";
+import { guessMapping, IMPORT_FIELDS, type ImportField, type ImportRow, validateImportRow } from "./orders";
 import { todayIn } from "./time";
 
 export type UpsertResult = {
@@ -113,7 +113,7 @@ export async function geocodeOrderIds(db: DB, ids: string[]) {
   for (const id of ids) {
     const [o] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
     if (!o || o.lat !== null) continue;
-    const r = await geocodeAddress(db, geocodeQuery(o));
+    const r = await locateOrder(db, o);
     await db
       .update(orders)
       .set({ lat: r.lat, lng: r.lng, geocodeStatus: r.status, geocodeLabel: r.label, updatedAt: new Date() })

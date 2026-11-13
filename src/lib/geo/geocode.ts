@@ -1,6 +1,6 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { DB } from "../db";
-import { geocodeCache, type GeocodeStatus, orders } from "../db/schema";
+import { customers, depots, geocodeCache, type GeocodeStatus, orders } from "../db/schema";
 import { geocodeQuery } from "../orders";
 import { haversine, type LatLng } from "./routing";
 
@@ -22,6 +22,35 @@ export function geocoderName() {
 function normalise(address: string) {
   return `${COUNTRY}|${address.toLowerCase().replace(/[\s,]+/g, " ").trim()}`;
 }
+
+/**
+ * "--", "N/A", "TBA", "": no address was given. Geocoders still answer these — Google with the
+ * middle of Australia — so they must never be looked up as an address.
+ */
+export function isPlaceholderAddress(text: string | null | undefined) {
+  const t = (text ?? "").replace(/,?\s*australia\s*$/i, "").trim();
+  if (!/[a-z]{2,}|\d{4}/i.test(t)) return true;
+  return /^(n\/?a|tba|tbc|none|nil|null|unknown|no address|address|same|same as above)\.?$/i.test(t);
+}
+
+/**
+ * A match for the whole country or a whole state ("Australia", "Queensland, Australia"): what a
+ * geocoder answers when it found nothing it could place. Not a location to drive to.
+ */
+export function isTooVague(label: string | null | undefined) {
+  if (!label) return false;
+  return new RegExp(`^\\s*(?:(?:${STATES})\\s*,?\\s*)?australia\\s*$`, "i").test(label) || new RegExp(`^\\s*(?:${STATES})\\s*$`, "i").test(label);
+}
+
+/**
+ * The address to show the driver and on the docket: the one written on the order, or — when
+ * none was given ("--") — where the order was found (e.g. the business found by name).
+ */
+export function shownAddress(o: { address: string; geocodeLabel: string | null }) {
+  return isPlaceholderAddress(o.address) && o.geocodeLabel ? o.geocodeLabel.replace(/, Australia$/, "") : o.address;
+}
+
+const FAILED = (provider: string): GeocodeResult => ({ status: "failed", lat: null, lng: null, label: null, provider });
 
 /** "Unit 3/12 Smith St" → "12 Smith St": open geocoders often miss unit-level addresses. */
 export function stripUnit(address: string) {
@@ -87,10 +116,12 @@ async function saveToCache(db: DB, key: string, r: GeocodeResult) {
 }
 
 export async function geocodeAddress(db: DB, address: string): Promise<GeocodeResult> {
+  if (isPlaceholderAddress(address)) return FAILED(geocoderName());
   const key = normalise(address);
   const want = COUNTRY === "au" ? postcodeOf(address) : null;
   const [cached] = await db.select().from(geocodeCache).where(eq(geocodeCache.query, key)).limit(1);
-  if (cached && cached.status !== "failed" && !(await inWrongTown(db, want, cached))) {
+  // A country- or state-wide answer cached before those were refused is looked up again.
+  if (cached && cached.status !== "failed" && !isTooVague(cached.label) && !(await inWrongTown(db, want, cached))) {
     return { status: cached.status as GeocodeResult["status"], lat: cached.lat, lng: cached.lng, label: cached.label, provider: cached.provider };
   }
 
@@ -135,6 +166,8 @@ export async function checkDayLocations(db: DB, date: string) {
       lng: orders.lng,
       geocodeStatus: orders.geocodeStatus,
       geocodeLabel: orders.geocodeLabel,
+      customerName: orders.customerName,
+      customerId: orders.customerId,
     })
     .from(orders)
     .where(and(eq(orders.deliveryDate, date), inArray(orders.status, ["pending", "planned", "dispatched"])));
@@ -144,7 +177,8 @@ export async function checkDayLocations(db: DB, date: string) {
     const query = geocodeQuery(o);
     // A big import is located by its own background job; this only picks up a few stragglers.
     if (o.geocodeStatus === "pending" && ++waiting > 10) continue;
-    if (o.geocodeStatus !== "pending") {
+    // Pinned to the whole country or state ("Australia"): never a real location, so always look again.
+    if (o.geocodeStatus !== "pending" && !(o.lat !== null && isTooVague(o.geocodeLabel))) {
       // No label: placed or confirmed by hand on the map.
       if (COUNTRY !== "au" || o.lat === null || !o.geocodeLabel) continue;
       const want = postcodeOf(query);
@@ -154,11 +188,142 @@ export async function checkDayLocations(db: DB, date: string) {
       if (!cached || cached.lat !== o.lat || cached.lng !== o.lng) continue;
       if (!(await inWrongTown(db, want, { status: o.geocodeStatus, lat: o.lat, lng: o.lng, label: o.geocodeLabel }))) continue;
     }
-    const r = await geocodeAddress(db, query);
+    const r = await locateOrder(db, o);
     await db.update(orders).set({ lat: r.lat, lng: r.lng, geocodeStatus: r.status, geocodeLabel: r.label, updatedAt: new Date() }).where(eq(orders.id, o.id));
     updated++;
   }
   return updated;
+}
+
+type OrderToLocate = {
+  id?: string;
+  address: string;
+  suburb: string | null;
+  postcode: string | null;
+  customerName?: string | null;
+  customerId?: string | null;
+};
+
+/** Further than this from every depot, a match found by business name is someone else's shop. */
+const BUSINESS_RANGE_KM = 150;
+
+/**
+ * Where to deliver an order. Its address, looked up as usual. When there's no usable address
+ * ("--", blank) or it can't be found, in this order:
+ *  1. where staff confirmed this customer on an earlier order (exact, it was checked by eye);
+ *  2. the customer's own address on file;
+ *  3. the business, searched by name (and suburb) near the depot — flagged approximate so
+ *     someone confirms it; confirming it makes it (1) for this customer's next orders;
+ *  4. the suburb or postcode's centre, approximate.
+ * Otherwise "failed": no pin at all, so the order shows as needing an address rather than
+ * being driven to the wrong place.
+ */
+export async function locateOrder(db: DB, o: OrderToLocate): Promise<GeocodeResult> {
+  const hasAddress = !isPlaceholderAddress(o.address);
+  if (hasAddress) {
+    const r = await geocodeAddress(db, geocodeQuery(o));
+    if (r.status !== "failed") return r;
+  }
+
+  const name = o.customerName?.trim() ?? "";
+  if (o.customerId || name) {
+    const earlier = await db
+      .select({ lat: orders.lat, lng: orders.lng, address: orders.address, label: orders.geocodeLabel })
+      .from(orders)
+      .where(
+        and(
+          o.customerId ? eq(orders.customerId, o.customerId) : sql`lower(${orders.customerName}) = lower(${name})`,
+          o.id ? ne(orders.id, o.id) : undefined,
+          isNotNull(orders.lat),
+          eq(orders.geocodeStatus, "ok"),
+          // The same address: a customer with another address written is somewhere else.
+          hasAddress ? sql`lower(trim(${orders.address})) = lower(trim(${o.address}))` : undefined,
+          // Placed or confirmed by hand (no label), unless the order had no address either: then
+          // "ok" only comes from someone confirming it, and the label is where it was found.
+          hasAddress ? isNull(orders.geocodeLabel) : undefined,
+        ),
+      )
+      .orderBy(desc(orders.updatedAt))
+      .limit(20);
+    const prev = earlier.find((e) => e.label === null || isPlaceholderAddress(e.address));
+    if (prev?.lat != null && prev.lng != null) return { status: "ok", lat: prev.lat, lng: prev.lng, label: hasAddress ? null : prev.label, provider: "confirmed" };
+  }
+
+  if (o.customerId && !hasAddress) {
+    const [c] = await db
+      .select({ address: customers.address, lat: customers.lat, lng: customers.lng, status: customers.geocodeStatus, label: customers.geocodeLabel, placedFor: customers.geocodedAddress })
+      .from(customers)
+      .where(eq(customers.id, o.customerId))
+      .limit(1);
+    if (c?.address && !isPlaceholderAddress(c.address)) {
+      const placed = c.lat !== null && c.lng !== null && c.placedFor === c.address && c.status && c.status !== "failed" && !isTooVague(c.label);
+      const r = placed ? { status: c.status!, lat: c.lat, lng: c.lng, label: c.label, provider: "customer" } : await geocodeAddress(db, c.address);
+      if (r.status !== "failed") return r;
+    }
+  }
+
+  if (name) {
+    const r = await findBusiness(db, name, [o.suburb, o.postcode].filter(Boolean).join(" "));
+    if (r.status !== "failed") return r;
+  }
+
+  const area = [o.suburb, o.postcode].filter(Boolean).join(" ");
+  if (area) {
+    const r = await geocodeAddress(db, area);
+    if (r.status !== "failed") return { ...r, status: "approximate" };
+  }
+  return FAILED(geocoderName());
+}
+
+/**
+ * A business found by name ("Sushi Paradise (Jindalee DFO)") with Google Places, near the
+ * depots. Always approximate: a name can match another branch, so someone confirms the pin.
+ */
+async function findBusiness(db: DB, name: string, area: string): Promise<GeocodeResult> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) return FAILED("google-places");
+  const text = [name.replace(/[()[\]]/g, " "), area].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  if (text.length < 3) return FAILED("google-places");
+  const key = `${COUNTRY}|business:${text.toLowerCase()}`;
+  const [cached] = await db.select().from(geocodeCache).where(eq(geocodeCache.query, key)).limit(1);
+  if (cached && cached.status !== "failed") return { status: "approximate", lat: cached.lat, lng: cached.lng, label: cached.label, provider: cached.provider };
+
+  const homes = (await db.select({ lat: depots.lat, lng: depots.lng }).from(depots).orderBy(asc(depots.createdAt))).filter(
+    (d): d is LatLng => d.lat !== null && d.lng !== null,
+  );
+  const home = homes[0];
+  let result = FAILED("google-places");
+  try {
+    const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location" },
+      body: JSON.stringify({
+        textQuery: text,
+        regionCode: COUNTRY.toUpperCase(),
+        languageCode: "en-AU",
+        pageSize: 1,
+        ...(home && { locationBias: { circle: { center: { latitude: home.lat, longitude: home.lng }, radius: 50_000 } } }),
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = (await res.json()) as { places?: { displayName?: { text: string }; formattedAddress?: string; location?: { latitude: number; longitude: number } }[] };
+    const p = body.places?.[0];
+    if (p?.location && p.formattedAddress) {
+      const at = { lat: p.location.latitude, lng: p.location.longitude };
+      const near = !homes.length || homes.some((d) => haversine(d, at) / 1000 <= BUSINESS_RANGE_KM);
+      const address = p.formattedAddress.replace(/, Australia$/, "");
+      if (near && !isTooVague(p.formattedAddress)) {
+        result = { status: "approximate", ...at, label: p.displayName?.text ? `${p.displayName.text}, ${address}` : address, provider: "google-places" };
+      }
+    }
+  } catch (err) {
+    // Places not enabled on the key, or no answer: no pin rather than a guess.
+    console.warn(`[geocode] business search unavailable (${(err as Error).message}).`);
+    return result;
+  }
+  await saveToCache(db, key, result);
+  return result;
 }
 
 async function lookup(address: string): Promise<GeocodeResult> {
@@ -188,6 +353,8 @@ async function lookupPostcode(postcode: string): Promise<GeocodeResult> {
 
 class GoogleUnavailable extends Error {}
 
+const VAGUE_TYPES = new Set(["country", "administrative_area_level_1", "administrative_area_level_2", "colloquial_area"]);
+
 async function google(address: string, apiKey: string, component?: string): Promise<GeocodeResult> {
   const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
   if (address) url.searchParams.set("address", address);
@@ -197,12 +364,14 @@ async function google(address: string, apiKey: string, component?: string): Prom
   const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
   const body = (await res.json()) as {
     status: string;
-    results: { formatted_address: string; partial_match?: boolean; geometry: { location: { lat: number; lng: number }; location_type: string } }[];
+    results: { formatted_address: string; types?: string[]; partial_match?: boolean; geometry: { location: { lat: number; lng: number }; location_type: string } }[];
   };
   const r = body.results?.[0];
   // ZERO_RESULTS is a real "not found"; REQUEST_DENIED / OVER_QUERY_LIMIT / etc. mean Google couldn't answer.
   if (body.status !== "OK" && body.status !== "ZERO_RESULTS") throw new GoogleUnavailable(`${body.status}: ${(body as { error_message?: string }).error_message ?? ""}`.trim());
-  if (body.status !== "OK" || !r) return { status: "failed", lat: null, lng: null, label: null, provider: "google" };
+  if (body.status !== "OK" || !r) return FAILED("google");
+  // The whole country, state or region: Google found nothing it could place.
+  if (r.types?.some((t) => VAGUE_TYPES.has(t)) || isTooVague(r.formatted_address)) return FAILED("google");
   const precise = !r.partial_match && ["ROOFTOP", "RANGE_INTERPOLATED"].includes(r.geometry.location_type);
   return {
     status: precise ? "ok" : "approximate",
@@ -230,7 +399,8 @@ async function nominatim(address: string): Promise<GeocodeResult> {
     const res = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error(`Nominatim ${res.status}`);
     const [r] = (await res.json()) as { lat: string; lon: string; display_name: string; addresstype?: string }[];
-    if (!r) return { status: "failed", lat: null, lng: null, label: null, provider: "nominatim" };
+    if (!r) return FAILED("nominatim");
+    if (["country", "state", "region", "county", "state_district"].includes(r.addresstype ?? "")) return FAILED("nominatim");
     const precise = ["house", "building", "amenity", "shop", "office", "craft", "commercial", "retail"].includes(r.addresstype ?? "");
     return { status: precise ? "ok" : "approximate", lat: Number(r.lat), lng: Number(r.lon), label: r.display_name, provider: "nominatim" };
   } catch {

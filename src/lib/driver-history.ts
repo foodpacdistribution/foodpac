@@ -2,6 +2,7 @@ import "server-only";
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import type { DB } from "./db";
 import { deliveryEvents, deliveryProofs, orders, plans, routes, routeStops } from "./db/schema";
+import { shownAddress } from "./geo/geocode";
 import { haversine } from "./geo/routing";
 
 export type HistoryItem = {
@@ -64,7 +65,7 @@ export async function driverHistory(db: DB, driverId: string, from: string): Pro
       completedAt: (stop.completedAt ?? ev?.createdAt ?? new Date()).toISOString(),
       orderNumber: order.orderNumber,
       customerName: order.customerName,
-      address: order.address,
+      address: shownAddress(order),
       recipient: ev?.recipient ?? null,
       reason: ev?.reason ?? null,
       note: ev?.note ?? null,
