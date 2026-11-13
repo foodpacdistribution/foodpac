@@ -29,7 +29,7 @@ export default async function CustomersPage() {
   return (
     <CustomersClient
       isAdmin={me.role === "admin"}
-      readOnly={me.role === "sales"}
+      sales={me.role === "sales"}
       customers={rows.map((c) => ({
         ...c,
         createdAt: undefined,

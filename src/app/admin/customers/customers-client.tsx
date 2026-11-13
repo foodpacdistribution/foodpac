@@ -44,7 +44,16 @@ const FILTERS = [
   ["inactive", "Inactive"],
 ] as const;
 
-export function CustomersClient({ customers, isAdmin, readOnly }: { customers: Customer[]; isAdmin: boolean; /** Sales staff: look, don't change (they add customers from the pipeline). */ readOnly?: boolean }) {
+export function CustomersClient({
+  customers,
+  isAdmin,
+  sales,
+}: {
+  customers: Customer[];
+  isAdmin: boolean;
+  /** Sales staff: edit details, stage and portal logins, but not terms, credit or approval; they add customers from the pipeline. */
+  sales?: boolean;
+}) {
   const tr = useT();
   const [editing, setEditing] = useState<Customer | "new" | null>(null);
   // Sales staff: the customer whose stage they're changing.
@@ -87,7 +96,7 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
         title={tr("Customers")}
         subtitle={tr("Give a customer a portal login and they can follow their own orders, see the delivery photo and signature.")}
         actions={
-          readOnly ? undefined : <>
+          sales ? undefined : <>
             <Link href="/admin/customers/import" className={btn("secondary")}>
               <Upload className="size-4" /> {tr("Import")}
             </Link>
@@ -128,8 +137,8 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
           <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
             {shown.slice(0, limit).map((c, i) => (
               <div key={c.id} className="stagger flex min-w-0" style={{ "--i": Math.min(i, 8) } as React.CSSProperties}>
-              <Card className={cx("relative flex w-full min-w-0 flex-col p-3.5 sm:p-4", !c.active && "opacity-60", readOnly && "transition-shadow hover:shadow-pop")}>
-                {readOnly && (
+              <Card className={cx("relative flex w-full min-w-0 flex-col p-3.5 sm:p-4", !c.active && "opacity-60", sales && "transition-shadow hover:shadow-pop")}>
+                {sales && (
                   // The whole card opens the stage picker; the phone / email / map links sit above it.
                   <button type="button" className="absolute inset-0 z-0 rounded-xl" onClick={() => setStaging(c)} aria-label={`${tr("Change status")}: ${c.name}`} />
                 )}
@@ -144,15 +153,14 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
                       </span>
                     </p>
                   </div>
-                  {!readOnly && (
-                    <button className={btn("ghost", "icon", "-mt-1 -mr-1 size-9 shrink-0")} onClick={() => setEditing(c)} aria-label={`Edit ${c.name}`}>
-                      <Pencil className="size-4" />
-                    </button>
-                  )}
+                  {/* Above the card-wide stage button sales staff have. */}
+                  <button className={btn("ghost", "icon", "relative z-10 -mt-1 -mr-1 size-9 shrink-0")} onClick={() => setEditing(c)} aria-label={`${tr("Edit")} ${c.name}`}>
+                    <Pencil className="size-4" />
+                  </button>
                 </div>
-                {(readOnly || c.salesStage !== "won" || !c.approved || !c.active || c.login) && (
+                {(sales || c.salesStage !== "won" || !c.approved || !c.active || c.login) && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {(readOnly || c.salesStage !== "won") && <Badge tone={STAGE_INFO[c.salesStage].tone}>{tr(STAGE_INFO[c.salesStage].label)}</Badge>}
+                    {(sales || c.salesStage !== "won") && <Badge tone={STAGE_INFO[c.salesStage].tone}>{tr(STAGE_INFO[c.salesStage].label)}</Badge>}
                     {!c.approved && <Badge tone="amber">{tr("Needs approval")}</Badge>}
                     {!c.active && <Badge>{tr("Inactive")}</Badge>}
                     {c.login && <Badge tone="green">{tr("Portal on")}</Badge>}
@@ -209,12 +217,12 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
                   {tr(PAYMENT_TERMS_LABEL[c.paymentTerms])}
                   {c.creditLimitCents !== null && <> · {tr("limit {amount}", { amount: aud(c.creditLimitCents) })}</>}
                 </p>
-                {readOnly && (
+                {sales && (
                   <button type="button" onClick={() => setStaging(c)} className={btn("secondary", "sm", "relative z-10 mt-3 h-9 w-full")}>
                     <span className={cx("size-2 rounded-full", STAGE_INFO[c.salesStage].dot)} /> {tr("Change status")}
                   </button>
                 )}
-                {!readOnly && (
+                {!sales && (
                   <div className="mt-auto grid grid-cols-2 gap-2 pt-3">
                     <Link href={`/admin/customers/${c.id}`} className={btn("secondary", "sm", "h-9")}>
                       <Tags className="size-3.5" /> {tr("Price list")}
@@ -255,6 +263,7 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
         {editing !== null && (
           <CustomerForm
             isAdmin={isAdmin}
+            sales={!!sales}
             customer={editing === "new" ? null : editing}
             onDone={() => setEditing(null)}
           />
@@ -264,8 +273,10 @@ export function CustomersClient({ customers, isAdmin, readOnly }: { customers: C
   );
 }
 
-function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null; onDone: () => void; isAdmin: boolean }) {
+function CustomerForm({ customer, onDone, isAdmin, sales }: { customer: Customer | null; onDone: () => void; isAdmin: boolean; sales: boolean }) {
   const tr = useT();
+  // Sales staff see the office's fields but can't change them (the server ignores them from sales too).
+  const office = sales ? tr("Set by the office.") : undefined;
   const [state, form] = useKeptForm(saveCustomer);
   const [removing, startRemove] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -277,8 +288,8 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
     <KeptForm form={form} className="space-y-4">
       {customer && <input type="hidden" name="id" value={customer.id} />}
       <div className="grid gap-3 sm:grid-cols-[1fr_2fr]">
-        <Field label={tr("Customer code")} hint={customer ? undefined : tr("Leave blank to get the next code.")}>
-          <input name="code" defaultValue={customer?.code ?? ""} placeholder={customer ? undefined : tr("Automatic")} autoComplete="off" className={cx(inputCls, "font-mono")} />
+        <Field label={tr("Customer code")} hint={office ?? (customer ? undefined : tr("Leave blank to get the next code."))}>
+          <input name="code" disabled={sales} defaultValue={customer?.code ?? ""} placeholder={customer ? undefined : tr("Automatic")} autoComplete="off" className={cx(inputCls, "font-mono")} />
         </Field>
         <Field label={tr("Business name")} hint={tr("Orders with this exact customer name are linked to this customer.")}>
           <input name="name" required defaultValue={customer?.name} className={inputCls} />
@@ -301,8 +312,8 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
         </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <Field label={tr("Payment terms")} hint={tr("Invoice terms let them choose “Pay by invoice” at checkout.")}>
-          <select name="paymentTerms" defaultValue={customer?.paymentTerms ?? "prepay"} className={inputCls}>
+        <Field label={tr("Payment terms")} hint={office ?? tr("Invoice terms let them choose “Pay by invoice” at checkout.")}>
+          <select name="paymentTerms" disabled={sales} defaultValue={customer?.paymentTerms ?? "prepay"} className={inputCls}>
             {Object.entries(PAYMENT_TERMS_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
                 {v}
@@ -319,15 +330,16 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
             ))}
           </select>
         </Field>
-        <Field label={tr("Credit limit ($, optional)")} hint={tr("Max unpaid balance on invoice orders.")}>
-          <input name="creditLimit" inputMode="decimal" defaultValue={customer?.creditLimitCents != null ? (customer.creditLimitCents / 100).toFixed(0) : ""} className={inputCls} />
+        <Field label={tr("Credit limit ($, optional)")} hint={office ?? tr("Max unpaid balance on invoice orders.")}>
+          <input name="creditLimit" disabled={sales} inputMode="decimal" defaultValue={customer?.creditLimitCents != null ? (customer.creditLimitCents / 100).toFixed(0) : ""} className={inputCls} />
         </Field>
       </div>
-      <div className="flex gap-5 text-sm">
+      <div className={cx("flex flex-wrap items-center gap-x-5 gap-y-1 text-sm", sales && "text-slate-400")}>
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="approved" defaultChecked={customer?.approved ?? true} /> {" "}{tr("Approved to order")}</label>
+          <input type="checkbox" name="approved" disabled={sales} defaultChecked={customer?.approved ?? true} /> {" "}{tr("Approved to order")}</label>
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="active" defaultChecked={customer?.active ?? true} /> {" "}{tr("Active")}</label>
+          <input type="checkbox" name="active" disabled={sales} defaultChecked={customer?.active ?? true} /> {" "}{tr("Active")}</label>
+        {office && <span className="text-xs">{office}</span>}
       </div>
 
       <fieldset className="space-y-3 rounded-xl border border-line p-3">
@@ -340,7 +352,7 @@ function CustomerForm({ customer, onDone, isAdmin }: { customer: Customer | null
             <input name="loginName" autoComplete="off" defaultValue={customer?.login?.name ?? ""} className={inputCls} />
           </Field>
         </div>
-        <Field label={customer?.login ? "New password (leave blank to keep)" : "Password"} hint={tr("At least 8 characters.")}>
+        <Field label={customer?.login ? tr("New password (leave blank to keep)") : tr("Password")} hint={tr("At least 8 characters.")}>
           <input name="password" type="password" autoComplete="new-password" className={inputCls} />
         </Field>
         {customer?.login && (

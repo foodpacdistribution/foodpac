@@ -4,7 +4,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { attempt } from "@/lib/action";
-import { assertUser, STAFF } from "@/lib/auth/dal";
+import { assertUser, PIPELINE, STAFF } from "@/lib/auth/dal";
 import { hashPassword } from "@/lib/auth/password";
 import { codeTaken, syncCustomerCodes } from "@/lib/customer-code";
 import { cleanCode, type CustomerImportRow, MAX_CUSTOMER_ROWS } from "@/lib/customer-import";
@@ -17,22 +17,28 @@ import { parseDollars } from "@/lib/money";
 import { isSalesStage } from "@/lib/sales-stage";
 import { UserError } from "@/lib/planning";
 
+/** What only the office sets: account code, payment terms, credit limit, approval to order, and switching a customer off. */
+const OFFICE_ONLY = ["code", "paymentTerms", "creditLimitCents", "approved", "active"] as const;
+
 export async function saveCustomer(_prev: unknown, form: FormData) {
   return attempt(async () => {
-    await assertUser(STAFF);
+    const me = await assertUser(PIPELINE);
+    // Sales staff edit their customers' details and portal logins; they add customers from the pipeline.
+    const sales = me.role === "sales";
     const db = await getDb();
     const get = (k: string) => String(form.get(k) ?? "").trim();
     const id = get("id") || null;
+    if (sales && !id) throw new UserError("Add new customers from the Sales Pipeline.");
     const name = get("name");
     if (!name) throw new UserError("Business name is required.");
     // Blank: a new customer gets the next C-number; an existing one keeps its code.
     let code: string | undefined;
     try {
-      code = get("code") ? cleanCode(get("code")) : undefined;
+      code = get("code") && !sales ? cleanCode(get("code")) : undefined;
     } catch (e) {
       throw new UserError(`${(e as Error).message}.`);
     }
-    const values = {
+    const all = {
       ...(code ? { code } : {}),
       name,
       phone: get("phone") || null,
@@ -44,20 +50,24 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
       paymentTerms: (["prepay", "net7", "net14", "net30"].includes(get("paymentTerms")) ? get("paymentTerms") : "prepay") as PaymentTerms,
       creditLimitCents: get("creditLimit") ? parseDollars(get("creditLimit")) : null,
     };
+    // From sales staff the office's fields are ignored, whatever the form sent.
+    const values = sales ? Object.fromEntries(Object.entries(all).filter(([k]) => !(OFFICE_ONLY as readonly string[]).includes(k))) as Omit<typeof all, (typeof OFFICE_ONLY)[number]> : all;
     const stage = get("salesStage");
-    if (get("creditLimit") && values.creditLimitCents === null) throw new UserError("Credit limit must be an amount, e.g. 5000.");
+    if (!sales && get("creditLimit") && all.creditLimitCents === null) throw new UserError("Credit limit must be an amount, e.g. 5000.");
 
     const loginEmail = get("loginEmail").toLowerCase();
     const loginName = get("loginName") || name;
     const password = get("password");
     if (password && password.length < 8) throw new UserError("Password must be at least 8 characters.");
 
-    const [before] = id ? await db.select({ approved: customers.approved, stage: customers.salesStage }).from(customers).where(eq(customers.id, id)).limit(1) : [];
+    const [before] = id ? await db.select({ approved: customers.approved, stage: customers.salesStage, rep: customers.salesRepId }).from(customers).where(eq(customers.id, id)).limit(1) : [];
     // The office form can move the sales stage too; the date only changes when the stage does.
     const stageFields = isSalesStage(stage) && stage !== before?.stage ? { salesStage: stage, salesStageAt: new Date() } : {};
+    // As on the pipeline: a salesperson who moves an unassigned customer along takes it on.
+    const repFields = sales && "salesStage" in stageFields && !before?.rep ? { salesRepId: me.id } : {};
     const customerId = await db.transaction(async (tx) => {
       let customerId = id;
-      if (id) await tx.update(customers).set({ ...values, ...stageFields }).where(eq(customers.id, id));
+      if (id) await tx.update(customers).set({ ...values, ...stageFields, ...repFields }).where(eq(customers.id, id));
       else customerId = (await tx.insert(customers).values({ ...values, ...stageFields }).returning({ id: customers.id }))[0].id;
 
       if (!loginEmail) return customerId!;
@@ -83,7 +93,7 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
     if (code) await syncCustomerCodes(db);
     await linkOrdersToCustomer(db, { id: customerId, name, phone: values.phone });
     // Registration promises an email once the account can order.
-    if (before && !before.approved && values.approved) after(() => accountApproved(customerId));
+    if (before && !before.approved && "approved" in values && values.approved) after(() => accountApproved(customerId));
     locateCustomersLater();
     revalidatePath("/admin/customers");
     revalidatePath("/admin/pipeline");
@@ -93,7 +103,7 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
 
 export async function removeCustomerLogin(customerId: string) {
   return attempt(async () => {
-    await assertUser(STAFF);
+    await assertUser(PIPELINE);
     const db = await getDb();
     await db.delete(users).where(and(eq(users.customerId, customerId), eq(users.role, "customer")));
     revalidatePath("/admin/customers");

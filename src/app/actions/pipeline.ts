@@ -41,7 +41,8 @@ export async function setSalesStage(customerId: string, stage: string) {
 
 /**
  * Adds a customer from the pipeline, or edits its contact details and stage. Deliberately leaves
- * prices, payment terms, approval and logins alone: those stay with the office (Customers page).
+ * prices, payment terms, approval and logins alone: prices, terms and approval stay with the
+ * office; portal logins are set on the Customers page (sales staff too).
  */
 export async function saveLead(_prev: unknown, form: FormData) {
   return attempt(async () => {
