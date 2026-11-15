@@ -63,6 +63,10 @@ export type CustomerMapProps = {
   pins: import("@/lib/customer-map").CustomerPin[];
   /** The map re-frames to `fitPins` whenever this changes (a filter or an area was picked). */
   fitKey: string;
-  fitPins: import("@/lib/customer-map").CustomerPin[];
+  fitPins: { lat: number; lng: number }[];
+  /** Lines drawn under the pins: the delivery runs. */
+  lines?: { key: string; color: string; path: [number, number][] }[];
+  /** Where the person using the map is (a blue dot). */
+  me?: { lat: number; lng: number } | null;
   className?: string;
 };

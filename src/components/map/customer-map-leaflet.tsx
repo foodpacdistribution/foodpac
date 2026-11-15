@@ -3,18 +3,18 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { clusterPoints, type CustomerPin, samePlace } from "@/lib/customer-map";
-import { bubbleHtml, CustomerPopup, DEFAULT_CENTER, NAMES_FROM_ZOOM, PIN, pinHtml } from "./customer-map-parts";
+import { bubbleHtml, CustomerPopup, DEFAULT_CENTER, ME_HTML, NAMES_FROM_ZOOM, PIN, pinHtml } from "./customer-map-parts";
 import type { CustomerMapProps } from "./types";
 
 const TILE_URL = process.env.NEXT_PUBLIC_TILE_URL ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE_ATTRIBUTION =
   process.env.NEXT_PUBLIC_TILE_ATTRIBUTION ?? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
-const bounds = (pins: CustomerPin[]) => L.latLngBounds(pins.map((p) => [p.lat, p.lng] as [number, number]));
+const bounds = (pins: { lat: number; lng: number }[]) => L.latLngBounds(pins.map((p) => [p.lat, p.lng] as [number, number]));
 
-function Fit({ pins, fitKey }: { pins: CustomerPin[]; fitKey: string }) {
+function Fit({ pins, fitKey }: { pins: { lat: number; lng: number }[]; fitKey: string }) {
   const map = useMap();
   useEffect(() => {
     if (!pins.length) return;
@@ -82,14 +82,20 @@ function InvalidateOnResize() {
   return null;
 }
 
-export default function CustomerMapLeaflet({ pins, fitKey, fitPins, className }: CustomerMapProps) {
+const meIcon = L.divIcon({ className: "", html: ME_HTML, iconSize: [18, 18], iconAnchor: [9, 9] });
+
+export default function CustomerMapLeaflet({ pins, fitKey, fitPins, lines = [], me, className }: CustomerMapProps) {
   const center = fitPins[0] ?? DEFAULT_CENTER;
   return (
     <MapContainer center={[center.lat, center.lng]} zoom={10} scrollWheelZoom className={className} style={{ height: "100%", width: "100%" }}>
       <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
       <Fit pins={fitPins} fitKey={fitKey} />
       <InvalidateOnResize />
+      {lines.map((l) => (
+        <Polyline key={l.key} positions={l.path} pathOptions={{ color: l.color, weight: 4, opacity: 0.55, lineJoin: "round" }} interactive={false} />
+      ))}
       <Clusters pins={pins} />
+      {me && <Marker position={[me.lat, me.lng]} icon={meIcon} title="You" zIndexOffset={2000} />}
     </MapContainer>
   );
 }

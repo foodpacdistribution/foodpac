@@ -5,6 +5,9 @@ import { useT } from "@/components/i18n";
 import { bubbleStyle, type CustomerPin, STAGE_COLOR } from "@/lib/customer-map";
 import { STAGE_INFO } from "@/lib/sales-stage";
 
+/** The "you are here" dot. */
+export const ME_HTML = '<div style="width:18px;height:18px;border-radius:9999px;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.25)"></div>';
+
 /** Map start when there's nothing to frame yet (Brisbane). */
 export const DEFAULT_CENTER = { lat: -27.47, lng: 153.02 };
 
@@ -33,7 +36,7 @@ export const NAMES_FROM_ZOOM = 15;
  * position is approximate, and the customer's name beside it when zoomed in.
  */
 export function pinHtml(p: CustomerPin, withName: boolean) {
-  const c = STAGE_COLOR[p.stage];
+  const c = p.color ?? STAGE_COLOR[p.stage];
   const cls = `cust-pin${p.active ? "" : " is-inactive"}`;
   const rough = p.approximate ? '<span class="cust-pin-rough">?</span>' : "";
   const name = withName ? `<span class="cust-pin-name">${escapeHtml(p.name)}</span>` : "";
@@ -64,6 +67,7 @@ export function CustomerPopup({ pins }: { pins: CustomerPin[] }) {
             {!p.active && <span className="text-slate-400">· {tr("Inactive")}</span>}
           </p>
           <p className="text-slate-500">{p.address}</p>
+          {p.note && <p className="font-medium text-red-700">{p.note}</p>}
           {p.approximate && <p className="text-xs text-amber-700">{tr("Placed roughly: check the address")}</p>}
           {p.phone && (
             <a href={`tel:${p.phone.replace(/[^\d+]/g, "")}`} className="font-medium text-blue-600">

@@ -1,9 +1,9 @@
 "use client";
 
-import { AdvancedMarker, AdvancedMarkerAnchorPoint, APIProvider, InfoWindow, Map, useMap } from "@vis.gl/react-google-maps";
+import { AdvancedMarker, AdvancedMarkerAnchorPoint, APIProvider, InfoWindow, Map, Polyline, useMap } from "@vis.gl/react-google-maps";
 import { useEffect, useMemo, useState } from "react";
 import { clusterPoints, type CustomerPin, samePlace } from "@/lib/customer-map";
-import { bubbleHtml, CustomerPopup, DEFAULT_CENTER, NAMES_FROM_ZOOM, PIN, pinHtml } from "./customer-map-parts";
+import { bubbleHtml, CustomerPopup, DEFAULT_CENTER, ME_HTML, NAMES_FROM_ZOOM, PIN, pinHtml } from "./customer-map-parts";
 import type { CustomerMapProps } from "./types";
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
@@ -11,13 +11,13 @@ const MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID ?? "DEMO_MAP_ID";
 
 type Selected = { lat: number; lng: number; pins: CustomerPin[]; offset: number } | null;
 
-function boundsOf(pins: CustomerPin[]) {
+function boundsOf(pins: { lat: number; lng: number }[]) {
   const b = new google.maps.LatLngBounds();
   pins.forEach((p) => b.extend({ lat: p.lat, lng: p.lng }));
   return b;
 }
 
-function Fit({ pins, fitKey }: { pins: CustomerPin[]; fitKey: string }) {
+function Fit({ pins, fitKey }: { pins: { lat: number; lng: number }[]; fitKey: string }) {
   const map = useMap();
   useEffect(() => {
     if (!map || !pins.length) return;
@@ -82,7 +82,7 @@ function Clusters({ pins, onSelect }: { pins: CustomerPin[]; onSelect: (s: Selec
   });
 }
 
-export default function CustomerMapGoogle({ pins, fitKey, fitPins, className }: CustomerMapProps) {
+export default function CustomerMapGoogle({ pins, fitKey, fitPins, lines = [], me, className }: CustomerMapProps) {
   const [selected, setSelected] = useState<Selected>(null);
   const center = fitPins[0] ? { lat: fitPins[0].lat, lng: fitPins[0].lng } : DEFAULT_CENTER;
   return (
@@ -101,7 +101,15 @@ export default function CustomerMapGoogle({ pins, fitKey, fitPins, className }: 
         onClick={() => setSelected(null)}
       >
         <Fit pins={fitPins} fitKey={fitKey} />
+        {lines.map((l) => (
+          <Polyline key={l.key} path={l.path.map(([lat, lng]) => ({ lat, lng }))} strokeColor={l.color} strokeWeight={4} strokeOpacity={0.55} zIndex={1} clickable={false} />
+        ))}
         <Clusters pins={pins} onSelect={setSelected} />
+        {me && (
+          <AdvancedMarker position={me} anchorPoint={AdvancedMarkerAnchorPoint.CENTER} zIndex={2000} title="You">
+            <div dangerouslySetInnerHTML={{ __html: ME_HTML }} />
+          </AdvancedMarker>
+        )}
         {selected && (
           <InfoWindow position={{ lat: selected.lat, lng: selected.lng }} pixelOffset={[0, -selected.offset]} onCloseClick={() => setSelected(null)} headerDisabled>
             <CustomerPopup pins={selected.pins} />

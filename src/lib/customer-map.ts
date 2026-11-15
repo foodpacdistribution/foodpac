@@ -18,6 +18,10 @@ export type CustomerPin = {
   areaKey: string;
   /** Where clicking the customer goes; null = no page this user can open. */
   href: string | null;
+  /** Pin colour, when the map isn't colouring by sales stage (e.g. the follow-up view). */
+  color?: string;
+  /** A line under the name in the popup, e.g. why they're due a call. */
+  note?: string | null;
 };
 
 /** Pin colour for each sales stage (the pipeline's dots, as hex for the map). */
@@ -37,6 +41,42 @@ const SUBURB = new RegExp(`(?:^|,)\\s*([^,\\d]+?)\\s+(?:${STATES})\\.?,?\\s*(\\d
 const POSTCODE = new RegExp(`\\b(?:${STATES}|${STATE_NAMES})\\b\\.?,?\\s*(\\d{4})\\b`, "i");
 
 export const UNKNOWN_AREA = "?";
+
+/** Most stops in one visit plan: Google Maps directions take a destination and nine stops on the way. */
+export const MAX_VISITS = 10;
+
+/** Pin colours in the follow-up view: due a call, in talks, buying normally, a lead not yet buying. */
+export const FOLLOW_COLOR = { due: "#dc2626", talks: "#f59e0b", fine: "#10b981", lead: "#94a3b8" } as const;
+export type FollowState = keyof typeof FOLLOW_COLOR;
+
+/** Weekday colours for the delivery runs (0 = Sunday). */
+export const WEEKDAY_COLOR = ["#a855f7", "#2563eb", "#0891b2", "#16a34a", "#ca8a04", "#ea580c", "#db2777"];
+export const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Straight-line distance in metres. */
+export function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const rad = (x: number) => (x * Math.PI) / 180;
+  const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
+
+/** One area's numbers, for ranking which areas are worth a visit. */
+export type AreaNumbers = { due: number; talks: number; leads: number; won: number; last90Cents: number; prev90Cents: number };
+
+/** Change in sales against the 90 days before, as a whole percentage; null without enough to compare. */
+export function salesTrend(a: Pick<AreaNumbers, "last90Cents" | "prev90Cents">) {
+  if (a.prev90Cents < 20_000) return null;
+  return Math.round(((a.last90Cents - a.prev90Cents) / a.prev90Cents) * 100);
+}
+
+/**
+ * How worth a visit an area is today: customers due a call count most, then ones in talks, then
+ * new leads; sales falling noticeably adds a little. Higher first.
+ */
+export function visitScore(a: AreaNumbers) {
+  const trend = salesTrend(a);
+  return a.due * 3 + a.talks * 2 + a.leads + (trend !== null && trend <= -15 ? 2 : 0);
+}
 
 const titleCase = (s: string) => s.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase());
 
