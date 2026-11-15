@@ -201,6 +201,7 @@ export async function checkout(_prev: unknown, form: FormData) {
         windowStartMin,
         windowEndMin,
         notes: str(form, "notes", 1000),
+        useCredit: form.get("useCredit") === "on",
       },
       s,
       stripeEnabled(),
@@ -221,7 +222,7 @@ export async function checkout(_prev: unknown, form: FormData) {
     if (so.paymentMethod === "card" && so.paymentStatus !== "paid") {
       const h = await headers();
       const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
-      const session = await createCheckoutSession({ id: so.id, number: so.number, totalCents: so.totalCents, email: customer.email ?? user.email }, origin);
+      const session = await createCheckoutSession({ id: so.id, number: so.number, totalCents: so.totalCents - so.creditAppliedCents, email: customer.email ?? user.email }, origin);
       await db.update(salesOrders).set({ stripeSessionId: session.id }).where(eq(salesOrders.id, so.id));
       redirect(session.url);
     }
@@ -313,7 +314,7 @@ export async function payPendingOrder(salesOrderId: string) {
     if (!so || so.status !== "pending" || so.paymentMethod !== "card" || so.paymentStatus === "paid") throw new UserError("This order doesn't need paying.");
     const h = await headers();
     const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
-    const session = await createCheckoutSession({ id: so.id, number: so.number, totalCents: so.totalCents, email: customer.email ?? user.email }, origin);
+    const session = await createCheckoutSession({ id: so.id, number: so.number, totalCents: so.totalCents - so.creditAppliedCents, email: customer.email ?? user.email }, origin);
     await db.update(salesOrders).set({ stripeSessionId: session.id }).where(eq(salesOrders.id, so.id));
     return { data: { redirect: session.url } };
   });

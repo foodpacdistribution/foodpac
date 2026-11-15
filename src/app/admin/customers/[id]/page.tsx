@@ -47,7 +47,7 @@ export const metadata: Metadata = { title: "Customer" };
 /**
  * One customer, everything about them: details and account, the numbers that matter, and their
  * history (orders, deliveries, quotes, returns, store credit, what they buy). Sales staff see it
- * too, without the office-only parts (prices, invoices, delivery photos, credit adjustments).
+ * too, without the office-only parts (prices, invoices, delivery photos); they can give store credit.
  */
 export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireUser(PIPELINE);
@@ -59,6 +59,8 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const p = await customerProfile(db, id, today);
   if (!p) notFound();
   const office = me.role !== "sales";
+  // Admins and sales staff give store credit (and take back credit given in error).
+  const canCredit = me.role === "admin" || me.role === "sales";
   const c = p.customer;
 
   const date = new Intl.DateTimeFormat("en-AU", { timeZone: s.timezone, day: "numeric", month: "short", year: "numeric" });
@@ -84,7 +86,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <CardHeader
             title={<T>{"Store credit"}</T>}
             subtitle={<T vars={{ balance: money(p.account.balance), issued: money(p.account.totalIssued), used: money(p.account.totalUsed) }}>{"{balance} available · {issued} given in total · {used} used"}</T>}
-            action={me.role === "admin" ? <CreditAdjust customerId={c.id} /> : undefined}
+            action={canCredit ? <CreditAdjust customerId={c.id} /> : undefined}
           />
           <CreditHistory staff={office} rows={p.credit.map((t) => ({ ...t, when: at(t.createdAt) }))} />
         </Card>
@@ -221,7 +223,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           </Card>
 
           <Card>
-            <CardHeader title={<T>{"Account"}</T>} />
+            <CardHeader title={<T>{"Account"}</T>} action={canCredit ? <CreditAdjust customerId={c.id} /> : undefined} />
             <dl className="divide-y divide-line text-sm">
               <Row icon={Wallet} label="Payment terms">
                 <T>{PAYMENT_TERMS_LABEL[c.paymentTerms]}</T>

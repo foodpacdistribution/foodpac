@@ -2,6 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentCustomer } from "@/lib/auth/dal";
+import { creditBalance } from "@/lib/credit";
 import { getDb } from "@/lib/db";
 import { customerAddresses } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
@@ -17,11 +18,12 @@ export default async function CheckoutPage() {
   if (!viewer) redirect("/login?next=%2Fcart");
   const { customer: c, user } = viewer;
   const db = await getDb();
-  const [lines, s, addresses, balance] = await Promise.all([
+  const [lines, s, addresses, balance, storeCredit] = await Promise.all([
     getCart(db, c),
     getSettings(db),
     db.select().from(customerAddresses).where(eq(customerAddresses.customerId, c.id)).orderBy(asc(customerAddresses.createdAt)),
     openBalance(db, c.id),
+    creditBalance(db, c.id),
   ]);
   if (!lines.length || lines.some((l) => l.issue) || !canSeePrices(c)) redirect("/cart");
   const q = quote(lines, s);
@@ -38,6 +40,7 @@ export default async function CheckoutPage() {
         methods={allowedMethods(c, stripeEnabled())}
         terms={c.paymentTerms}
         creditLeftCents={c.creditLimitCents === null ? null : c.creditLimitCents - balance}
+        storeCreditCents={Math.round(storeCredit * 100)}
         bankDetails={s.bankDetails}
         addresses={addresses.map((a) => ({ id: a.id, label: a.label, recipient: a.recipient, phone: a.phone, address: a.address, instructions: a.instructions }))}
         defaults={{ recipient: user.name, phone: c.phone ?? "", address: c.address ?? "" }}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CalendarDays, CreditCard, Landmark, Receipt } from "lucide-react";
+import { Building2, CalendarDays, Coins, CreditCard, Landmark, Receipt } from "lucide-react";
 import { useState } from "react";
 import { checkout } from "@/app/actions/shop";
 import { FormError, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
@@ -25,6 +25,8 @@ export function CheckoutForm(props: {
   methods: PaymentMethod[];
   terms: PaymentTerms;
   creditLeftCents: number | null;
+  /** The customer's store credit; they can put it towards this order. */
+  storeCreditCents: number;
   bankDetails: string;
   addresses: Address[];
   defaults: { recipient: string; phone: string; address: string };
@@ -36,7 +38,12 @@ export function CheckoutForm(props: {
   const fill = addr ?? { recipient: props.defaults.recipient, phone: props.defaults.phone, address: props.defaults.address, instructions: "" };
 
 
-  const overCredit = method === "invoice" && props.creditLeftCents !== null && props.quote.totalCents > props.creditLeftCents;
+  const [useCredit, setUseCredit] = useState(props.storeCreditCents > 0);
+  const creditCents = useCredit ? Math.min(props.storeCreditCents, props.quote.totalCents) : 0;
+  const toPayCents = props.quote.totalCents - creditCents;
+  // Store credit covers it all: nothing to choose, nothing to pay.
+  const covered = creditCents > 0 && toPayCents === 0;
+  const overCredit = !covered && method === "invoice" && props.creditLeftCents !== null && toPayCents > props.creditLeftCents;
 
   return (
     <KeptForm form={form} className="mt-5 grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -101,28 +108,49 @@ export function CheckoutForm(props: {
         </Step>
 
         <Step n={3} title={tr("Payment")} icon={CreditCard}>
-          <div className="space-y-2">
-            {props.methods.map((m) => {
-              const Icon = METHOD_ICON[m];
-              return (
-                <label key={m} className={cx("flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-4 py-3", method === m ? "border-leaf-700 bg-leaf-50" : "border-leaf-950/15")}>
-                  <input type="radio" name="method" value={m} checked={method === m} onChange={() => setMethod(m)} className="accent-leaf-700" />
-                  <Icon className="size-4 text-leaf-700" />
-                  <span className="flex-1 text-sm">
-                    <span className="font-semibold">{PAYMENT_METHOD_LABEL[m]}</span>
-                    <span className="block text-xs text-leaf-900/60">
-                      {m === "card"
-                        ? tr("Pay securely with Stripe. Your order is confirmed once payment goes through.")
-                        : m === "bank_transfer"
-                          ? tr("Confirmed now; please pay by bank transfer using your order number.")
-                          : `${PAYMENT_TERMS_LABEL[props.terms]} from delivery.${props.creditLeftCents !== null ? ` Credit available ${aud(Math.max(0, props.creditLeftCents))}.` : ""}`}
+          {props.storeCreditCents > 0 && (
+            <label className={cx("mb-3 flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3", useCredit ? "border-leaf-700 bg-leaf-50" : "border-leaf-950/15 bg-white")}>
+              <input type="checkbox" name="useCredit" checked={useCredit} onChange={(e) => setUseCredit(e.target.checked)} className="size-4 accent-leaf-700" />
+              <Coins className="size-4 text-leaf-700" />
+              <span className="flex-1 text-sm">
+                <span className="font-semibold">{tr("Use my store credit")}</span>
+                <span className="block text-xs text-leaf-900/60">
+                  {tr("{amount} available", { amount: aud(props.storeCreditCents) })}
+                  {useCredit && ` · ${tr(covered ? "covers this whole order" : "{amount} comes off this order", { amount: aud(creditCents) })}`}
+                </span>
+              </span>
+            </label>
+          )}
+          {covered ? (
+            <>
+              {/* Fully paid with credit: a method still goes with the form, but there's nothing to choose. */}
+              <input type="hidden" name="method" value={props.methods.includes("bank_transfer") ? "bank_transfer" : props.methods[0]} />
+              <p className="rounded-xl bg-leaf-50 px-4 py-3 text-sm text-leaf-900">{tr("Your store credit pays for this order. There's nothing more to pay.")}</p>
+            </>
+          ) : (
+            <div className="space-y-2">
+              {props.methods.map((m) => {
+                const Icon = METHOD_ICON[m];
+                return (
+                  <label key={m} className={cx("flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-4 py-3", method === m ? "border-leaf-700 bg-leaf-50" : "border-leaf-950/15")}>
+                    <input type="radio" name="method" value={m} checked={method === m} onChange={() => setMethod(m)} className="accent-leaf-700" />
+                    <Icon className="size-4 text-leaf-700" />
+                    <span className="flex-1 text-sm">
+                      <span className="font-semibold">{PAYMENT_METHOD_LABEL[m]}</span>
+                      <span className="block text-xs text-leaf-900/60">
+                        {m === "card"
+                          ? tr("Pay securely with Stripe. Your order is confirmed once payment goes through.")
+                          : m === "bank_transfer"
+                            ? tr("Confirmed now; please pay by bank transfer using your order number.")
+                            : `${PAYMENT_TERMS_LABEL[props.terms]} from delivery.${props.creditLeftCents !== null ? ` Credit available ${aud(Math.max(0, props.creditLeftCents))}.` : ""}`}
+                      </span>
                     </span>
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          {method === "bank_transfer" && props.bankDetails && <p className="mt-3 rounded-xl bg-[#f5f1e8] p-3 text-xs whitespace-pre-wrap">{props.bankDetails}</p>}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+          {!covered && method === "bank_transfer" && props.bankDetails && <p className="mt-3 rounded-xl bg-[#f5f1e8] p-3 text-xs whitespace-pre-wrap">{props.bankDetails}</p>}
           {overCredit && <p className="mt-3 text-sm text-red-700">{tr("This order is over your available credit. Choose another payment method.")}</p>}
         </Step>
 
@@ -163,12 +191,24 @@ export function CheckoutForm(props: {
             <dt>{tr("Total")}</dt>
             <dd className="tabular-nums">{aud(props.quote.totalCents)}</dd>
           </div>
+          {creditCents > 0 && (
+            <>
+              <div className="flex justify-between text-leaf-700">
+                <dt>{tr("Store credit")}</dt>
+                <dd className="tabular-nums">−{aud(creditCents)}</dd>
+              </div>
+              <div className="flex justify-between font-semibold text-leaf-950">
+                <dt>{tr("To pay")}</dt>
+                <dd className="tabular-nums">{aud(toPayCents)}</dd>
+              </div>
+            </>
+          )}
         </dl>
         <div className="mt-4">
           <FormError message={state && !state.ok ? state.error : null} />
         </div>
         <SubmitButton size="lg" disabled={overCredit} pendingText={tr("Placing order…")} className="mt-3 w-full rounded-md bg-tomato hover:bg-tomato-dark">
-          {method === "card" ? tr("Continue to payment") : tr("Place order")}
+          {method === "card" && !covered ? tr("Continue to payment") : tr("Place order")}
         </SubmitButton>
         <p className="mt-2 text-center text-[11px] text-leaf-900/50">{tr("Prices, stock and totals are checked again when you place the order.")}</p>
       </aside>

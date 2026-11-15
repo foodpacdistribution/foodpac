@@ -54,7 +54,7 @@ export default async function InvoicesPage() {
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4">
             <h2 className="font-display text-lg font-semibold"><T>{"Store credit"}</T></h2>
             <p className="text-sm text-leaf-900/70">
-              <T vars={{ amount: money(credit.balance) }}>{"{amount} available"}</T> · <T>{"We take it off your next order when you ask us to."}</T>
+              <T vars={{ amount: money(credit.balance) }}>{"{amount} available"}</T> · <T>{"Use it at checkout on your next order."}</T>
             </p>
           </div>
           <CreditHistory staff={false} rows={creditRows.map((t) => ({ ...t, by: null, when: fmt.format(t.createdAt) }))} />

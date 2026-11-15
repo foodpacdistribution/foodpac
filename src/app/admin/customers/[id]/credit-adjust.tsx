@@ -1,5 +1,6 @@
 "use client";
 
+import { Coins } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { adjustCustomerCredit } from "@/app/actions/customer-returns";
@@ -8,7 +9,7 @@ import { useT } from "@/components/i18n";
 import { btn, Field, inputCls } from "@/components/ui";
 import type { ActionResult } from "@/lib/action";
 
-/** Admin: give store credit by hand (goodwill, promotion) or take back credit given in error. Always with a reason. */
+/** Admins and sales staff: give store credit by hand (to order with, goodwill, promotion) or take back credit given in error. Always with a reason. */
 export function CreditAdjust({ customerId }: { customerId: string }) {
   const tr = useT();
   const router = useRouter();
@@ -24,14 +25,14 @@ export function CreditAdjust({ customerId }: { customerId: string }) {
   return (
     <>
       <button type="button" className={btn("secondary", "sm")} onClick={() => setOpen(true)}>
-        {tr("Adjust credit")}
+        <Coins className="size-3.5" /> {tr("Adjust credit")}
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={tr("Adjust store credit")}>
         <KeptForm form={form} className="space-y-3">
           <input type="hidden" name="customerId" value={customerId} />
           <Field label="Change">
             <select name="kind" defaultValue="manual_credit" className={inputCls}>
-              <option value="manual_credit">{tr("Give credit (goodwill, correction)")}</option>
+              <option value="manual_credit">{tr("Give credit (to order with, goodwill, correction)")}</option>
               <option value="promotion_credit">{tr("Give promotion credit")}</option>
               <option value="credit_reversal">{tr("Take back credit given in error")}</option>
             </select>

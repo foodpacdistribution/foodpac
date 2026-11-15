@@ -74,11 +74,10 @@ export async function cancelReturnForCustomer(returnId: string) {
   });
 }
 
-/** Admin only: give credit (goodwill / promotion) or take back credit given in error. */
+/** Admins and sales staff: give credit (goodwill / promotion / to order with) or take back credit given in error. */
 export async function adjustCustomerCredit(_prev: unknown, form: FormData) {
   return attempt(async () => {
-    const user = await assertUser(STAFF);
-    if (user.role !== "admin") throw new UserError("Only an admin can give or take back store credit by hand.");
+    const user = await assertUser(["admin", "sales"]);
     const kind = String(form.get("kind"));
     if (kind !== "manual_credit" && kind !== "promotion_credit" && kind !== "credit_reversal") throw new UserError("Choose what kind of change this is.");
     const customerId = id(form.get("customerId"));

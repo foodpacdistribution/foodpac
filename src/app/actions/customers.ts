@@ -1,34 +1,33 @@
 "use server";
 
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { attempt } from "@/lib/action";
 import { assertUser, PIPELINE, STAFF } from "@/lib/auth/dal";
-import { hashPassword } from "@/lib/auth/password";
+import { setCustomerLogin } from "@/lib/customer-account";
 import { codeTaken, syncCustomerCodes } from "@/lib/customer-code";
 import { cleanCode, type CustomerImportRow, MAX_CUSTOMER_ROWS } from "@/lib/customer-import";
 import { applyCustomerImport, type CustomerImportResult, linkOrdersToCustomer, removeCustomer } from "@/lib/customers";
 import { locateCustomersLater } from "@/lib/customer-locations";
-import { getDb } from "@/lib/db";
+import { type DB, getDb } from "@/lib/db";
 import { accountApproved } from "@/lib/notify";
 import { customers, type PaymentTerms, users } from "@/lib/db/schema";
 import { parseDollars } from "@/lib/money";
 import { isSalesStage } from "@/lib/sales-stage";
 import { UserError } from "@/lib/planning";
 
-/** What only the office sets: account code, payment terms, credit limit, approval to order, and switching a customer off. */
-const OFFICE_ONLY = ["code", "paymentTerms", "creditLimitCents", "approved", "active"] as const;
+/** What only the office sets: the account code and switching a customer off. Sales staff open accounts, so terms, credit limit and approval are theirs too. */
+const OFFICE_ONLY = ["code", "active"] as const;
 
 export async function saveCustomer(_prev: unknown, form: FormData) {
   return attempt(async () => {
     const me = await assertUser(PIPELINE);
-    // Sales staff edit their customers' details and portal logins; they add customers from the pipeline.
+    // Sales staff add and edit customers, terms, credit and logins included; code and active stay with the office.
     const sales = me.role === "sales";
     const db = await getDb();
     const get = (k: string) => String(form.get(k) ?? "").trim();
     const id = get("id") || null;
-    if (sales && !id) throw new UserError("Add new customers from the Sales Pipeline.");
     const name = get("name");
     if (!name) throw new UserError("Business name is required.");
     // Blank: a new customer gets the next C-number; an existing one keeps its code.
@@ -53,7 +52,7 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
     // From sales staff the office's fields are ignored, whatever the form sent.
     const values = sales ? Object.fromEntries(Object.entries(all).filter(([k]) => !(OFFICE_ONLY as readonly string[]).includes(k))) as Omit<typeof all, (typeof OFFICE_ONLY)[number]> : all;
     const stage = get("salesStage");
-    if (!sales && get("creditLimit") && all.creditLimitCents === null) throw new UserError("Credit limit must be an amount, e.g. 5000.");
+    if (get("creditLimit") && all.creditLimitCents === null) throw new UserError("Credit limit must be an amount, e.g. 5000.");
 
     const loginEmail = get("loginEmail").toLowerCase();
     const loginName = get("loginName") || name;
@@ -68,25 +67,10 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
     const customerId = await db.transaction(async (tx) => {
       let customerId = id;
       if (id) await tx.update(customers).set({ ...values, ...stageFields, ...repFields }).where(eq(customers.id, id));
-      else customerId = (await tx.insert(customers).values({ ...values, ...stageFields }).returning({ id: customers.id }))[0].id;
+      // A customer a salesperson adds is theirs to look after.
+      else customerId = (await tx.insert(customers).values({ ...values, ...stageFields, ...(sales ? { salesRepId: me.id } : {}) }).returning({ id: customers.id }))[0].id;
 
-      if (!loginEmail) return customerId!;
-      const [login] = await tx.select().from(users).where(eq(users.customerId, customerId!)).limit(1);
-      const [taken] = await tx
-        .select({ id: users.id })
-        .from(users)
-        .where(and(eq(users.email, loginEmail), ...(login ? [ne(users.id, login.id)] : [])))
-        .limit(1);
-      if (taken) throw new UserError("That email is already used by another login.");
-      if (login) {
-        await tx
-          .update(users)
-          .set({ email: loginEmail, name: loginName, ...(password ? { passwordHash: await hashPassword(password) } : {}) })
-          .where(eq(users.id, login.id));
-      } else {
-        if (!password) throw new UserError("Set a password to create the customer's portal login.");
-        await tx.insert(users).values({ email: loginEmail, name: loginName, role: "customer", customerId, passwordHash: await hashPassword(password) });
-      }
+      if (loginEmail) await setCustomerLogin(tx as unknown as DB, customerId!, { email: loginEmail, name: loginName, password });
       return customerId!;
     }).catch((err) => codeTaken(err, code));
 

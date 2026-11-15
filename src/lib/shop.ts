@@ -22,7 +22,7 @@ import { orderConfirmed } from "./notify";
 import { UserError } from "./planning";
 import { fillWaiting, returnStock } from "./stock-allocation";
 import { withStockContext } from "./stock-ledger";
-import { releaseOrderCredit } from "./credit";
+import { applyCreditToOrder, creditBalance, releaseOrderCredit } from "./credit";
 import { nowSecondsIn, todayIn } from "./time";
 
 type Settings = typeof settings.$inferSelect;
@@ -390,6 +390,8 @@ export type Checkout = {
   windowStartMin: number | null;
   windowEndMin: number | null;
   notes: string | null;
+  /** Take what the order costs off the customer's store credit first (as much as they have). */
+  useCredit?: boolean;
 };
 
 export const dueIn = { prepay: 0, net7: 7, net14: 14, net30: 30 } as const;
@@ -415,9 +417,15 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
   const totals = quote(lines, s);
   if (totals.belowMinimum) throw new UserError(`The minimum order is $${(s.minOrderCents / 100).toFixed(2)} before GST.`);
 
-  if (c.method === "invoice" && customer.creditLimitCents !== null) {
+  // Store credit pays first. When it covers everything there's nothing to charge a card for, so
+  // the order is confirmed straight away (and recorded as a bank-transfer order, already paid).
+  const creditCents = c.useCredit ? Math.min(Math.round((await creditBalance(db, customer.id)) * 100), totals.totalCents) : 0;
+  const toPayCents = totals.totalCents - creditCents;
+  const method: PaymentMethod = toPayCents === 0 && c.method === "card" ? "bank_transfer" : c.method;
+
+  if (method === "invoice" && customer.creditLimitCents !== null) {
     const balance = await openBalance(db, customer.id);
-    if (balance + totals.totalCents > customer.creditLimitCents) {
+    if (balance + toPayCents > customer.creditLimitCents) {
       throw new UserError("This order would go over your account's credit limit. Please pay by card or bank transfer, or contact us.");
     }
   }
@@ -433,8 +441,8 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
         if (!ok.length) throw new UserError(`${l.name} just sold out. Please update your cart.`);
       }
     });
-    const confirmed = c.method !== "card";
-    const [so] = await tx
+    const confirmed = method !== "card";
+    const [placed] = await tx
       .insert(salesOrders)
       .values({
         number: sql`'FP-' || nextval('${sql.raw(salesOrderNo.seqName!)}')`,
@@ -442,7 +450,7 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
         userId,
         status: confirmed ? "confirmed" : "pending",
         paymentStatus: "unpaid",
-        paymentMethod: c.method,
+        paymentMethod: method,
         subtotalCents: totals.subtotalCents,
         deliveryFeeCents: totals.deliveryFeeCents,
         gstCents: totals.gstCents,
@@ -455,10 +463,16 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
         windowStartMin: c.windowStartMin,
         windowEndMin: c.windowEndMin,
         notes: c.notes,
-        dueDate: c.method === "invoice" ? shiftDate(c.deliveryDate, dueIn[customer.paymentTerms]) : null,
+        dueDate: method === "invoice" ? shiftDate(c.deliveryDate, dueIn[customer.paymentTerms]) : null,
         idempotencyKey: c.idempotencyKey,
       })
       .returning();
+    // In the same transaction: if the credit was spent elsewhere meanwhile, no order is placed.
+    let so = placed;
+    if (creditCents > 0) {
+      await applyCreditToOrder(tx as unknown as DB, placed.id, creditCents, userId);
+      [so] = await tx.select().from(salesOrders).where(eq(salesOrders.id, placed.id));
+    }
     await tx.insert(salesOrderItems).values(
       lines.map((l) => ({
         salesOrderId: so.id,

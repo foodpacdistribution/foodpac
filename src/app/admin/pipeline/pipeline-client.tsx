@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, BellRing, Check, Clock, Mail, Pencil, Phone, Plus, Search, Target, UserRound } from "lucide-react";
+import { Bell, BellRing, Check, Clock, KeyRound, Mail, Pencil, Phone, Plus, Search, Store, Target, UserRound } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { markFollowedUp, saveLead, setFollowUp, setQuietDays, setSalesStage } from "@/app/actions/pipeline";
 import { AddressInput } from "@/components/address-input";
@@ -8,9 +8,10 @@ import { FormError, KeptForm, Modal, SubmitButton, Toast, type ToastMessage, use
 import { useT } from "@/components/i18n";
 import { btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import { prettyDate, shiftDate } from "@/lib/dates";
-import type { Role, SalesStage } from "@/lib/db/schema";
+import type { PaymentTerms, Role, SalesStage } from "@/lib/db/schema";
 import { daysBetween, type DueFollowUp, QUIET_CHOICES, REMIND_IN } from "@/lib/follow-up";
 import { SALES_STAGES, STAGE_INFO } from "@/lib/sales-stage";
+import { OpenAccountForm } from "./open-account-form";
 
 type Lead = {
   id: string;
@@ -18,7 +19,12 @@ type Lead = {
   phone: string | null;
   email: string | null;
   address: string | null;
+  abn: string | null;
   active: boolean;
+  approved: boolean;
+  paymentTerms: PaymentTerms;
+  creditLimitCents: number | null;
+  login: { email: string; name: string } | null;
   stage: SalesStage;
   stageAt: string;
   repId: string | null;
@@ -32,6 +38,9 @@ type Lead = {
 };
 
 type Tr = ReturnType<typeof useT>;
+
+/** Signed and set up: approved to order, with a login to order online. */
+const accountOpen = (c: Pick<Lead, "approved" | "login">) => c.approved && !!c.login;
 const shortDate = (d: string, tr: Tr) => tr(prettyDate(d, { weekday: "short", day: "numeric", month: "short" }));
 
 /** "today", "yesterday", "3 days ago", or the date once it's more than a fortnight back. */
@@ -53,6 +62,8 @@ function dueText(due: DueFollowUp, tr: Tr) {
 export function PipelineClient({ customers, me, today, quietDays }: { customers: Lead[]; me: { id: string; role: Role }; today: string; quietDays: number }) {
   const tr = useT();
   const [editing, setEditing] = useState<Lead | "new" | null>(null);
+  // The store whose account is being opened ("new" for one not on the pipeline yet).
+  const [opening, setOpening] = useState<Lead | "new" | null>(null);
   const [reminding, setReminding] = useState<Lead | null>(null);
   const [q, setQ] = useState("");
   const [stage, setStage] = useState<SalesStage | "all">("all");
@@ -107,6 +118,8 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
       const r = await setSalesStage(c.id, to);
       say(r);
       if (!r.ok) setMoved((m) => ({ ...m, [c.id]: from }));
+      // Just won a store that can't order yet: straight on to opening its account.
+      else if (to === "won" && !accountOpen(c)) setOpening({ ...c, stage: to });
     });
   };
   const followedUp = (c: Lead) => {
@@ -129,9 +142,14 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
         title={tr("Sales Pipeline")}
         subtitle={tr("Move each customer along as talks go: new customer, interested, in talks, won.")}
         actions={
-          <button className={btn("primary")} onClick={() => setEditing("new")}>
-            <Plus className="size-4" /> {tr("Add customer")}
-          </button>
+          <>
+            <button className={btn("secondary")} onClick={() => setEditing("new")}>
+              <Plus className="size-4" /> {tr("Add lead")}
+            </button>
+            <button className={btn("primary")} onClick={() => setOpening("new")}>
+              <Store className="size-4" /> {tr("Open account")}
+            </button>
+          </>
         }
       />
 
@@ -212,6 +230,12 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
                     )}
                     {!c.phone && !c.email && <span>{tr("No contact details")}</span>}
                   </p>
+                  {/* Won, but not set up to order yet. */}
+                  {c.stage === "won" && !accountOpen(c) && (
+                    <button onClick={() => setOpening(c)} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900 hover:underline">
+                      <KeyRound className="size-3" /> {tr("Finish opening the account")}
+                    </button>
+                  )}
                 </div>
                 <StageSelect value={c.stage} onChange={(to) => move(c, to)} label={tr("Stage for {name}", { name: c.name })} />
                 <FollowUpCell c={c} today={today} onClick={() => setReminding(c)} />
@@ -231,13 +255,32 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
         </Card>
       )}
 
-      <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? tr("Add customer") : tr("Edit customer")}>
+      <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? tr("Add lead") : tr("Edit customer")}>
         {editing !== null && (
           <LeadForm
             lead={editing === "new" ? null : editing}
             defaultStage={stage === "all" ? "new" : stage}
             onDone={(message) => {
               setEditing(null);
+              if (message) say({ ok: true, message });
+            }}
+            onOpenAccount={(lead) => {
+              setEditing(null);
+              setOpening(lead);
+            }}
+          />
+        )}
+      </Modal>
+      <Modal
+        open={opening !== null}
+        onClose={() => setOpening(null)}
+        title={opening === "new" || opening === null ? tr("Open an account") : tr("Open an account · {name}", { name: opening.name })}
+      >
+        {opening !== null && (
+          <OpenAccountForm
+            start={opening === "new" ? null : opening}
+            onClose={(message) => {
+              setOpening(null);
               if (message) say({ ok: true, message });
             }}
           />
@@ -513,7 +556,17 @@ function StageSelect({ value, onChange, label }: { value: SalesStage; onChange: 
   );
 }
 
-function LeadForm({ lead, defaultStage, onDone }: { lead: Lead | null; defaultStage: SalesStage; onDone: (message?: string) => void }) {
+function LeadForm({
+  lead,
+  defaultStage,
+  onDone,
+  onOpenAccount,
+}: {
+  lead: Lead | null;
+  defaultStage: SalesStage;
+  onDone: (message?: string) => void;
+  onOpenAccount: (lead: Lead) => void;
+}) {
   const tr = useT();
   const [state, form] = useKeptForm(saveLead);
   useEffect(() => {
@@ -549,9 +602,15 @@ function LeadForm({ lead, defaultStage, onDone }: { lead: Lead | null; defaultSt
       <Field label={tr("Address")}>
         <AddressInput name="address" defaultValue={lead?.address ?? ""} inputClassName={inputCls} />
       </Field>
-      <p className="text-xs text-slate-500">{tr("Prices, payment terms and portal logins are set by the office on the Customers page.")}</p>
       <FormError message={state && !state.ok ? state.error : null} />
-      <SubmitButton className="w-full">{lead ? tr("Save changes") : tr("Add customer")}</SubmitButton>
+      <SubmitButton className="w-full">{lead ? tr("Save changes") : tr("Add lead")}</SubmitButton>
+      {lead && !accountOpen(lead) ? (
+        <button type="button" className={btn("secondary", "md", "w-full")} onClick={() => onOpenAccount(lead)}>
+          <Store className="size-4" /> {tr("Signed? Open their account")}
+        </button>
+      ) : (
+        !lead && <p className="text-center text-xs text-slate-500">{tr("Already signed? Use Open account to set up their login, payment terms and credit.")}</p>
+      )}
     </KeptForm>
   );
 }

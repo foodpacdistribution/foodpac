@@ -1,15 +1,19 @@
 "use server";
 
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { attempt } from "@/lib/action";
 import { assertUser, PIPELINE } from "@/lib/auth/dal";
+import { assertNameFree, openAccount, PAYMENT_TERMS } from "@/lib/customer-account";
 import { linkOrdersToCustomer } from "@/lib/customers";
 import { locateCustomersLater } from "@/lib/customer-locations";
 import { getDb } from "@/lib/db";
-import { customers, settings } from "@/lib/db/schema";
+import { customers, type PaymentTerms, settings } from "@/lib/db/schema";
 import { prettyDate } from "@/lib/dates";
 import { QUIET_CHOICES } from "@/lib/follow-up";
+import { parseDollars } from "@/lib/money";
+import { accountApproved } from "@/lib/notify";
 import { getSettings, UserError } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
 import { isSalesStage, STAGE_INFO } from "@/lib/sales-stage";
@@ -57,13 +61,7 @@ export async function saveLead(_prev: unknown, form: FormData) {
     const email = get("email").toLowerCase() || null;
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new UserError("That email doesn't look right.");
 
-    // Orders are matched to customers by name, so two customers with one name would muddle them.
-    const [twin] = await db
-      .select({ name: customers.name })
-      .from(customers)
-      .where(and(sql`lower(${customers.name}) = lower(${name})`, ...(id ? [ne(customers.id, id)] : [])))
-      .limit(1);
-    if (twin) throw new UserError(`There's already a customer called “${twin.name}”. Search for it and update that one instead.`);
+    await assertNameFree(db, name, id);
 
     const details = { name, phone: get("phone") || null, email, address: get("address") || null };
     let customerId = id;
@@ -88,6 +86,53 @@ export async function saveLead(_prev: unknown, form: FormData) {
     locateCustomersLater();
     refresh();
     return { message: id ? `Customer updated: ${name}` : `Customer added: ${name}` };
+  });
+}
+
+export type OpenedAccount = { customerId: string; name: string; login: { email: string; password: string | null } | null; creditBalance: number | null };
+
+/**
+ * A store has signed: opens its trade account in one go (details, portal login, payment terms,
+ * credit limit and any starting store credit), approved and ready to order. Sales staff can do
+ * all of it. With "notify" on, the customer gets the "your account is ready" email.
+ */
+export async function openCustomerAccount(_prev: unknown, form: FormData) {
+  return attempt<OpenedAccount>(async () => {
+    const user = await assertUser(PIPELINE);
+    const db = await getDb();
+    const get = (k: string) => String(form.get(k) ?? "").trim();
+    const terms = get("paymentTerms") as PaymentTerms;
+    if (!PAYMENT_TERMS.includes(terms)) throw new UserError("Choose payment terms.");
+    const creditLimitCents = terms !== "prepay" && get("creditLimit") ? parseDollars(get("creditLimit")) : null;
+    if (terms !== "prepay" && get("creditLimit") && creditLimitCents === null) throw new UserError("Credit limit must be an amount, e.g. 5000.");
+    const startingCreditCents = get("startingCredit") ? parseDollars(get("startingCredit")) : 0;
+    if (startingCreditCents === null) throw new UserError("Store credit must be an amount, e.g. 200.");
+    const loginEmail = get("loginEmail").toLowerCase();
+    const password = get("password") || null;
+
+    const r = await openAccount(db, user, {
+      id: get("id") || null,
+      name: get("name"),
+      abn: get("abn"),
+      phone: get("phone"),
+      email: get("email"),
+      address: get("address"),
+      login: loginEmail ? { email: loginEmail, name: get("loginName"), password } : null,
+      paymentTerms: terms,
+      creditLimitCents,
+      startingCreditCents,
+      creditReason: get("creditReason"),
+    });
+
+    await linkOrdersToCustomer(db, { id: r.customerId, name: r.name, phone: r.phone });
+    if (form.get("notify") === "on" && loginEmail) after(() => accountApproved(r.customerId));
+    locateCustomersLater();
+    refresh();
+    revalidatePath(`/admin/customers/${r.customerId}`);
+    return {
+      message: `Account open: ${r.name}`,
+      data: { customerId: r.customerId, name: r.name, login: loginEmail ? { email: loginEmail, password } : null, creditBalance: r.creditBalance },
+    };
   });
 }
 

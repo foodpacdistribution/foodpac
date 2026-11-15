@@ -8,6 +8,7 @@ import { initials } from "@/lib/account";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { linkOrdersToCustomer } from "@/lib/customers";
 import { prettyDate } from "@/lib/dates";
+import { creditBalance } from "@/lib/credit";
 import { getDb } from "@/lib/db";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
@@ -35,7 +36,7 @@ export default async function PortalOverview() {
   const s = await getSettings(db);
   const site = siteInfo(s);
   const today = todayIn(s.timezone);
-  const [orders, again] = await Promise.all([listSalesOrders(db, c.id, 60), recentlyBought(db, c, 4)]);
+  const [orders, again, storeCredit] = await Promise.all([listSalesOrders(db, c.id, 60), recentlyBought(db, c, 4), creditBalance(db, c.id)]);
 
   const month = today.slice(0, 7);
   const monthOf = (d: Date) => todayIn(s.timezone, d).slice(0, 7);
@@ -67,6 +68,11 @@ export default async function PortalOverview() {
                 {c.approved ? <T>{"Approved trade account"}</T> : <T>{"Awaiting approval"}</T>}
               </span>
               <span className="rounded-full bg-white/10 px-2.5 py-1"><T>{PAYMENT_TERMS_LABEL[c.paymentTerms]}</T></span>
+              {storeCredit > 0 && (
+                <Link href="/portal/invoices" className="rounded-full bg-white/10 px-2.5 py-1 hover:bg-white/15">
+                  <T vars={{ amount: aud(Math.round(storeCredit * 100)) }}>{"Store credit {amount}"}</T>
+                </Link>
+              )}
             </div>
           </div>
           <div className="flex gap-2">

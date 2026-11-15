@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, FileText, KeyRound, Mail, MapPin, Package, Pencil, Phone, Plus, Search, Tags, Upload } from "lucide-react";
+import { Building2, FileText, KeyRound, Mail, MapPin, Package, Pencil, Phone, Plus, Search, Store, Tags, Upload } from "lucide-react";
 import Link from "@/components/link";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { deleteCustomer, removeCustomerLogin, saveCustomer } from "@/app/actions/customers";
@@ -12,6 +12,7 @@ import { SALES_STAGES, STAGE_INFO } from "@/lib/sales-stage";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { useT } from "@/components/i18n";
 import { AddressInput } from "@/components/address-input";
+import { OpenAccountForm } from "../pipeline/open-account-form";
 
 export type Customer = {
   id: string;
@@ -51,11 +52,12 @@ export function CustomersClient({
 }: {
   customers: Customer[];
   isAdmin: boolean;
-  /** Sales staff: edit details, stage and portal logins, but not terms, credit or approval; they add customers from the pipeline. */
+  /** Sales staff: open accounts and edit customers, terms and credit included; not the account code, switching customers off or importing. */
   sales?: boolean;
 }) {
   const tr = useT();
   const [editing, setEditing] = useState<Customer | "new" | null>(null);
+  const [opening, setOpening] = useState(false);
   // Sales staff: the customer whose stage they're changing.
   const [staging, setStaging] = useState<Customer | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -96,7 +98,11 @@ export function CustomersClient({
         title={tr("Customers")}
         subtitle={tr("Give a customer a portal login and they can follow their own orders, see the delivery photo and signature.")}
         actions={
-          sales ? undefined : <>
+          sales ? (
+            <button className={btn("primary")} onClick={() => setOpening(true)}>
+              <Store className="size-4" /> {tr("Open account")}
+            </button>
+          ) : <>
             <Link href="/admin/customers/import" className={btn("secondary")}>
               <Upload className="size-4" /> {tr("Import")}
             </Link>
@@ -257,6 +263,17 @@ export function CustomersClient({
         )}
       </Modal>
       <Toast toast={toast} onDone={() => setToast(null)} />
+      <Modal open={opening} onClose={() => setOpening(false)} title={tr("Open an account")}>
+        {opening && (
+          <OpenAccountForm
+            start={null}
+            onClose={(message) => {
+              setOpening(false);
+              if (message) setToast({ id: Date.now(), tone: "ok", text: message });
+            }}
+          />
+        )}
+      </Modal>
       <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? tr("Add customer") : tr("Edit customer")}>
         {editing !== null && (
           <CustomerForm
@@ -286,7 +303,7 @@ export function CustomerForm({
   sales: boolean;
 }) {
   const tr = useT();
-  // Sales staff see the office's fields but can't change them (the server ignores them from sales too).
+  // Sales staff see the account code and on/off switch but can't change them (the server ignores them from sales too).
   const office = sales ? tr("Set by the office.") : undefined;
   const [state, form] = useKeptForm(saveCustomer);
   const [removing, startRemove] = useTransition();
@@ -323,8 +340,8 @@ export function CustomerForm({
         </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <Field label={tr("Payment terms")} hint={office ?? tr("Invoice terms let them choose “Pay by invoice” at checkout.")}>
-          <select name="paymentTerms" disabled={sales} defaultValue={customer?.paymentTerms ?? "prepay"} className={inputCls}>
+        <Field label={tr("Payment terms")} hint={tr("Invoice terms let them choose “Pay by invoice” at checkout.")}>
+          <select name="paymentTerms" defaultValue={customer?.paymentTerms ?? "prepay"} className={inputCls}>
             {Object.entries(PAYMENT_TERMS_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
                 {v}
@@ -341,16 +358,16 @@ export function CustomerForm({
             ))}
           </select>
         </Field>
-        <Field label={tr("Credit limit ($, optional)")} hint={office ?? tr("Max unpaid balance on invoice orders.")}>
-          <input name="creditLimit" disabled={sales} inputMode="decimal" defaultValue={customer?.creditLimitCents != null ? (customer.creditLimitCents / 100).toFixed(0) : ""} className={inputCls} />
+        <Field label={tr("Credit limit ($, optional)")} hint={tr("Max unpaid balance on invoice orders.")}>
+          <input name="creditLimit" inputMode="decimal" defaultValue={customer?.creditLimitCents != null ? (customer.creditLimitCents / 100).toFixed(0) : ""} className={inputCls} />
         </Field>
       </div>
-      <div className={cx("flex flex-wrap items-center gap-x-5 gap-y-1 text-sm", sales && "text-slate-400")}>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="approved" disabled={sales} defaultChecked={customer?.approved ?? true} /> {" "}{tr("Approved to order")}</label>
-        <label className="flex items-center gap-2">
+          <input type="checkbox" name="approved" defaultChecked={customer?.approved ?? true} /> {" "}{tr("Approved to order")}</label>
+        <label className={cx("flex items-center gap-2", sales && "text-slate-400")}>
           <input type="checkbox" name="active" disabled={sales} defaultChecked={customer?.active ?? true} /> {" "}{tr("Active")}</label>
-        {office && <span className="text-xs">{office}</span>}
+        {office && <span className="text-xs text-slate-400">{tr("Active is set by the office.")}</span>}
       </div>
 
       <fieldset className="space-y-3 rounded-xl border border-line p-3">

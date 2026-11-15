@@ -44,12 +44,19 @@ export default async function DonePage({ searchParams }: { searchParams: Promise
       </h1>
       <p className="mt-2 text-leaf-900/70">
         <T>{"Order"}</T>{" "}<span className="font-semibold">{so.number}</span> · {aud(so.totalCents)} {" "}<T>{"· delivery"}</T>{" "}{<Tx>{prettyDate(so.deliveryDate)}</Tx>}
+        {so.creditAppliedCents > 0 && so.creditAppliedCents < so.totalCents && (
+          <span className="mt-1 block text-sm">
+            <T vars={{ credit: aud(so.creditAppliedCents), rest: aud(so.totalCents - so.creditAppliedCents) }}>{"{credit} paid with store credit · {rest} to pay"}</T>
+          </span>
+        )}
       </p>
       <p className="mt-3 text-sm text-leaf-900/60">
         {paidOrConfirmed
           ? so.paymentMethod === "card"
             ? <T>{"Payment received. You can follow packing and delivery from your account."}</T>
-            : so.paymentMethod === "bank_transfer"
+            : so.paymentStatus === "paid" && so.creditAppliedCents > 0
+              ? <T>{"Paid with your store credit. You can follow packing and delivery from your account."}</T>
+              : so.paymentMethod === "bank_transfer"
               ? <T>{"Please pay by bank transfer using your order number as the reference."}</T>
               : <T>{"We'll invoice your account. You can follow packing and delivery from your account."}</T>
           : sp.cancelled
