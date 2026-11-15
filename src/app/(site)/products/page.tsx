@@ -5,7 +5,7 @@ import { cx } from "@/components/ui";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { canSeePrices, countCatalog, listCatalog, listCategories, type Sort, SORTS } from "@/lib/shop";
-import { categoryHref, categoryInfo, SITE } from "../content";
+import { categoryHref, categoryInfo, OG_IMAGE, SITE } from "../content";
 import { CategorySidebar } from "../category-nav";
 import { ProductCard } from "../shop-ui";
 import { T } from "@/components/i18n";
@@ -28,7 +28,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
     title: tr("All products"),
     description,
     alternates,
-    openGraph: { title: `${tr("All products")} · Foodpac Distribution`, description, url: alternates.canonical },
+    openGraph: { title: `${tr("All products")} · Foodpac Distribution`, description, url: alternates.canonical, images: [OG_IMAGE] },
   };
 }
 

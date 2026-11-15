@@ -161,8 +161,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
               <T>{"About us"}</T></Link>
             <Link href="/#how-it-works" className="block py-2 hover:text-white sm:py-0">
               <T>{"How it works"}</T></Link>
-            <Link href="/#delivery" className="block py-2 hover:text-white sm:py-0">
-              <T>{"Delivery"}</T></Link>
+            <Link href="/delivery" className="block py-2 hover:text-white sm:py-0">
+              <T>{"Delivery areas"}</T></Link>
             <Link href="/#contact" className="block py-2 hover:text-white sm:py-0">
               <T>{"Contact us"}</T></Link>
           </div>

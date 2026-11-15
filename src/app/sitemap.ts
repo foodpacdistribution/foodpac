@@ -1,9 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { MetadataRoute } from "next";
 import { CATEGORIES, categoryHref } from "@/app/(site)/content";
 import { getDb } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { zhPath } from "@/lib/i18n";
+import { productImageUrl } from "@/lib/product-image";
 import { siteUrl } from "@/lib/site-url";
 
 // Rebuilt hourly so new products reach Google without a redeploy.
@@ -31,12 +32,13 @@ async function englishPages(): Promise<MetadataRoute.Sitemap> {
     { url: base, changeFrequency: "weekly", priority: 1 },
     { url: `${base}/products`, changeFrequency: "daily", priority: 0.9 },
     { url: `${base}/about`, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${base}/delivery`, changeFrequency: "weekly", priority: 0.7 },
     { url: `${base}/register`, changeFrequency: "yearly", priority: 0.5 },
   ];
   const category = (name: string) => ({ url: `${base}${categoryHref(name)}`, changeFrequency: "weekly" as const, priority: 0.8 });
   try {
     const rows = await (await getDb())
-      .select({ sku: products.sku, category: products.category, at: products.updatedAt })
+      .select({ id: products.id, sku: products.sku, category: products.category, at: products.updatedAt, hasImage: sql<boolean>`${products.image} is not null` })
       .from(products)
       .where(eq(products.active, true));
     // Only ranges with something on sale: an empty category page is thin content. The standard six
@@ -47,7 +49,14 @@ async function englishPages(): Promise<MetadataRoute.Sitemap> {
       ...pages,
       ...CATEGORIES.filter((c) => stocked.has(c.title)).map((c) => category(c.title)),
       ...extra.map((c) => ({ ...category(c), priority: 0.7 })),
-      ...rows.map((p) => ({ url: `${base}/products/${encodeURIComponent(p.sku)}`, lastModified: p.at, changeFrequency: "weekly" as const, priority: 0.6 })),
+      // With its photo, so products can turn up in Google Images too.
+      ...rows.map((p) => ({
+        url: `${base}/products/${encodeURIComponent(p.sku)}`,
+        lastModified: p.at,
+        changeFrequency: "weekly" as const,
+        priority: 0.6,
+        ...(p.hasImage ? { images: [`${base}${productImageUrl({ id: p.id, updatedAt: p.at })}`] } : {}),
+      })),
     ];
   } catch {
     // No database reachable (e.g. during a build without one): list the fixed pages and standard ranges.

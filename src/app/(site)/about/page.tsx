@@ -8,8 +8,9 @@ import { getSettings } from "@/lib/planning";
 import { listCategories } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
 import { formatMinutesClock } from "@/lib/time";
-import { CATEGORIES, categoryHref, SITE, STEPS } from "../content";
+import { CATEGORIES, categoryHref, OG_IMAGE, SITE, STEPS } from "../content";
 import { siteInfo } from "../site-info";
+import { weekdays } from "../weekdays";
 
 /**
  * Who Foodpac is, what it supplies, where and when it delivers, and how ordering works, in plain
@@ -29,16 +30,8 @@ export async function generateMetadata(): Promise<Metadata> {
     title: tr("About us"),
     description,
     alternates,
-    openGraph: { title: `${tr("About us")} · ${SITE.name}`, description, url: alternates.canonical },
+    openGraph: { title: `${tr("About us")} · ${SITE.name}`, description, url: alternates.canonical, images: [OG_IMAGE] },
   };
-}
-
-function weekdays(days: number[], locale: "en" | "zh", tr: (t: string) => string) {
-  const sorted = [...days].sort();
-  if (sorted.join() === "1,2,3,4,5") return tr("Monday to Friday");
-  // 2026-11-09 is a Monday, so day n is 2026-11-(8+n).
-  const name = (n: number) => new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-AU", { weekday: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 10, 8 + n)));
-  return sorted.map(name).join(locale === "zh" ? "、" : ", ");
 }
 
 export default async function AboutPage() {
@@ -139,6 +132,9 @@ export default async function AboutPage() {
           </li>
           <li>{tr("Every drop is recorded with a photo and signature, and you can follow the van on the day.")}</li>
         </ul>
+        <Link href="/delivery" className="mt-3 inline-block font-semibold text-leaf-800 underline decoration-leaf-800/30 underline-offset-2 hover:decoration-leaf-800">
+          {tr("See the suburbs we deliver to")}
+        </Link>
       </section>
 
       <section className="mt-12">

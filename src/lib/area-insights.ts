@@ -1,7 +1,8 @@
 import "server-only";
-import { and, gte, isNotNull, lt, ne, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, lt, ne, sql } from "drizzle-orm";
 import type { DB } from "./db";
-import { plans, routes, salesOrders } from "./db/schema";
+import { areaOf, UNKNOWN_AREA } from "./customer-map";
+import { orders, plans, routes, salesOrders } from "./db/schema";
 import { shiftDate } from "./dates";
 import { haversine } from "./geo/routing";
 
@@ -86,4 +87,26 @@ export function vanDaysNear(runs: VanRun[], places: { lat: number; lng: number }
         for (const q of grid.get(`${cy + dy}:${cx + dx}`) ?? []) if (!days.has(q.weekday) && haversine(p, q) <= radiusM) days.add(q.weekday);
     return [...days].sort((a, b) => a - b);
   });
+}
+
+/**
+ * The suburbs we've delivered to in the last `days` days, busiest first, from the delivery
+ * addresses themselves: the honest answer to "do you deliver to …?".
+ */
+export async function servedSuburbs(db: DB, today: string, days = 180) {
+  const rows = await db
+    .select({ address: orders.address, n: sql<number>`count(*)::int` })
+    .from(orders)
+    .where(and(eq(orders.status, "delivered"), gte(orders.deliveryDate, shiftDate(today, -days))))
+    .groupBy(orders.address);
+  const bySuburb = new Map<string, { name: string; n: number }>();
+  for (const r of rows) {
+    const a = areaOf(r.address);
+    // Only real suburbs ("Sunnybank 4109"), not a bare postcode or an address we couldn't read.
+    if (a.key === UNKNOWN_AREA || !a.key.includes("|")) continue;
+    const cur = bySuburb.get(a.key) ?? { name: a.name, n: 0 };
+    cur.n += r.n;
+    bySuburb.set(a.key, cur);
+  }
+  return [...bySuburb.values()].sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
 }

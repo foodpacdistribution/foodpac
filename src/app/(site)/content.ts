@@ -6,7 +6,7 @@ import { Coffee, Package, ShoppingBag, SprayCan, Utensils, Wheat } from "lucide-
 
 // Company details (name, phone, email, hours…) live in site-info.ts, which emails and
 // invoices use too.
-export { SITE } from "./site-info";
+export { OG_IMAGE, SITE } from "./site-info";
 
 /** Shop categories with an icon and blurb; products use these names in their category field. */
 export const CATEGORIES = [

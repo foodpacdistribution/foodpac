@@ -44,8 +44,8 @@ describe("map queries on a real database", async () => {
   const { drizzle } = await import("drizzle-orm/pglite");
   const { migrate } = await import("drizzle-orm/pglite/migrator");
   const { schema } = await import("./db");
-  const { customers, drivers, plans, routes, salesOrders } = await import("./db/schema");
-  const { recentSales, vanRuns } = await import("./area-insights");
+  const { customers, drivers, orders, plans, routes, salesOrders } = await import("./db/schema");
+  const { recentSales, servedSuburbs, vanRuns } = await import("./area-insights");
   type DB = import("./db").DB;
 
   it("reads sales lately and the last four weeks' runs", async () => {
@@ -78,5 +78,20 @@ describe("map queries on a real database", async () => {
     await db.insert(routes).values([route(recent.id), route(old.id)]);
     const runs = await vanRuns(db, "2026-11-15");
     expect(runs.map((r) => r.weekday)).toEqual([2]); // 10 Nov 2026 is a Tuesday
+
+    // Suburbs delivered to lately, busiest first; failed drops, old ones and unreadable addresses don't count.
+    const drop = (n: number, address: string, deliveryDate: string, status: "delivered" | "failed" = "delivered") => ({ orderNumber: `D${n}`, deliveryDate, address, status });
+    await db.insert(orders).values([
+      drop(1, "5 Market St, Sunnybank QLD 4109", "2026-11-02"),
+      drop(2, "9 Mains Rd, Sunnybank QLD 4109", "2026-11-03"),
+      drop(3, "1 Logan Rd, Woolloongabba QLD 4102", "2026-10-20"),
+      drop(4, "2 Beach Rd, Manly QLD 4179", "2026-11-04", "failed"),
+      drop(5, "3 Old St, Ipswich QLD 4305", "2025-01-01"),
+      drop(6, "somewhere", "2026-11-05"),
+    ]);
+    expect(await servedSuburbs(db, "2026-11-15")).toEqual([
+      { name: "Sunnybank 4109", n: 2 },
+      { name: "Woolloongabba 4102", n: 1 },
+    ]);
   }, 30000);
 });

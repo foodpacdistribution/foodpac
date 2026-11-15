@@ -10,7 +10,7 @@ import { deliveryPromise, getProductBySku, listCatalog } from "@/lib/shop";
 import { getSettings } from "@/lib/planning";
 import { aud } from "@/lib/money";
 import { siteUrl } from "@/lib/site-url";
-import { categoryHref, SITE } from "../../content";
+import { categoryHref, OG_IMAGE, SITE } from "../../content";
 import { AddToCart } from "../../add-to-cart";
 import { DeliveryPromiseText, FreeDeliveryText } from "../../delivery-promise";
 import { BuyBar } from "./buy-bar";
@@ -25,13 +25,22 @@ export async function generateMetadata({ params }: { params: Promise<{ sku: stri
   const p = await getProductBySku(await getDb(), null, decodeURIComponent(sku));
   if (!p) return { title: "Product" };
   const tr = await getT();
+  const pack = p.packSize.trim();
+  // Many imported products have no pack size: leave it out rather than show "()" or "· ·".
   const description =
-    p.description || tr("{name} ({pack}) – wholesale {category} at trade prices, delivered across {area}.", { name: p.name, pack: p.packSize, category: tr(p.category).toLowerCase(), area: tr(SITE.serviceArea) });
+    p.description?.trim() ||
+    tr(pack ? "{name} ({pack}). Wholesale {category} for food businesses, sold by the {unit} at trade prices and delivered across Brisbane and {area}." : "{name}. Wholesale {category} for food businesses, sold by the {unit} at trade prices and delivered across Brisbane and {area}.", {
+      name: p.name,
+      pack,
+      category: tr(p.category).toLowerCase(),
+      unit: tr(p.unit),
+      area: tr(SITE.serviceArea),
+    });
   return {
-    title: `${p.name} · ${p.packSize}`,
+    title: pack ? `${p.name} · ${pack}` : p.name,
     description,
     alternates: await languageAlternates(`/products/${encodeURIComponent(p.sku)}`),
-    openGraph: { title: p.name, description, ...(p.hasImage ? { images: [productImageUrl(p)] } : {}) },
+    openGraph: { title: p.name, description, images: [p.hasImage ? productImageUrl(p) : OG_IMAGE] },
   };
 }
 
@@ -51,11 +60,30 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
       <JsonLd
         data={{
           "@context": "https://schema.org",
-          "@type": "BreadcrumbList",
-          itemListElement: [
-            { "@type": "ListItem", position: 1, name: "Home", item: base },
-            { "@type": "ListItem", position: 2, name: p.category, item: `${base}${categoryHref(p.category)}` },
-            { "@type": "ListItem", position: 3, name: p.name, item: `${base}/products/${encodeURIComponent(p.sku)}` },
+          "@graph": [
+            {
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: "Home", item: base },
+                { "@type": "ListItem", position: 2, name: p.category, item: `${base}${categoryHref(p.category)}` },
+                { "@type": "ListItem", position: 3, name: p.name, item: `${base}/products/${encodeURIComponent(p.sku)}` },
+              ],
+            },
+            // What the product is. Prices are per trade account, so there's no public offer to list.
+            {
+              "@type": "Product",
+              "@id": `${base}/products/${encodeURIComponent(p.sku)}#product`,
+              name: p.name,
+              sku: p.sku,
+              url: `${base}/products/${encodeURIComponent(p.sku)}`,
+              category: p.category,
+              ...(p.description.trim() ? { description: p.description.trim() } : {}),
+              ...(p.hasImage ? { image: `${base}${productImageUrl(p)}` } : {}),
+              additionalProperty: [
+                ...(p.packSize.trim() ? [{ "@type": "PropertyValue", name: "Pack size", value: p.packSize.trim() }] : []),
+                { "@type": "PropertyValue", name: "Sold by", value: p.unit },
+              ],
+            },
           ],
         }}
       />

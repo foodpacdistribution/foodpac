@@ -4,7 +4,7 @@ import { JsonLd } from "@/components/json-ld";
 import { getDb } from "@/lib/db";
 import { listCategories } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
-import { CATEGORIES, categoryHref, categoryInfo, categorySlug, SITE } from "../../content";
+import { CATEGORIES, categoryHref, categoryInfo, categorySlug, OG_IMAGE, SITE } from "../../content";
 import ProductsPage from "../../products/page";
 import { getT, languageAlternates } from "@/lib/i18n/server";
 
@@ -26,8 +26,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!name) return {};
   const tr = await getT();
   const blurb = categoryInfo(name).text ? tr(categoryInfo(name).text) : tr("{name} for cafés, restaurants and takeaway shops.", { name: tr(name) });
-  const description = `${blurb} ${tr("Trade prices and delivery across {area} from {name}.", { area: tr(SITE.serviceArea), name: SITE.name })}`;
-  const title = tr("{name} – wholesale supply", { name: tr(name) });
+  const description = `${blurb} ${tr("Trade prices and delivery across Brisbane and {area} from {name}.", { area: tr(SITE.serviceArea), name: SITE.name })}`;
+  // People looking for a supplier search with the city: "takeaway containers wholesale Brisbane".
+  const title = tr("{name} wholesale, Brisbane", { name: tr(name) });
   const alternates = await languageAlternates(categoryHref(name));
   // A range with nothing on sale yet is an empty page: keep it out of search until it has products.
   const stocked = (await listCategories(await getDb())).some((c) => c.name === name && c.n > 0);
@@ -35,7 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     alternates,
-    openGraph: { title: `${title} · ${SITE.name}`, description, url: alternates.canonical },
+    openGraph: { title: `${title} · ${SITE.name}`, description, url: alternates.canonical, images: [OG_IMAGE] },
     ...(stocked ? {} : { robots: { index: false, follow: true } }),
   };
 }

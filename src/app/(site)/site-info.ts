@@ -19,6 +19,12 @@ export const SITE = {
 
 export type SiteInfo = typeof SITE;
 
+/**
+ * The site's link-preview picture (app/opengraph-image.png). A page that sets its own `openGraph`
+ * replaces the site-wide one, picture included, so pages without a picture of their own name this.
+ */
+export const OG_IMAGE = "/opengraph-image.png";
+
 /** SITE with the business details set in the back office (Settings) filled in over it. */
 export function siteInfo(s: { contactPhone: string; contactEmail: string; contactAddress: string; abn: string; openingHours: string }): SiteInfo {
   const hours = s.openingHours.trim() || SITE.hours;

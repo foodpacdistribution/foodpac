@@ -37,6 +37,7 @@ ${ranges}
 - ${s.deliveryFeeCents > 0 ? (s.freeDeliveryOverCents > 0 ? `Free delivery on orders over ${aud(s.freeDeliveryOverCents)}; otherwise ${aud(s.deliveryFeeCents)}.` : `Delivery fee ${aud(s.deliveryFeeCents)}.`) : "Free delivery."} Prices exclude GST.
 - Trade (business) customers only. Prices are per account: open a free trade account at ${base}/register.
 - Every delivery is recorded with a photo and signature; customers can follow the van on the day.
+- Delivery days, fees and the suburbs we deliver to: ${base}/delivery
 
 ## Contact
 - Hours: ${site.hours}
