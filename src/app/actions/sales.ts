@@ -4,9 +4,10 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { attempt } from "@/lib/action";
-import { assertUser, STAFF } from "@/lib/auth/dal";
+import { assertUser, PIPELINE, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { applyCreditToOrder, releaseOrderCredit } from "@/lib/credit";
+import { assertMayServe, takeOn } from "@/lib/rep-scope";
 import { linkExchangeOrder } from "@/lib/customer-returns";
 import { finaliseInvoice, reopenInvoice } from "@/lib/invoices";
 import { orderConfirmed, sendInvoice } from "@/lib/notify";
@@ -280,14 +281,20 @@ function parsePayload(p: StaffOrderPayload) {
   };
 }
 
-/** Staff enter an order for a customer (phone, email, or something that's out of stock and has to wait). */
+/**
+ * Staff enter an order for a customer (phone, email, or something that's out of stock and has to
+ * wait). Sales staff take orders on the spot too, for their own customers; exchanges for customer
+ * returns stay with the office.
+ */
 export async function createOrderForCustomer(p: StaffOrderPayload) {
   return attempt<{ id: string }>(async () => {
-    const user = await assertUser(STAFF);
+    const user = await assertUser(PIPELINE);
     const db = await getDb();
     const s = await getSettings(db);
     const creditCents = Math.max(0, Math.round(Number(p.creditCents) || 0));
     const customerId = String(p.customerId ?? "");
+    if (user.role === "sales" && p.exchangeReturnId) throw new UserError("Exchanges for customer returns are entered by the office.");
+    await assertMayServe(db, user, customerId);
     const idempotencyKey = String(p.idempotencyKey ?? "").slice(0, 80);
     const quoteId = p.quoteId && /^[0-9a-f-]{36}$/i.test(p.quoteId) ? p.quoteId : null;
     if (quoteId) await quoteForOrder(db, quoteId, customerId, idempotencyKey);
@@ -298,6 +305,7 @@ export async function createOrderForCustomer(p: StaffOrderPayload) {
       revalidatePath(`/admin/quotes/${quoteId}`);
     }
     if (p.exchangeReturnId && /^[0-9a-f-]{36}$/i.test(p.exchangeReturnId)) await linkExchangeOrder(db, p.exchangeReturnId, so.id);
+    await takeOn(db, user, customerId);
     if (so.deliveryOrderId) {
       const id = so.deliveryOrderId;
       after(async () => geocodeOrderIds(await getDb(), [id]));
@@ -305,6 +313,7 @@ export async function createOrderForCustomer(p: StaffOrderPayload) {
     if (p.emailCustomer) after(() => orderConfirmed(so.id, { office: false }));
     revalidate(so.id);
     revalidatePath("/admin/products");
+    revalidatePath(`/admin/customers/${customerId}`);
     revalidatePath("/", "layout");
     return { message: `Order ${so.number} placed`, data: { id: so.id } };
   });

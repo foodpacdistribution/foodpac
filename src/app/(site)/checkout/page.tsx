@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { creditBalance } from "@/lib/credit";
+import { firstOrderOfferFor } from "@/lib/first-order-offer";
 import { getDb } from "@/lib/db";
 import { customerAddresses } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
@@ -28,6 +29,7 @@ export default async function CheckoutPage() {
   if (!lines.length || lines.some((l) => l.issue) || !canSeePrices(c)) redirect("/cart");
   const q = quote(lines, s);
   if (q.belowMinimum) redirect("/cart");
+  const offerCents = Math.min(await firstOrderOfferFor(db, c, q.subtotalCents), q.totalCents);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -41,6 +43,7 @@ export default async function CheckoutPage() {
         terms={c.paymentTerms}
         creditLeftCents={c.creditLimitCents === null ? null : c.creditLimitCents - balance}
         storeCreditCents={Math.round(storeCredit * 100)}
+        offerCents={offerCents}
         bankDetails={s.bankDetails}
         addresses={addresses.map((a) => ({ id: a.id, label: a.label, recipient: a.recipient, phone: a.phone, address: a.address, instructions: a.instructions }))}
         defaults={{ recipient: user.name, phone: c.phone ?? "", address: c.address ?? "" }}

@@ -10,6 +10,7 @@ import { btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/compon
 import { prettyDate, shiftDate } from "@/lib/dates";
 import type { PaymentTerms, Role, SalesStage } from "@/lib/db/schema";
 import { daysBetween, type DueFollowUp, QUIET_CHOICES, REMIND_IN } from "@/lib/follow-up";
+import { aud } from "@/lib/money";
 import { SALES_STAGES, STAGE_INFO } from "@/lib/sales-stage";
 import { OpenAccountForm } from "./open-account-form";
 
@@ -52,11 +53,24 @@ function ago(day: string, today: string, tr: Tr) {
   return shortDate(day, tr);
 }
 
-/** Why a customer is due, in a few words. */
+/** Why a customer is due, in a few words: something to open the call with. */
 function dueText(due: DueFollowUp, tr: Tr) {
-  if (due.kind === "quiet") return tr("No order for {n} days", { n: due.days });
-  if (due.late === 0) return tr("Reminder for today");
-  return tr(due.late === 1 ? "Reminder was due yesterday" : "Reminder was due {n} days ago", { n: due.late });
+  switch (due.kind) {
+    case "quiet":
+      return tr("No order for {n} days", { n: due.days });
+    case "first_order":
+      return tr("Account opened {n} days ago, no first order yet", { n: due.days });
+    case "slipping":
+      return (
+        tr("Usually buys {product} every {every} days, none for {n} days", { product: due.product, every: due.everyDays, n: due.days }) +
+        (due.more ? ` ${tr(due.more === 1 ? "(and 1 more product)" : "(and {n} more products)", { n: due.more })}` : "")
+      );
+    case "spend_drop":
+      return tr("Spending down {pct}%: {recent} in the last 60 days, usually {usual}", { pct: due.pct, recent: aud(due.recentCents), usual: aud(due.usualCents) });
+    case "reminder":
+      if (due.late === 0) return tr("Reminder for today");
+      return tr(due.late === 1 ? "Reminder was due yesterday" : "Reminder was due {n} days ago", { n: due.late });
+  }
 }
 
 export function PipelineClient({ customers, me, today, quietDays }: { customers: Lead[]; me: { id: string; role: Role }; today: string; quietDays: number }) {
@@ -306,8 +320,12 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
   );
 }
 
-/** Sort key for the follow-up list: the longer it's been waiting, the higher it goes. */
-const weight = (d: DueFollowUp) => (d.kind === "reminder" ? 1000 + d.late : d.days);
+/**
+ * Sort key for the follow-up list: reminders people set first, then new stores still to order,
+ * customers drifting away, and quiet ones; within each, the longer it's been, the higher.
+ */
+const weight = (d: DueFollowUp) =>
+  d.kind === "reminder" ? 4000 + d.late : d.kind === "first_order" ? 3000 + d.days : d.kind === "slipping" ? 2000 + d.days : d.kind === "spend_drop" ? 2000 + d.pct : d.days;
 
 /** Today's follow-ups at the top of the page: who, why, and buttons to finish or put it off. */
 function FollowUpList({
@@ -364,7 +382,7 @@ function FollowUpList({
                 <p className={cx("text-xs", c.due!.kind === "reminder" && c.due!.late > 0 ? "text-red-600" : "text-amber-700")}>
                   {dueText(c.due!, tr)}
                   {c.due!.kind === "quiet" && c.lastOrderOn && <span className="text-slate-500"> · {tr("last order {date}", { date: shortDate(c.lastOrderOn, tr) })}</span>}
-                  {c.due!.kind === "reminder" && c.lastOrderOn && <span className="text-slate-500"> · {tr("last order {date}", { date: ago(c.lastOrderOn, today, tr) })}</span>}
+                  {c.due!.kind !== "quiet" && c.lastOrderOn && <span className="text-slate-500"> · {tr("last order {date}", { date: ago(c.lastOrderOn, today, tr) })}</span>}
                 </p>
                 {c.followUpNote && <p className="mt-0.5 truncate text-xs text-slate-600">“{c.followUpNote}”</p>}
               </div>
@@ -400,7 +418,7 @@ function FollowUpCell({ c, today, onClick }: { c: Lead; today: string; onClick: 
         {c.followUpOn === today ? tr("Today") : shortDate(c.followUpOn, tr)}
       </span>
     </>
-  ) : c.due?.kind === "quiet" ? (
+  ) : c.due && c.due.kind !== "reminder" ? (
     <>
       <BellRing className="size-3.5 shrink-0 text-amber-600" />
       <span className="truncate font-medium text-amber-800">{dueText(c.due, tr)}</span>

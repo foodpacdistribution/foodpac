@@ -1,4 +1,4 @@
-import { ShoppingCart, TriangleAlert } from "lucide-react";
+import { Gift, ShoppingCart, TriangleAlert, Truck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { redirect } from "next/navigation";
@@ -6,7 +6,9 @@ import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { aud } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
-import { canSeePrices, getCart, quote, recentlyBought } from "@/lib/shop";
+import { canSeePrices, catalogFor, type CatalogItem, getCart, quote, recentlyBought } from "@/lib/shop";
+import { firstOrderOfferFor, openOffer } from "@/lib/first-order-offer";
+import { worthOffering } from "@/lib/recommend";
 import { prettyDate } from "@/lib/dates";
 import { todayIn } from "@/lib/time";
 import { lastOrder } from "@/app/portal/orders/data";
@@ -27,6 +29,11 @@ export default async function CartPage() {
   const [last, again] = lines.length === 0 && priced ? await Promise.all([lastOrder(db, viewer.customer.id), recentlyBought(db, viewer.customer, 4)]) : [null, []];
   const q = quote(lines, s);
   const blocked = lines.some((l) => l.issue) || q.belowMinimum || !canSeePrices(viewer.customer);
+  // How far from free delivery, and from a first-order offer, plus a few things to top up with.
+  const freeGap = q.deliveryFeeCents > 0 && s.freeDeliveryOverCents > 0 ? s.freeDeliveryOverCents - q.subtotalCents : 0;
+  const offer = lines.length && priced ? openOffer(viewer.customer) : null;
+  const offerOn = offer && (await firstOrderOfferFor(db, viewer.customer, Number.MAX_SAFE_INTEGER)) > 0 ? offer : null;
+  const topUp = lines.length && priced ? await topUpItems(db, viewer.customer, new Set(lines.map((l) => l.id))) : [];
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -84,6 +91,20 @@ export default async function CartPage() {
             ))}
           </section>
           <aside className="h-fit rounded-3xl border border-leaf-950/10 bg-white p-5 lg:sticky lg:top-36">
+            {offerOn && (
+              <Progress icon={Gift} done={q.subtotalCents >= offerOn.minCents} have={q.subtotalCents} need={offerOn.minCents}>
+                {q.subtotalCents >= offerOn.minCents ? (
+                  <T vars={{ amount: aud(offerOn.offCents) }}>{"First-order offer: {amount} off at checkout"}</T>
+                ) : (
+                  <T vars={{ more: aud(offerOn.minCents - q.subtotalCents), amount: aud(offerOn.offCents) }}>{"Add {more} more to get {amount} off your first order"}</T>
+                )}
+              </Progress>
+            )}
+            {freeGap > 0 && (
+              <Progress icon={Truck} done={false} have={q.subtotalCents} need={s.freeDeliveryOverCents}>
+                <T vars={{ more: aud(freeGap) }}>{"Add {more} more for free delivery"}</T>
+              </Progress>
+            )}
             <dl className="space-y-2 text-sm">
               <Row label={<T>{"Subtotal (ex GST)"}</T>} value={aud(q.subtotalCents)} />
               <Row
@@ -108,6 +129,18 @@ export default async function CartPage() {
             )}
             <p className="mt-3 text-center text-xs text-leaf-900/50"><T>{"Stock is reserved when you place the order."}</T></p>
           </aside>
+          {topUp.length > 0 && (
+            <section className="lg:col-start-1">
+              <h2 className="text-xs font-semibold tracking-[0.14em] text-leaf-900/50 uppercase">
+                {freeGap > 0 ? <T>{"Top up for free delivery"}</T> : <T>{"Anything else you need?"}</T>}
+              </h2>
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                {topUp.map((p) => (
+                  <ProductCard key={p.id} p={p} signedIn />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </main>
@@ -124,4 +157,32 @@ function Row({ label, value, hint }: { label: React.ReactNode; value: string; hi
       <dd className="tabular-nums">{value}</dd>
     </div>
   );
+}
+
+/** A bar towards a spend target (free delivery, a first-order offer), with what's left to add. */
+function Progress({ icon: Icon, done, have, need, children }: { icon: typeof Truck; done: boolean; have: number; need: number; children: React.ReactNode }) {
+  return (
+    <div className={`mb-4 rounded-xl px-3 py-2.5 text-sm ${done ? "bg-leaf-50 text-leaf-900" : "bg-[#f5f1e8] text-leaf-950"}`}>
+      <p className="flex items-center gap-2 font-medium">
+        <Icon className="size-4 shrink-0 text-leaf-700" /> {children}
+      </p>
+      {!done && (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-leaf-950/10">
+          <div className="h-full rounded-full bg-leaf-600" style={{ width: `${Math.min(100, Math.round((have / need) * 100))}%` }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Up to four things to add: what they usually buy that isn't in the cart, then what stores like
+ * them buy. In stock only, so adding one doesn't hold up the order.
+ */
+async function topUpItems(db: Awaited<ReturnType<typeof getDb>>, customer: Parameters<typeof recentlyBought>[1], inCart: Set<string>) {
+  const fresh = (items: CatalogItem[]) => items.filter((p) => !inCart.has(p.id) && p.stock > 0);
+  const usual = fresh(await recentlyBought(db, customer, 16));
+  if (usual.length >= 4) return usual.slice(0, 4);
+  const more = fresh(await catalogFor(db, customer, (await worthOffering(db, customer.id, 8)).map((x) => x.productId)));
+  return [...usual, ...more.filter((p) => !usual.some((u) => u.id === p.id))].slice(0, 4);
 }

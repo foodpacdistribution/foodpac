@@ -1,9 +1,9 @@
 import "server-only";
-import { and, asc, isNotNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import type { CurrentUser } from "./auth/dal";
 import type { DB } from "./db";
-import { customers, orders, salesOrders } from "./db/schema";
-import { dueFollowUp } from "./follow-up";
+import { customers, orders, salesOrderItems, salesOrders } from "./db/schema";
+import { type BuyingLess, buyingLess, dueFollowUp, type ProductHistory, SPEND_WINDOW } from "./follow-up";
 import { getSettings } from "./planning";
 import { todayIn } from "./time";
 
@@ -31,6 +31,53 @@ async function lastOrderDays(db: DB, timeZone: string, today: string) {
     if (!last.has(id) || d > last.get(id)!) last.set(id, d);
   }
   return last;
+}
+
+/**
+ * What each customer bought over the last year, for spotting who's buying less: the days they
+ * bought each product they've had at least three times, and their spend lately against before.
+ */
+async function buyingLessBy(db: DB, timeZone: string, today: string, lastOrder: Map<string, string>) {
+  const day = sql`(${salesOrders.createdAt} at time zone ${timeZone})::date`;
+  const live = ne(salesOrders.status, "cancelled");
+  const product = sql`coalesce(${salesOrderItems.productId}::text, ${salesOrderItems.sku})`;
+  const [items, spend] = await Promise.all([
+    db
+      .select({
+        customerId: salesOrders.customerId,
+        name: sql<string>`max(${salesOrderItems.name})`,
+        // Sorted below: with the time zone bound twice, Postgres can't match an ORDER BY to the DISTINCT.
+        days: sql<string[]>`array_agg(distinct ${day}::text)`,
+        cents: sql<number>`sum(${salesOrderItems.lineCents})::int`,
+      })
+      .from(salesOrderItems)
+      .innerJoin(salesOrders, eq(salesOrders.id, salesOrderItems.salesOrderId))
+      .where(and(live, sql`${salesOrders.createdAt} > now() - interval '365 days'`))
+      .groupBy(salesOrders.customerId, product)
+      .having(sql`count(distinct ${day}) >= 3`),
+    db
+      .select({
+        customerId: salesOrders.customerId,
+        recent: sql<number>`coalesce(sum(${salesOrders.totalCents}) filter (where ${salesOrders.createdAt} > now() - make_interval(days => ${SPEND_WINDOW})), 0)::int`,
+        prior: sql<number>`coalesce(sum(${salesOrders.totalCents}) filter (where ${salesOrders.createdAt} <= now() - make_interval(days => ${SPEND_WINDOW}) and ${salesOrders.createdAt} > now() - make_interval(days => ${SPEND_WINDOW * 4})), 0)::int`,
+        first: sql<string>`min(${day})::text`,
+      })
+      .from(salesOrders)
+      .where(live)
+      .groupBy(salesOrders.customerId),
+  ]);
+  const products = new Map<string, ProductHistory[]>();
+  for (const r of items) {
+    const list = products.get(r.customerId) ?? [];
+    list.push({ name: r.name, days: [...r.days].sort(), cents: r.cents });
+    products.set(r.customerId, list);
+  }
+  const out = new Map<string, BuyingLess>();
+  for (const r of spend) {
+    const less = buyingLess(products.get(r.customerId) ?? [], { recentCents: r.recent, priorCents: r.prior, firstOrderOn: r.first }, lastOrder.get(r.customerId) ?? null, today);
+    if (less) out.set(r.customerId, less);
+  }
+  return out;
 }
 
 /** Every customer with what the pipeline needs, including whether a follow-up is due today. */
@@ -62,10 +109,14 @@ export async function loadPipeline(db: DB) {
       .orderBy(asc(customers.name)),
     lastOrderDays(db, s.timezone, today),
   ]);
+  const less = await buyingLessBy(db, s.timezone, today, last);
   const list = rows.map((c) => {
     const lastOrderOn = last.get(c.id) ?? null;
     const contactedOn = c.contactedAt ? todayIn(s.timezone, c.contactedAt) : null;
-    return { ...c, lastOrderOn, contactedOn, due: c.active ? dueFollowUp({ followUpOn: c.followUpOn, lastOrderOn, contactedOn }, today, s.quietDays) : null };
+    // An open account: won and approved, counted from the day it was won.
+    const openedOn = c.stage === "won" && c.approved ? todayIn(s.timezone, c.stageAt) : null;
+    const facts = { followUpOn: c.followUpOn, lastOrderOn, contactedOn, openedOn, buyingLess: less.get(c.id) ?? null };
+    return { ...c, lastOrderOn, contactedOn, due: c.active ? dueFollowUp(facts, today, s.quietDays) : null };
   });
   return { today, quietDays: s.quietDays, customers: list };
 }

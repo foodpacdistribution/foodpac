@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { hashPassword } from "./auth/password";
 import { postCredit } from "./credit";
+import { checkOffer } from "./first-order-offer";
 import type { DB } from "./db";
 import { customers, type PaymentTerms, type Role, users } from "./db/schema";
 import { UserError } from "./planning";
@@ -66,6 +67,8 @@ export type OpenAccountInput = {
   /** Store credit to start them off with, in cents (0 for none). */
   startingCreditCents: number;
   creditReason?: string | null;
+  /** "$off off a first order of $min or more", in cents; off null or 0 for no offer. */
+  firstOrderOffer?: { minCents: number | null; offCents: number | null } | null;
 };
 
 /**
@@ -83,6 +86,7 @@ export async function openAccount(db: DB, by: { id: string; role: Role }, input:
   if (limit !== null && (!Number.isInteger(limit) || limit < 0)) throw new UserError("Credit limit must be an amount, e.g. 5000.");
   if (!Number.isInteger(input.startingCreditCents) || input.startingCreditCents < 0) throw new UserError("Store credit must be an amount, e.g. 200.");
   if (input.startingCreditCents > 1_000_000) throw new UserError("That's a lot of store credit. Give at most $10,000 here; the office can add more.");
+  const offer = checkOffer(input.firstOrderOffer?.minCents ?? null, input.firstOrderOffer?.offCents ?? null);
   await assertNameFree(db, name, input.id);
 
   return db.transaction(async (t) => {
@@ -97,6 +101,8 @@ export async function openAccount(db: DB, by: { id: string; role: Role }, input:
       active: true,
       paymentTerms: input.paymentTerms,
       creditLimitCents: limit,
+      firstOrderMinCents: offer?.minCents ?? null,
+      firstOrderOffCents: offer?.offCents ?? null,
     };
     let customerId = input.id ?? null;
     if (customerId) {
@@ -129,6 +135,6 @@ export async function openAccount(db: DB, by: { id: string; role: Role }, input:
           by: by.id,
         })
       : null;
-    return { customerId, name, phone: details.phone, loginCreated: !!login?.created, creditBalance: credit?.balanceAfter ?? null };
+    return { customerId, name, phone: details.phone, loginCreated: !!login?.created, creditBalance: credit?.balanceAfter ?? null, offer };
   });
 }

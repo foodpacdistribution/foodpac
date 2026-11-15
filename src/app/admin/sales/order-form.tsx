@@ -14,7 +14,18 @@ import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { defaultDeliveryFee, orderTotals, waitingFor } from "@/lib/order-totals";
 import { minutesToInput } from "@/lib/time";
 
-export type FormCustomer = { id: string; code: string; name: string; phone: string | null; email: string | null; address: string | null; paymentTerms: PaymentTerms; approved: boolean };
+export type FormCustomer = {
+  id: string;
+  code: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  paymentTerms: PaymentTerms;
+  approved: boolean;
+  /** An unused first-order offer (taken off on the server if this is their first order). */
+  firstOrderOffer?: { minCents: number; offCents: number } | null;
+};
 export type FormProduct = { id: string; sku: string; name: string; packSize: string; unit: string; priceCents: number; gst: boolean; stock: number; minQty: number; active: boolean; waiting: number };
 
 type Line = { key: string; productId: string; qty: string; price: string; priceTouched: boolean };
@@ -29,6 +40,8 @@ export type OrderFormProps = {
   credits: Record<string, number>;
   /** New order: start with this customer chosen. */
   initialCustomerId?: string;
+  /** New order: start with these products on it (from "Worth offering" on a customer's page). */
+  startProducts?: string[];
   /** New order: replacement goods for this customer return (its credit is used). */
   exchangeReturnId?: string;
   /** New order: made from this accepted quote (its customer, lines, prices and delivery fee). */
@@ -54,6 +67,8 @@ export type OrderFormProps = {
     reserved: Record<string, number>;
   };
   defaultDate: string;
+  /** Where "back" goes, when not the sales orders list (sales staff don't have it). */
+  backHref?: string;
 };
 
 const dollars = (c: number) => (c / 100).toFixed(2);
@@ -80,7 +95,11 @@ export function OrderForm(p: OrderFormProps) {
     () =>
       (o ?? fromQuote)?.lines
         .filter((l) => p.products.some((x) => x.id === l.productId))
-        .map((l) => ({ key: nextKey(), productId: l.productId, qty: String(l.qty), price: dollars(l.unitPriceCents), priceTouched: true })) ?? [],
+        .map((l) => ({ key: nextKey(), productId: l.productId, qty: String(l.qty), price: dollars(l.unitPriceCents), priceTouched: true })) ??
+      (p.startProducts ?? [])
+        .map((id) => p.products.find((x) => x.id === id))
+        .filter((x) => x !== undefined)
+        .map((x) => ({ key: nextKey(), productId: x.id, qty: String(Math.max(1, x.minQty)), price: dollars(priceFor(start0?.id ?? "", x.id)), priceTouched: false })),
   );
   const [delivery, setDelivery] = useState({
     deliveryDate: o?.deliveryDate ?? p.defaultDate,
@@ -163,11 +182,11 @@ export function OrderForm(p: OrderFormProps) {
     });
   };
 
-  const back = o ? `/admin/sales/${o.id}` : "/admin/sales";
+  const back = o ? `/admin/sales/${o.id}` : (p.backHref ?? "/admin/sales");
   return (
     <>
       <Link href={back} className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="size-4" /> {o ? tr("Order {number}", { number: o.number }) : tr("Sales orders")}
+        <ArrowLeft className="size-4" /> {o ? tr("Order {number}", { number: o.number }) : p.backHref ? tr("Back") : tr("Sales orders")}
       </Link>
       <h1 className="mb-5 text-xl font-semibold tracking-tight text-slate-900">{o ? tr("Edit order {number}", { number: o.number }) : tr("New order")}</h1>
       {fromQuote && (
@@ -384,6 +403,17 @@ export function OrderForm(p: OrderFormProps) {
                   </div>
                 )}
               </dl>
+              {p.mode === "new" && customer?.firstOrderOffer && (
+                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900 ring-1 ring-emerald-200">
+                  {totals.subtotalCents >= customer.firstOrderOffer.minCents
+                    ? tr("First-order offer: {off} comes off when the order is placed, if it's their first.", { off: aud(customer.firstOrderOffer.offCents) })
+                    : tr("First-order offer: {off} off once the goods come to {min} (before GST). {more} to go.", {
+                        off: aud(customer.firstOrderOffer.offCents),
+                        min: aud(customer.firstOrderOffer.minCents),
+                        more: aud(customer.firstOrderOffer.minCents - totals.subtotalCents),
+                      })}
+                </p>
+              )}
               {waitingLines.length > 0 && (
                 <p className="flex gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200">
                   <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />

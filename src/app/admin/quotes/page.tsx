@@ -1,10 +1,11 @@
 import { and, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import type { Metadata } from "next";
-import { requireUser, STAFF } from "@/lib/auth/dal";
+import { PIPELINE, requireUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { customers, quoteItems, quotes, salesOrders } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { quoteState } from "@/lib/quote-status";
+import { myCustomers } from "@/lib/rep-scope";
 import { todayIn } from "@/lib/time";
 import { QuotesClient } from "./quotes-client";
 
@@ -13,7 +14,9 @@ export const metadata: Metadata = { title: "Quotations" };
 const VIEWS = ["open", "accepted", "closed", "all"] as const;
 
 export default async function QuotesPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string }> }) {
-  await requireUser(STAFF);
+  // Sales staff see the quotes for their own customers (and ones nobody looks after yet).
+  const me = await requireUser(PIPELINE);
+  const mine = myCustomers(me);
   const sp = await searchParams;
   const view = VIEWS.find((v) => v === sp.view) ?? "open";
   const db = await getDb();
@@ -31,6 +34,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
           ? or(eq(quotes.status, "declined"), and(inArray(quotes.status, ["draft", "sent"]), lt(quotes.validUntil, today)))
           : undefined,
     q ? or(ilike(quotes.number, like), ilike(customers.name, like), ilike(customers.code, like)) : undefined,
+    mine,
   );
   const [rows, [stats]] = await Promise.all([
     db
@@ -55,7 +59,9 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
         accepted90: sql<number>`count(*) filter (where ${quotes.status} = 'accepted' and ${quotes.createdAt} > now() - interval '90 days')::int`,
         decided90: sql<number>`count(*) filter (where ${quotes.status} in ('accepted', 'declined') and ${quotes.createdAt} > now() - interval '90 days')::int`,
       })
-      .from(quotes),
+      .from(quotes)
+      .innerJoin(customers, eq(customers.id, quotes.customerId))
+      .where(mine),
   ]);
   return (
     <QuotesClient

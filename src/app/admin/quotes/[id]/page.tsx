@@ -6,7 +6,7 @@ import { LinkPending } from "@/components/client-ui";
 import { T, Tx } from "@/components/i18n";
 import Link from "@/components/link";
 import { Badge, btn, Card, CardHeader } from "@/components/ui";
-import { requireUser, STAFF } from "@/lib/auth/dal";
+import { PIPELINE, requireUser } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { customers, salesOrders, users } from "@/lib/db/schema";
@@ -16,18 +16,19 @@ import { customerEmail } from "@/lib/notify";
 import { getSettings } from "@/lib/planning";
 import { QUOTE_STATUS, quoteState } from "@/lib/quote-status";
 import { quoteEditBlocker, quoteWithItems } from "@/lib/quotes";
+import { mayServeId } from "@/lib/rep-scope";
 import { todayIn } from "@/lib/time";
 import { QuoteActions } from "./quote-actions";
 
 export const metadata: Metadata = { title: "Quote" };
 
 export default async function QuotePage({ params }: { params: Promise<{ id: string }> }) {
-  const me = await requireUser(STAFF);
+  const me = await requireUser(PIPELINE);
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = await getDb();
   const found = await quoteWithItems(db, id);
-  if (!found) notFound();
+  if (!found || !(await mayServeId(db, me, found.quote.customerId))) notFound();
   const { quote: q, items } = found;
   const [[c], s, emailTo, [by], [so]] = await Promise.all([
     db.select().from(customers).where(eq(customers.id, q.customerId)).limit(1),

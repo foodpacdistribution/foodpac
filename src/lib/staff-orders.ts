@@ -6,6 +6,7 @@ import { shiftDate } from "./dates";
 import { orderTotals } from "./order-totals";
 import { UserError } from "./planning";
 import { applyCreditToOrder, releaseOrderCredit } from "./credit";
+import { firstOrderOfferFor, useFirstOrderOffer } from "./first-order-offer";
 import { createDeliveryOrder, dueIn } from "./shop";
 import { fillWaiting, reserveStock, returnStock } from "./stock-allocation";
 
@@ -96,9 +97,12 @@ export async function createStaffOrder(db: DB, staffId: string, input: StaffOrde
       .returning();
     await tx.insert(salesOrderItems).values(items.map((it) => ({ ...it, salesOrderId: so.id })));
     const deliveryOrderId = await createDeliveryOrder(tx, so, customer, items);
-    // Store credit towards it, in the same transaction: not enough credit undoes the whole order.
-    const creditAppliedCents = input.creditCents ? await applyCreditToOrder(tx, so.id, input.creditCents, staffId) : 0;
-    return { ...so, deliveryOrderId, creditAppliedCents };
+    // A first-order offer the store was given comes off first, as it does in the shop.
+    const offerCents = Math.min(await firstOrderOfferFor(tx, customer, totals.subtotalCents, so.id), totals.totalCents);
+    const offered = offerCents ? await useFirstOrderOffer(tx, so, offerCents, staffId) : 0;
+    // Store credit towards the rest, in the same transaction: not enough credit undoes the whole order.
+    const credited = input.creditCents && totals.totalCents > offered ? await applyCreditToOrder(tx, so.id, Math.min(input.creditCents, totals.totalCents - offered), staffId) : 0;
+    return { ...so, deliveryOrderId, creditAppliedCents: offered + credited };
   });
 }
 

@@ -9,6 +9,7 @@ import { cartItems, customers, products, settings, users } from "./db/schema";
 import { creditBalance, postCredit } from "./credit";
 import { getSettings } from "./planning";
 import { cancelOrder, deliveryDates, placeOrder } from "./shop";
+import { createStaffOrder } from "./staff-orders";
 
 vi.mock("next/server", () => ({ after: () => {} }));
 
@@ -92,5 +93,61 @@ describe("paying with store credit at checkout", () => {
     const so = await checkout(c, "bank_transfer", true);
     await cancelOrder(db, so.id);
     expect(await creditBalance(db, c.id)).toBe(40);
+  });
+});
+
+describe("first-order offers", () => {
+  // $110 orders (2 cartons at $50 + GST); $100 before GST.
+  const withOffer = async (min: number, off: number) => {
+    const c = await customer();
+    const [row] = await db.update(customers).set({ firstOrderMinCents: min, firstOrderOffCents: off }).where(eq(customers.id, c.id)).returning();
+    return row;
+  };
+  const fresh = async (id: string) => (await db.select().from(customers).where(eq(customers.id, id)))[0];
+
+  it("takes the offer off a first order that reaches the minimum, once", async () => {
+    const c = await withOffer(10000, 3000);
+    const so = await checkout(c, "bank_transfer", false);
+    expect(so).toMatchObject({ creditAppliedCents: 3000, paymentStatus: "unpaid" });
+    expect((await fresh(c.id)).firstOrderOfferOrderId).toBe(so.id);
+    expect(await creditBalance(db, c.id)).toBe(0);
+    const second = await checkout(await fresh(c.id), "bank_transfer", false);
+    expect(second.creditAppliedCents).toBe(0);
+  });
+
+  it("leaves it for later when the first order is under the minimum", async () => {
+    const c = await withOffer(20000, 3000);
+    expect((await checkout(c, "bank_transfer", false)).creditAppliedCents).toBe(0);
+    expect((await fresh(c.id)).firstOrderOfferOrderId).toBeNull();
+  });
+
+  it("comes before store credit, and a card order it covers needs no card", async () => {
+    const c = await withOffer(10000, 3000);
+    await giveCredit(c.id, 100);
+    const so = await checkout(c, "card", true);
+    expect(so).toMatchObject({ creditAppliedCents: 11000, paymentStatus: "paid", paymentMethod: "bank_transfer" });
+    expect(await creditBalance(db, c.id)).toBe(20);
+  });
+
+  it("is open again when that order is cancelled, without leaving its credit behind", async () => {
+    const c = await withOffer(10000, 3000);
+    await giveCredit(c.id, 10);
+    const so = await checkout(c, "bank_transfer", true);
+    expect(so.creditAppliedCents).toBe(4000);
+    await cancelOrder(db, so.id);
+    expect(await creditBalance(db, c.id)).toBe(10);
+    expect((await fresh(c.id)).firstOrderOfferOrderId).toBeNull();
+  });
+
+  it("applies to a first order a salesperson takes too", async () => {
+    const c = await withOffer(10000, 3000);
+    const s = await getSettings(db);
+    const so = await createStaffOrder(
+      db,
+      userId,
+      { customerId: c.id, method: "invoice", idempotencyKey: `s${++key}`, deliveryDate: deliveryDates(s)[0], recipient: "Mei", phone: null, address: "1 Main St", instructions: null, windowStartMin: null, windowEndMin: null, notes: null, deliveryFeeCents: 0, lines: [{ productId: cups, qty: 2, unitPriceCents: 5000 }] },
+      "2000-01-01",
+    );
+    expect(so.creditAppliedCents).toBe(3000);
   });
 });

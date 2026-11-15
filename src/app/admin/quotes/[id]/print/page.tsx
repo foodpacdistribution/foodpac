@@ -3,12 +3,13 @@ import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { QuoteSheet } from "@/components/quote-sheet";
-import { requireUser, STAFF } from "@/lib/auth/dal";
+import { PIPELINE, requireUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { customers, quotes } from "@/lib/db/schema";
 import { invoiceImages } from "@/lib/invoices";
 import { getSettings } from "@/lib/planning";
 import { quoteWithItems } from "@/lib/quotes";
+import { mayServeId } from "@/lib/rep-scope";
 
 /** The title is the PDF's file name when the quote is saved from the print window. */
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -19,12 +20,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default async function QuotePrintPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUser(STAFF);
+  const me = await requireUser(PIPELINE);
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = await getDb();
   const found = await quoteWithItems(db, id);
-  if (!found) notFound();
+  if (!found || !(await mayServeId(db, me, found.quote.customerId))) notFound();
   const [[c], s, images] = await Promise.all([
     db.select().from(customers).where(eq(customers.id, found.quote.customerId)).limit(1),
     getSettings(db),

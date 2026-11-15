@@ -5,20 +5,21 @@ import { orderFormData } from "@/app/admin/sales/form-data";
 import { T, Tx } from "@/components/i18n";
 import Link from "@/components/link";
 import { Card } from "@/components/ui";
-import { requireUser, STAFF } from "@/lib/auth/dal";
+import { PIPELINE, requireUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { quoteEditBlocker, quoteWithItems } from "@/lib/quotes";
+import { mayServeId } from "@/lib/rep-scope";
 import { QuoteForm } from "../../quote-form";
 
 export const metadata: Metadata = { title: "Edit Quote" };
 
 export default async function EditQuotePage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUser(STAFF);
+  const me = await requireUser(PIPELINE);
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = await getDb();
   const found = await quoteWithItems(db, id);
-  if (!found) notFound();
+  if (!found || !(await mayServeId(db, me, found.quote.customerId))) notFound();
   const { quote: q, items } = found;
   const blocked = quoteEditBlocker(q);
   if (blocked) {
@@ -33,7 +34,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
       </>
     );
   }
-  const data = await orderFormData(db, { customerId: q.customerId });
+  const data = await orderFormData(db, { customerId: q.customerId, user: me });
   return (
     <QuoteForm
       customers={data.customers}

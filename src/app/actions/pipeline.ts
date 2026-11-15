@@ -89,7 +89,13 @@ export async function saveLead(_prev: unknown, form: FormData) {
   });
 }
 
-export type OpenedAccount = { customerId: string; name: string; login: { email: string; password: string | null } | null; creditBalance: number | null };
+export type OpenedAccount = {
+  customerId: string;
+  name: string;
+  login: { email: string; password: string | null } | null;
+  creditBalance: number | null;
+  offer: { minCents: number; offCents: number } | null;
+};
 
 /**
  * A store has signed: opens its trade account in one go (details, portal login, payment terms,
@@ -109,6 +115,9 @@ export async function openCustomerAccount(_prev: unknown, form: FormData) {
     if (startingCreditCents === null) throw new UserError("Store credit must be an amount, e.g. 200.");
     const loginEmail = get("loginEmail").toLowerCase();
     const password = get("password") || null;
+    const offCents = get("offerOff") ? parseDollars(get("offerOff")) : null;
+    const minCents = get("offerMin") ? parseDollars(get("offerMin")) : null;
+    if ((get("offerOff") && offCents === null) || (get("offerMin") && minCents === null)) throw new UserError("The first-order offer must be amounts, e.g. 30 off 200.");
 
     const r = await openAccount(db, user, {
       id: get("id") || null,
@@ -122,6 +131,7 @@ export async function openCustomerAccount(_prev: unknown, form: FormData) {
       creditLimitCents,
       startingCreditCents,
       creditReason: get("creditReason"),
+      firstOrderOffer: { minCents, offCents },
     });
 
     await linkOrdersToCustomer(db, { id: r.customerId, name: r.name, phone: r.phone });
@@ -131,7 +141,7 @@ export async function openCustomerAccount(_prev: unknown, form: FormData) {
     revalidatePath(`/admin/customers/${r.customerId}`);
     return {
       message: `Account open: ${r.name}`,
-      data: { customerId: r.customerId, name: r.name, login: loginEmail ? { email: loginEmail, password } : null, creditBalance: r.creditBalance },
+      data: { customerId: r.customerId, name: r.name, login: loginEmail ? { email: loginEmail, password } : null, creditBalance: r.creditBalance, offer: r.offer },
     };
   });
 }

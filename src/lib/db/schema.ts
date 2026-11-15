@@ -121,6 +121,14 @@ export const customers = pgTable("customers", {
   paymentTerms: text("payment_terms").$type<PaymentTerms>().notNull().default("prepay"),
   /** Max unpaid invoice balance for account customers. null = no limit. */
   creditLimitCents: integer("credit_limit_cents"),
+  /**
+   * A first-order offer set when the account is opened: `firstOrderOffCents` off a first order of
+   * at least `firstOrderMinCents` (before GST), given as store credit on that order. Null = none.
+   * `firstOrderOfferOrderId` is the order that used it; cancelling that order makes it usable again.
+   */
+  firstOrderMinCents: integer("first_order_min_cents"),
+  firstOrderOffCents: integer("first_order_off_cents"),
+  firstOrderOfferOrderId: uuid("first_order_offer_order_id"),
   /** Sales pipeline, set by sales staff. */
   salesStage: text("sales_stage").$type<SalesStage>().notNull().default("new"),
   salesStageAt: timestamp("sales_stage_at", { withTimezone: true }).notNull().defaultNow(),

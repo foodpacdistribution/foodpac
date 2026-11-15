@@ -27,6 +27,8 @@ export function CheckoutForm(props: {
   creditLeftCents: number | null;
   /** The customer's store credit; they can put it towards this order. */
   storeCreditCents: number;
+  /** A first-order offer this order qualifies for, taken off before store credit. */
+  offerCents: number;
   bankDetails: string;
   addresses: Address[];
   defaults: { recipient: string; phone: string; address: string };
@@ -39,10 +41,10 @@ export function CheckoutForm(props: {
 
 
   const [useCredit, setUseCredit] = useState(props.storeCreditCents > 0);
-  const creditCents = useCredit ? Math.min(props.storeCreditCents, props.quote.totalCents) : 0;
-  const toPayCents = props.quote.totalCents - creditCents;
-  // Store credit covers it all: nothing to choose, nothing to pay.
-  const covered = creditCents > 0 && toPayCents === 0;
+  const creditCents = useCredit ? Math.min(props.storeCreditCents, props.quote.totalCents - props.offerCents) : 0;
+  const toPayCents = props.quote.totalCents - props.offerCents - creditCents;
+  // The offer and store credit cover it all: nothing to choose, nothing to pay.
+  const covered = creditCents + props.offerCents > 0 && toPayCents === 0;
   const overCredit = !covered && method === "invoice" && props.creditLeftCents !== null && toPayCents > props.creditLeftCents;
 
   return (
@@ -116,7 +118,7 @@ export function CheckoutForm(props: {
                 <span className="font-semibold">{tr("Use my store credit")}</span>
                 <span className="block text-xs text-leaf-900/60">
                   {tr("{amount} available", { amount: aud(props.storeCreditCents) })}
-                  {useCredit && ` · ${tr(covered ? "covers this whole order" : "{amount} comes off this order", { amount: aud(creditCents) })}`}
+                  {useCredit && creditCents > 0 && ` · ${tr(covered ? "covers the rest of this order" : "{amount} comes off this order", { amount: aud(creditCents) })}`}
                 </span>
               </span>
             </label>
@@ -125,7 +127,7 @@ export function CheckoutForm(props: {
             <>
               {/* Fully paid with credit: a method still goes with the form, but there's nothing to choose. */}
               <input type="hidden" name="method" value={props.methods.includes("bank_transfer") ? "bank_transfer" : props.methods[0]} />
-              <p className="rounded-xl bg-leaf-50 px-4 py-3 text-sm text-leaf-900">{tr("Your store credit pays for this order. There's nothing more to pay.")}</p>
+              <p className="rounded-xl bg-leaf-50 px-4 py-3 text-sm text-leaf-900">{tr(creditCents > 0 ? "Your store credit pays for this order. There's nothing more to pay." : "Your first-order offer pays for this order. There's nothing more to pay.")}</p>
             </>
           ) : (
             <div className="space-y-2">
@@ -191,17 +193,23 @@ export function CheckoutForm(props: {
             <dt>{tr("Total")}</dt>
             <dd className="tabular-nums">{aud(props.quote.totalCents)}</dd>
           </div>
+          {props.offerCents > 0 && (
+            <div className="flex justify-between text-leaf-700">
+              <dt>{tr("First-order offer")}</dt>
+              <dd className="tabular-nums">−{aud(props.offerCents)}</dd>
+            </div>
+          )}
           {creditCents > 0 && (
-            <>
-              <div className="flex justify-between text-leaf-700">
-                <dt>{tr("Store credit")}</dt>
-                <dd className="tabular-nums">−{aud(creditCents)}</dd>
-              </div>
-              <div className="flex justify-between font-semibold text-leaf-950">
-                <dt>{tr("To pay")}</dt>
-                <dd className="tabular-nums">{aud(toPayCents)}</dd>
-              </div>
-            </>
+            <div className="flex justify-between text-leaf-700">
+              <dt>{tr("Store credit")}</dt>
+              <dd className="tabular-nums">−{aud(creditCents)}</dd>
+            </div>
+          )}
+          {creditCents + props.offerCents > 0 && (
+            <div className="flex justify-between font-semibold text-leaf-950">
+              <dt>{tr("To pay")}</dt>
+              <dd className="tabular-nums">{aud(toPayCents)}</dd>
+            </div>
           )}
         </dl>
         <div className="mt-4">

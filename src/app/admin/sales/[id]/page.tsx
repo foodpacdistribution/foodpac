@@ -5,7 +5,7 @@ import Link from "@/components/link";
 import { LinkPending } from "@/components/client-ui";
 import { notFound } from "next/navigation";
 import { Badge, btn, Card, CardHeader } from "@/components/ui";
-import { requireUser, STAFF } from "@/lib/auth/dal";
+import { PIPELINE, requireUser } from "@/lib/auth/dal";
 import { prettyDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { emailEnabled } from "@/lib/email";
@@ -16,6 +16,7 @@ import { creditBalance } from "@/lib/credit";
 import { CUSTOMER_RETURN_STATUS } from "@/lib/customer-return-labels";
 import { aud, FULFILMENT, PAYMENT_METHOD_LABEL, PAYMENT_STATUS, PAYMENT_TERMS_LABEL, SALES_STATUS } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
+import { mayServeId } from "@/lib/rep-scope";
 import { editBlocker } from "@/lib/staff-orders";
 import { formatMinutesClock, todayIn } from "@/lib/time";
 import { InvoiceActions } from "./invoice-actions";
@@ -25,12 +26,14 @@ import { T, Tx } from "@/components/i18n";
 export const metadata: Metadata = { title: "Sales Order" };
 
 export default async function SalePage({ params }: { params: Promise<{ id: string }> }) {
-  const me = await requireUser(STAFF);
+  // Sales staff see their own customers' orders, to check what they took; changing them is the office's.
+  const me = await requireUser(PIPELINE);
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = await getDb();
   const [so] = await db.select().from(salesOrders).where(eq(salesOrders.id, id)).limit(1);
-  if (!so) notFound();
+  if (!so || !(await mayServeId(db, me, so.customerId))) notFound();
+  const office = me.role !== "sales";
   const [[c], items, s, [d], [by], emailTo, credit, returns, [fromQuote]] = await Promise.all([
     db.select().from(customers).where(eq(customers.id, so.customerId)).limit(1),
     db.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id)),
@@ -56,8 +59,14 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <Link href="/admin/sales" className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="size-4" /> {" "}<T>{"Sales orders"}</T></Link>
+      {office ? (
+        <Link href="/admin/sales" className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
+          <ArrowLeft className="size-4" /> {" "}<T>{"Sales orders"}</T></Link>
+      ) : (
+        <Link href={`/admin/customers/${c.id}`} className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
+          <ArrowLeft className="size-4" /> {c.name}
+        </Link>
+      )}
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-slate-900"><T>{"Order"}</T>{" "}{so.number}</h1>
@@ -84,7 +93,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
             {so.status !== "cancelled" && waiting > 0 && <Badge tone="red"><T vars={{ n: waiting }}>{"{n} waiting for stock"}</T></Badge>}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {office && <div className="flex flex-wrap gap-2">
           {so.status === "confirmed" && d?.status === "delivered" && (
             <Link href={`/admin/customer-returns/new?order=${so.id}`} className={btn("secondary")}>
               <Undo2 className="size-4" /> <T>{"Customer return"}</T>
@@ -98,7 +107,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
             </Link>
           )}
         <SaleActions id={so.id} status={so.status} paymentStatus={so.paymentStatus} paymentMethod={so.paymentMethod} fulfilment={so.fulfilment} canCancel={canCancel} isAdmin={me.role === "admin"} />
-        </div>
+        </div>}
       </div>
 
       {missed && (
@@ -111,7 +120,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
               {d?.status === "failed" ? <T>{"The drop failed. Move it to another day to send it again."}</T> : <T>{"It wasn't delivered. Move it to another day, or cancel it."}</T>}
             </span>
           </p>
-          <MoveDay id={so.id} today={today} />
+          {office && <MoveDay id={so.id} today={today} />}
         </div>
       )}
 
@@ -120,8 +129,10 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
           <CardHeader
             title={<T>{"Items"}</T>}
             action={
-              <Link href={`/admin/sales/picklist?ids=${so.id}`} className={btn("secondary", "sm")}>
-                <ClipboardList className="size-3.5" /> {" "}<T>{"Pick list"}</T></Link>
+              office ? (
+                <Link href={`/admin/sales/picklist?ids=${so.id}`} className={btn("secondary", "sm")}>
+                  <ClipboardList className="size-3.5" /> {" "}<T>{"Pick list"}</T></Link>
+              ) : undefined
             }
           />
           <table className="w-full text-sm">
@@ -197,7 +208,9 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
               {so.phone && <p className="text-slate-600">{so.phone}</p>}
               {so.instructions && <p className="text-slate-600">“{so.instructions}”</p>}
               {so.notes && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-amber-900"><T>{"Note:"}</T>{" "}{so.notes}</p>}
-              {d ? (
+              {d && !office ? (
+                <p className="mt-2 text-xs text-slate-500"><T>{"Delivery"}</T>{" "}{d.orderNumber} · {d.status}</p>
+              ) : d ? (
                 <Link href={`/admin/orders?date=${d.deliveryDate}&q=${encodeURIComponent(d.orderNumber)}`} className={btn("secondary", "sm", "mt-3")}>
                   <Truck className="size-3.5" /> {" "}<T>{"Delivery"}</T>{" "}{d.orderNumber} · {d.status}
                 </Link>
@@ -218,7 +231,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
                 <T>{"Store credit available:"}</T>{" "}
                 <Link href={`/admin/customers/${c.id}#credit`} className="font-medium text-blue-700 hover:underline">{aud(Math.round(credit * 100))}</Link>
               </p>
-              {so.status !== "cancelled" && so.paymentStatus === "unpaid" && credit > 0 && dueCents > 0 && <ApplyCredit id={so.id} maxCents={Math.min(dueCents, Math.round(credit * 100))} />}
+              {office && so.status !== "cancelled" && so.paymentStatus === "unpaid" && credit > 0 && dueCents > 0 && <ApplyCredit id={so.id} maxCents={Math.min(dueCents, Math.round(credit * 100))} />}
             </div>
           </Card>
           {returns.length > 0 && (
@@ -227,14 +240,14 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
               <ul className="divide-y divide-line text-sm">
                 {returns.map((r) => (
                   <li key={r.id} className="flex items-center justify-between px-4 py-2.5">
-                    <Link href={`/admin/customer-returns/${r.id}`} className="font-medium text-blue-700 hover:underline">{r.returnNumber}</Link>
+                    {office ? <Link href={`/admin/customer-returns/${r.id}`} className="font-medium text-blue-700 hover:underline">{r.returnNumber}</Link> : <span className="font-medium">{r.returnNumber}</span>}
                     <Badge tone={CUSTOMER_RETURN_STATUS[r.status].tone}><Tx>{CUSTOMER_RETURN_STATUS[r.status].label}</Tx></Badge>
                   </li>
                 ))}
               </ul>
             </Card>
           )}
-          <Card>
+          {office && <Card>
             <CardHeader title={<T>{"Invoice"}</T>} />
             <InvoiceActions
               id={so.id}
@@ -249,7 +262,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
               emailEnabled={emailEnabled()}
               waiting={so.status === "cancelled" ? 0 : waiting}
             />
-          </Card>
+          </Card>}
         </div>
       </div>
     </>

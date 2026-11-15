@@ -23,6 +23,8 @@ export type QuoteFormProps = {
   today: string;
   defaultValidUntil: string;
   initialCustomerId?: string;
+  /** New quote: start with these products on it (from "Worth offering" on a customer's page). */
+  startProducts?: string[];
   /** Edit: the quote as it is now. */
   quote?: {
     id: string;
@@ -53,7 +55,12 @@ export function QuoteForm(p: QuoteFormProps) {
   const customer = p.customers.find((c) => c.id === customerId) ?? null;
   const priceFor = (cid: string, productId: string) => p.prices[cid]?.[productId] ?? p.products.find((x) => x.id === productId)?.priceCents ?? 0;
   const [lines, setLines] = useState<Line[]>(
-    () => q?.lines.filter((l) => p.products.some((x) => x.id === l.productId)).map((l) => ({ key: nextKey(), productId: l.productId, qty: String(l.qty), price: dollars(l.unitPriceCents), priceTouched: true })) ?? [],
+    () =>
+      q?.lines.filter((l) => p.products.some((x) => x.id === l.productId)).map((l) => ({ key: nextKey(), productId: l.productId, qty: String(l.qty), price: dollars(l.unitPriceCents), priceTouched: true })) ??
+      (p.startProducts ?? [])
+        .map((id) => p.products.find((x) => x.id === id))
+        .filter((x) => x !== undefined)
+        .map((x) => ({ key: nextKey(), productId: x.id, qty: String(Math.max(1, x.minQty)), price: dollars(priceFor(customerId, x.id)), priceTouched: false })),
   );
   const [validUntil, setValidUntil] = useState(q?.validUntil ?? p.defaultValidUntil);
   const [fee, setFee] = useState<string | null>(q ? dollars(q.deliveryFeeCents) : null);

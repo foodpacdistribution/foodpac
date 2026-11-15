@@ -173,10 +173,16 @@ export async function accountRequested(c: { id: string; name: string; contact: s
 /** Staff approved a customer's account: prices and ordering are now open to them. */
 export async function accountApproved(customerId: string) {
   const db = await getDb();
-  const [c] = await db.select({ name: customers.name }).from(customers).where(eq(customers.id, customerId)).limit(1);
+  const [c] = await db
+    .select({ name: customers.name, min: customers.firstOrderMinCents, off: customers.firstOrderOffCents, used: customers.firstOrderOfferOrderId })
+    .from(customers)
+    .where(eq(customers.id, customerId))
+    .limit(1);
   const to = c && (await customerEmail(db, customerId));
   if (!c || !to) return;
   const base = emailSiteUrl();
+  // A first-order offer from the salesperson who signed them up.
+  const offer = c.off && c.min !== null && !c.used ? `Your first order comes with $${(c.off / 100).toFixed(2)} off when it's $${(c.min / 100).toFixed(2)} or more (before GST).` : "";
   await sendEmail({
     to,
     subject: "Your Foodpac trade account is ready",
@@ -184,10 +190,10 @@ export async function accountApproved(customerId: string) {
         site: await business(),
       preview: "Your prices and online ordering are now open.",
       heading: `Welcome aboard, ${c.name}`,
-      body: `<p style="margin:0">Your trade account is approved. Sign in to see your prices, order online and choose your delivery day.</p>`,
+      body: `<p style="margin:0">Your trade account is approved. Sign in to see your prices, order online and choose your delivery day.</p>${offer ? `<p style="margin:12px 0 0"><strong>${offer}</strong></p>` : ""}`,
       button: { label: "Start ordering", url: `${base}/products` },
     }),
-    text: `Welcome aboard, ${c.name}.\n\nYour trade account is approved. Sign in to see your prices and order online: ${base}/products`,
+    text: `Welcome aboard, ${c.name}.\n\nYour trade account is approved. Sign in to see your prices and order online: ${base}/products${offer ? `\n\n${offer}` : ""}`,
   });
 }
 

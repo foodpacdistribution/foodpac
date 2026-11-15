@@ -1,3 +1,4 @@
+import { and, eq, inArray } from "drizzle-orm";
 import {
   ArrowLeft,
   Ban,
@@ -15,6 +16,7 @@ import {
   ShoppingCart,
   Coins,
   Flag,
+  Gift,
   History,
   UserPlus,
   Tags,
@@ -33,14 +35,18 @@ import { PIPELINE, requireUser } from "@/lib/auth/dal";
 import { CUSTOMER_RETURN_STATUS } from "@/lib/customer-return-labels";
 import { type CustomerProfile, customerProfile, type TimelineEvent } from "@/lib/customer-profile";
 import { getDb } from "@/lib/db";
+import { customerPrices, products } from "@/lib/db/schema";
 import { aud, FULFILMENT, PAYMENT_STATUS, PAYMENT_TERMS_LABEL, SALES_STATUS } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
+import { mayServe } from "@/lib/rep-scope";
+import { worthOffering } from "@/lib/recommend";
 import { money } from "@/lib/purchasing/labels";
 import { quoteState, QUOTE_STATUS } from "@/lib/quote-status";
 import { STAGE_INFO } from "@/lib/sales-stage";
 import { todayIn } from "@/lib/time";
 import { CreditAdjust } from "./credit-adjust";
 import { EditCustomer, ProfileTabs } from "./profile-client";
+import { type Offer, WorthOffering } from "./worth-offering";
 
 export const metadata: Metadata = { title: "Customer" };
 
@@ -56,9 +62,11 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const db = await getDb();
   const s = await getSettings(db);
   const today = todayIn(s.timezone);
-  const p = await customerProfile(db, id, today);
+  const [p, offers] = await Promise.all([customerProfile(db, id, today), offersFor(db, id)]);
   if (!p) notFound();
   const office = me.role !== "sales";
+  // Their quotes and orders open for the office, and for the salesperson who looks after them.
+  const serve = mayServe(me, p.customer);
   // Admins and sales staff give store credit (and take back credit given in error).
   const canCredit = me.role === "admin" || me.role === "sales";
   const c = p.customer;
@@ -73,10 +81,10 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const creditLeft = c.creditLimitCents !== null ? c.creditLimitCents - st.unpaidCents : null;
 
   const tabs = [
-    { key: "activity", label: "Activity", panel: <Timeline events={p.timeline} at={at} office={office} /> },
-    { key: "orders", label: "Orders", count: p.sales.length, panel: <OrdersTable p={p} day={day} at={at} office={office} /> },
+    { key: "activity", label: "Activity", panel: <Timeline events={p.timeline} at={at} office={office} serve={serve} /> },
+    { key: "orders", label: "Orders", count: p.sales.length, panel: <OrdersTable p={p} day={day} at={at} office={office} serve={serve} /> },
     { key: "deliveries", label: "Deliveries", count: p.deliveries.length, panel: <DeliveriesTable p={p} day={day} at={at} office={office} /> },
-    { key: "quotes", label: "Quotes", count: p.quotes.length, panel: <QuotesTable p={p} day={day} today={today} office={office} customerId={c.id} /> },
+    { key: "quotes", label: "Quotes", count: p.quotes.length, panel: <QuotesTable p={p} day={day} today={today} office={office} serve={serve && c.active} customerId={c.id} /> },
     { key: "returns", label: "Returns", count: p.returns.length, panel: <ReturnsTable p={p} day={day} at={at} office={office} /> },
     {
       key: "credit",
@@ -154,12 +162,18 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
             }}
           />
           {office && (
+            <Link href={`/admin/customers/${c.id}/prices`} className={btn("secondary")}>
+              <Tags className="size-4" /> <T>{"Price list"}</T>
+            </Link>
+          )}
+          {/* Sales staff quote and take orders on the spot for their own customers. */}
+          {serve && c.active && (
             <>
-              <Link href={`/admin/customers/${c.id}/prices`} className={btn("secondary")}>
-                <Tags className="size-4" /> <T>{"Price list"}</T>
-              </Link>
-              <Link href={`/admin/quotes/new?customer=${c.id}`} className={btn("primary")}>
+              <Link href={`/admin/quotes/new?customer=${c.id}`} className={btn("secondary")}>
                 <FileText className="size-4" /> <T>{"New quote"}</T>
+              </Link>
+              <Link href={`/admin/sales/new?customer=${c.id}`} className={btn("primary")}>
+                <ShoppingCart className="size-4" /> <T>{"New order"}</T>
               </Link>
             </>
           )}
@@ -240,6 +254,12 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                   </>
                 )}
               </Row>
+              {c.firstOrderOffCents !== null && c.firstOrderMinCents !== null && (
+                <Row icon={Gift} label="First-order offer">
+                  <T vars={{ off: aud(c.firstOrderOffCents), min: aud(c.firstOrderMinCents) }}>{"{off} off {min}+"}</T>
+                  <span className="block text-xs text-slate-500">{c.firstOrderOfferOrderId ? <T>{"Used"}</T> : <T>{"Not used yet"}</T>}</span>
+                </Row>
+              )}
               <Row icon={KeyRound} label="Portal login">
                 {p.login ? (
                   <>
@@ -292,6 +312,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
               </ul>
             </Card>
           )}
+          <WorthOffering customerId={c.id} items={offers} canAct={serve && c.active} />
         </aside>
       </div>
     </>
@@ -370,7 +391,10 @@ const TIMELINE_ICON: Record<TimelineEvent["kind"], { icon: typeof Wallet; tone: 
   credit: { icon: Coins, tone: "bg-slate-100 text-slate-600" },
 };
 
-function Timeline({ events, at, office }: { events: TimelineEvent[]; at: (d: string) => string; office: boolean }) {
+/** Sales staff can open the orders and quotes of customers they look after; the rest of the history is the office's. */
+const salesLink = (href: string) => href.startsWith("/admin/sales/") || href.startsWith("/admin/quotes/");
+
+function Timeline({ events, at, office, serve }: { events: TimelineEvent[]; at: (d: string) => string; office: boolean; serve: boolean }) {
   if (events.length <= 1) return <Empty icon={History}>{"No activity yet"}</Empty>;
   return (
     <Card className="px-4 py-2">
@@ -390,7 +414,7 @@ function Timeline({ events, at, office }: { events: TimelineEvent[]; at: (d: str
               </span>
               <div className="min-w-0 flex-1 pt-1 text-sm">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                  {e.href && office ? (
+                  {e.href && (office || (serve && salesLink(e.href))) ? (
                     <Link href={e.href} className="hover:underline">
                       {title}
                     </Link>
@@ -409,16 +433,16 @@ function Timeline({ events, at, office }: { events: TimelineEvent[]; at: (d: str
   );
 }
 
-type Fmt = { p: CustomerProfile; day: (d: string | null) => string; office: boolean };
+type Fmt = { p: CustomerProfile; day: (d: string | null) => string; office: boolean; serve?: boolean };
 
-function OrdersTable({ p, day, at, office }: Fmt & { at: (d: Date | null) => string }) {
+function OrdersTable({ p, day, at, office, serve }: Fmt & { at: (d: Date | null) => string }) {
   if (!p.sales.length) return <Empty icon={ShoppingCart}>{"No orders yet"}</Empty>;
   return (
     <Table head={["Order", "Placed", "Delivery", "Status", "Payment", "Warehouse", "Total"]}>
       {p.sales.map((o) => (
         <tr key={o.id} className="hover:bg-slate-50/70">
           <td className="px-4 py-2.5 font-medium whitespace-nowrap">
-            {office ? (
+            {office || serve ? (
               <Link href={`/admin/sales/${o.id}`} className="text-blue-700 hover:underline">
                 {o.number}
               </Link>
@@ -517,12 +541,12 @@ function DeliveriesTable({ p, day, at, office }: Fmt & { at: (d: Date | null) =>
   );
 }
 
-function QuotesTable({ p, day, today, office, customerId }: Fmt & { today: string; customerId: string }) {
+function QuotesTable({ p, day, today, office, serve, customerId }: Fmt & { today: string; customerId: string }) {
   if (!p.quotes.length)
     return (
       <Card>
         <EmptyState icon={FileText} title="No quotes yet">
-          {office && (
+          {serve && (
             <Link href={`/admin/quotes/new?customer=${customerId}`} className={btn("primary", "sm", "mt-3")}>
               <FileText className="size-3.5" /> <T>{"New quote"}</T>
             </Link>
@@ -537,7 +561,7 @@ function QuotesTable({ p, day, today, office, customerId }: Fmt & { today: strin
         return (
           <tr key={q.id} className="hover:bg-slate-50/70">
             <td className="px-4 py-2.5 font-medium">
-              {office ? (
+              {office || serve ? (
                 <Link href={`/admin/quotes/${q.id}`} className="text-blue-700 hover:underline">
                   {q.number}
                 </Link>
@@ -618,4 +642,20 @@ function TopProducts({ p, day }: { p: CustomerProfile; day: (d: string | null) =
       </ul>
     </Card>
   );
+}
+
+/** "Worth offering" with what the card shows: name, pack, this customer's price and stock. */
+async function offersFor(db: Awaited<ReturnType<typeof getDb>>, customerId: string): Promise<Offer[]> {
+  const picks = await worthOffering(db, customerId, 6);
+  if (!picks.length) return [];
+  const ids = picks.map((x) => x.productId);
+  const [rows, own] = await Promise.all([
+    db.select({ id: products.id, name: products.name, sku: products.sku, packSize: products.packSize, priceCents: products.priceCents, stock: products.stock }).from(products).where(inArray(products.id, ids)),
+    db.select({ productId: customerPrices.productId, priceCents: customerPrices.priceCents }).from(customerPrices).where(and(eq(customerPrices.customerId, customerId), inArray(customerPrices.productId, ids))),
+  ]);
+  return picks.flatMap((x) => {
+    const r = rows.find((row) => row.id === x.productId);
+    if (!r) return [];
+    return [{ ...r, priceCents: own.find((o) => o.productId === r.id)?.priceCents ?? r.priceCents, stores: x.stores, of: x.of }];
+  });
 }

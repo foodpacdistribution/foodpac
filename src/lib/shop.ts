@@ -23,6 +23,7 @@ import { UserError } from "./planning";
 import { fillWaiting, returnStock } from "./stock-allocation";
 import { withStockContext } from "./stock-ledger";
 import { applyCreditToOrder, creditBalance, releaseOrderCredit } from "./credit";
+import { firstOrderOfferFor, returnFirstOrderOffer, useFirstOrderOffer } from "./first-order-offer";
 import { nowSecondsIn, todayIn } from "./time";
 
 type Settings = typeof settings.$inferSelect;
@@ -235,7 +236,11 @@ export async function recentlyBought(db: DB, customer: Customer, limit = 8) {
     .groupBy(salesOrderItems.productId)
     .orderBy(desc(sql`max(${salesOrders.createdAt})`))
     .limit(limit);
-  const ids = rows.map((r) => r.productId).filter((x): x is string => !!x);
+  return catalogFor(db, customer, rows.map((r) => r.productId).filter((x): x is string => !!x));
+}
+
+/** These products, with this customer's prices, in the order given (ones no longer on sale are left out). */
+export async function catalogFor(db: DB, customer: Customer, ids: string[]) {
   if (!ids.length) return [];
   const items = await db
     .select(catalogColumns)
@@ -417,10 +422,12 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
   const totals = quote(lines, s);
   if (totals.belowMinimum) throw new UserError(`The minimum order is $${(s.minOrderCents / 100).toFixed(2)} before GST.`);
 
-  // Store credit pays first. When it covers everything there's nothing to charge a card for, so
-  // the order is confirmed straight away (and recorded as a bank-transfer order, already paid).
-  const creditCents = c.useCredit ? Math.min(Math.round((await creditBalance(db, customer.id)) * 100), totals.totalCents) : 0;
-  const toPayCents = totals.totalCents - creditCents;
+  // A first-order offer comes off first, then store credit if they chose to use it. When those
+  // cover everything there's nothing to charge a card for, so the order is confirmed straight
+  // away (and recorded as a bank-transfer order, already paid).
+  const offerCents = Math.min(await firstOrderOfferFor(db, customer, totals.subtotalCents), totals.totalCents);
+  const creditCents = c.useCredit ? Math.min(Math.round((await creditBalance(db, customer.id)) * 100), totals.totalCents - offerCents) : 0;
+  const toPayCents = totals.totalCents - offerCents - creditCents;
   const method: PaymentMethod = toPayCents === 0 && c.method === "card" ? "bank_transfer" : c.method;
 
   if (method === "invoice" && customer.creditLimitCents !== null) {
@@ -469,10 +476,9 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
       .returning();
     // In the same transaction: if the credit was spent elsewhere meanwhile, no order is placed.
     let so = placed;
-    if (creditCents > 0) {
-      await applyCreditToOrder(tx as unknown as DB, placed.id, creditCents, userId);
-      [so] = await tx.select().from(salesOrders).where(eq(salesOrders.id, placed.id));
-    }
+    if (offerCents > 0) await useFirstOrderOffer(tx as unknown as DB, placed, offerCents, userId);
+    if (creditCents > 0) await applyCreditToOrder(tx as unknown as DB, placed.id, creditCents, userId);
+    if (offerCents > 0 || creditCents > 0) [so] = await tx.select().from(salesOrders).where(eq(salesOrders.id, placed.id));
     await tx.insert(salesOrderItems).values(
       lines.map((l) => ({
         salesOrderId: so.id,
@@ -601,8 +607,9 @@ export async function cancelOrder(db: DB, salesOrderId: string) {
     // Only what was actually reserved goes back; units still waiting for stock never left the shelf.
     const items = await tx.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id));
     for (const it of items) if (it.productId) await returnStock(tx as unknown as DB, it.productId, it.qty - it.backorderQty, { id: so.id, number: so.number, note: "Order cancelled" });
-    // Store credit spent on it goes back to the customer.
+    // Store credit spent on it goes back to the customer; a first-order offer it used is open again.
     await releaseOrderCredit(tx as unknown as DB, so, 0, "Order cancelled", null);
+    await returnFirstOrderOffer(tx as unknown as DB, so, null);
     const [updated] = await tx
       .update(salesOrders)
       .set({ status: "cancelled", cancelledAt: new Date(), deliveryOrderId: null })

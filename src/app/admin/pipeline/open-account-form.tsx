@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CheckCircle2, Copy, Dices, KeyRound, Store, Wallet } from "lucide-react";
+import { Check, CheckCircle2, Copy, Dices, Gift, KeyRound, Store, Wallet } from "lucide-react";
 import { useState } from "react";
 import { type OpenedAccount, openCustomerAccount } from "@/app/actions/pipeline";
 import { AddressInput } from "@/components/address-input";
@@ -152,6 +152,22 @@ export function OpenAccountForm({ start, onClose }: { start: AccountStart | null
         </div>
       </Section>
 
+      <Section icon={Gift} title={tr("First-order offer (optional)")}>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+          <span className="relative w-24">
+            <span className="pointer-events-none absolute top-2 left-2.5 text-slate-400">$</span>
+            <input name="offerOff" inputMode="decimal" aria-label={tr("Amount off")} placeholder="30" className={cx(inputCls, "pl-6")} />
+          </span>
+          {tr("off their first order of")}
+          <span className="relative w-28">
+            <span className="pointer-events-none absolute top-2 left-2.5 text-slate-400">$</span>
+            <input name="offerMin" inputMode="decimal" aria-label={tr("Minimum first order")} placeholder="200" className={cx(inputCls, "pl-6")} />
+          </span>
+          {tr("or more")}
+        </div>
+        <p className="text-xs text-slate-500">{tr("Gets them to place a first order. Taken off automatically, online or when you take the order; before GST, up to $500.")}</p>
+      </Section>
+
       <FormError message={state && !state.ok ? state.error : null} />
       <SubmitButton className="w-full" pendingText={tr("Opening account…")}>
         <CheckCircle2 className="size-4" /> {tr("Open account")}
@@ -197,6 +213,7 @@ function Opened({ account, terms, onClose }: { account: OpenedAccount; terms: Pa
         )}
         <Row label={tr("Payment terms")}>{tr(PAYMENT_TERMS_LABEL[terms])}</Row>
         {account.creditBalance !== null && <Row label={tr("Store credit")}>{aud(Math.round(account.creditBalance * 100))}</Row>}
+        {account.offer && <Row label={tr("First-order offer")}>{tr("{off} off {min}+", { off: aud(account.offer.offCents), min: aud(account.offer.minCents) })}</Row>}
       </dl>
       {handover && (
         <button
