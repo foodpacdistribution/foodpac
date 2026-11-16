@@ -61,7 +61,7 @@ export function ProductsClient({
   const tr = useT();
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [q, setQ] = useState(initialQuery);
-  const [filter, setFilter] = useState<"all" | "low" | "waiting" | "inactive">("all");
+  const [filter, setFilter] = useState<"all" | "instock" | "low" | "waiting" | "inactive">("all");
   const [showWaiting, setShowWaiting] = useState<Product | null>(null);
   const [category, setCategory] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -72,13 +72,14 @@ export function ProductsClient({
     const s = deferredQ.trim().toLowerCase();
     return products.filter(
       (p) =>
-        (filter === "all" || (filter === "low" ? p.active && p.stock <= LOW_STOCK : filter === "waiting" ? p.waiting.length > 0 : !p.active)) &&
+        (filter === "all" || (filter === "instock" ? p.stock > 0 : filter === "low" ? p.active && p.stock <= LOW_STOCK : filter === "waiting" ? p.waiting.length > 0 : !p.active)) &&
         (!category || p.category === category) &&
         (!s || p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s) || p.barcode?.includes(s)),
     );
   }, [products, deferredQ, filter, category]);
   const low = products.filter((p) => p.active && p.stock <= LOW_STOCK).length;
   const hidden = products.filter((p) => !p.active).length;
+  const inStock = products.filter((p) => p.stock > 0).length;
   const waitingCount = products.filter((p) => p.waiting.length > 0).length;
   const usedCategories = useMemo(() => [...new Set(products.map((p) => p.category))].sort(), [products]);
   // Only rows still on screen count as selected, so a filter change can't act on hidden rows.
@@ -107,9 +108,10 @@ export function ProductsClient({
         subtitle={tr("What customers can order in the online shop. Stock is reserved when an order is placed and returned if it's cancelled.")}
         actions={
           <>
-            {products.length > 0 && (
-              <button className={btn("secondary")} onClick={() => exportCsv(products)} title={tr("Edit in Excel and import again to update in bulk")}>
-                <Download className="size-4" /> {" "}{tr("Export CSV")}</button>
+            {shown.length > 0 && (
+              // Exports what's on screen: pick "In stock", a category or a search first to export just those.
+              <button className={btn("secondary")} onClick={() => exportCsv(shown)} title={tr("Exports the products shown. Edit in Excel and import again to update in bulk")}>
+                <Download className="size-4" /> {" "}{shown.length === products.length ? tr("Export CSV") : tr("Export CSV ({n})", { n: shown.length })}</button>
             )}
             <Link href="/admin/products/import" className={btn("secondary")}>
               <FileUp className="size-4" /> {" "}{tr("Import")}</Link>
@@ -134,10 +136,10 @@ export function ProductsClient({
           ))}
         </select>
         <div className="flex gap-1">
-          {(["all", "low", "waiting", "inactive"] as const).map((f) =>
+          {(["all", "instock", "low", "waiting", "inactive"] as const).map((f) =>
             f === "waiting" && !waitingCount ? null : (
               <button key={f} onClick={() => setFilter(f)} className={cx(btn(filter === f ? "primary" : "ghost", "sm"), f === "waiting" && filter !== f && "text-red-600")}>
-                {f === "all" ? tr(`All (${products.length})`) : f === "low" ? tr(`Low stock (${low})`) : f === "waiting" ? tr("Waiting for stock ({n})", { n: waitingCount }) : tr(`Hidden (${hidden})`)}
+                {f === "all" ? tr(`All (${products.length})`) : f === "instock" ? tr("In stock ({n})", { n: inStock }) : f === "low" ? tr(`Low stock (${low})`) : f === "waiting" ? tr("Waiting for stock ({n})", { n: waitingCount }) : tr(`Hidden (${hidden})`)}
               </button>
             ),
           )}
