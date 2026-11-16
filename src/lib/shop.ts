@@ -413,6 +413,8 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
 
   if (!canSeePrices(customer)) throw new UserError("Your account is waiting for approval. We'll email you once you can order.");
   if (!allowedMethods(customer, stripeOn).includes(c.method)) throw new UserError("That payment method isn't available on your account.");
+  // The shop doesn't ask for a day: an order goes on the next run we can make. A day passed in must still be one we deliver.
+  if (!c.deliveryDate) c = { ...c, deliveryDate: deliveryDates(s, 1)[0] };
   if (!deliveryDates(s).includes(c.deliveryDate)) throw new UserError("Choose one of the available delivery days.");
 
   const lines = await getCart(db, customer);

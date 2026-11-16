@@ -25,14 +25,14 @@ const customer = async (paymentTerms: "prepay" | "net30" = "prepay") => {
   return c;
 };
 const giveCredit = (customerId: string, dollars: number) => postCredit(db, { customerId, type: "promotion_credit", amount: dollars, sourceType: "manual", description: "test", by: userId });
-const checkout = async (c: typeof customers.$inferSelect, method: "card" | "bank_transfer" | "invoice", useCredit: boolean) => {
+const checkout = async (c: typeof customers.$inferSelect, method: "card" | "bank_transfer" | "invoice", useCredit: boolean, day?: string) => {
   await db.insert(cartItems).values({ customerId: c.id, productId: cups, qty: 2 });
   const s = await getSettings(db);
   return placeOrder(
     db,
     c,
     userId,
-    { idempotencyKey: `k${++key}`, method, deliveryDate: deliveryDates(s)[0], recipient: "Mei", phone: null, address: "1 Main St", instructions: null, windowStartMin: null, windowEndMin: null, notes: null, useCredit },
+    { idempotencyKey: `k${++key}`, method, deliveryDate: day ?? deliveryDates(s)[0], recipient: "Mei", phone: null, address: "1 Main St", instructions: null, windowStartMin: null, windowEndMin: null, notes: null, useCredit },
     s,
     true,
   );
@@ -51,6 +51,17 @@ beforeAll(async () => {
 
 beforeEach(() => {
   key++;
+});
+
+describe("delivery day at checkout", () => {
+  it("puts an order with no day chosen on the next delivery day", async () => {
+    const so = await checkout(await customer(), "bank_transfer", false, "");
+    expect(so.deliveryDate).toBe(deliveryDates(await getSettings(db))[0]);
+  });
+
+  it("still refuses a day we don't deliver", async () => {
+    await expect(checkout(await customer(), "bank_transfer", false, "2000-01-01")).rejects.toThrow("available delivery days");
+  });
 });
 
 describe("paying with store credit at checkout", () => {

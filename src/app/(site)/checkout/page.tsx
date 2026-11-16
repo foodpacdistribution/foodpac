@@ -7,7 +7,7 @@ import { firstOrderOfferFor } from "@/lib/first-order-offer";
 import { getDb } from "@/lib/db";
 import { customerAddresses } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
-import { allowedMethods, canSeePrices, deliveryDates, getCart, openBalance, quote } from "@/lib/shop";
+import { allowedMethods, canSeePrices, getCart, openBalance, quote } from "@/lib/shop";
 import { stripeEnabled } from "@/lib/stripe";
 import { CheckoutForm } from "./checkout-form";
 import { T } from "@/components/i18n";
@@ -38,7 +38,6 @@ export default async function CheckoutPage() {
         idempotencyKey={crypto.randomUUID()}
         lines={lines.map((l) => ({ id: l.id, name: l.name, sku: l.sku, qty: l.qty, unit: l.unit, lineCents: l.lineCents }))}
         quote={q}
-        dates={deliveryDates(s)}
         methods={allowedMethods(c, stripeEnabled())}
         terms={c.paymentTerms}
         creditLeftCents={c.creditLimitCents === null ? null : c.creditLimitCents - balance}

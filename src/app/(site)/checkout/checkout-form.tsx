@@ -1,11 +1,10 @@
 "use client";
 
-import { Building2, CalendarDays, Coins, CreditCard, Landmark, Receipt } from "lucide-react";
+import { Building2, Clock, Coins, CreditCard, Landmark, Receipt } from "lucide-react";
 import { useState } from "react";
 import { checkout } from "@/app/actions/shop";
 import { FormError, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { cx } from "@/components/ui";
-import { prettyDate } from "@/lib/dates";
 import type { PaymentMethod, PaymentTerms } from "@/lib/db/schema";
 import { aud, PAYMENT_METHOD_LABEL, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { Tx, useT } from "@/components/i18n";
@@ -21,7 +20,6 @@ export function CheckoutForm(props: {
   idempotencyKey: string;
   lines: { id: string; name: string; sku: string; qty: number; unit: string; lineCents: number }[];
   quote: { subtotalCents: number; deliveryFeeCents: number; gstCents: number; totalCents: number };
-  dates: string[];
   methods: PaymentMethod[];
   terms: PaymentTerms;
   creditLeftCents: number | null;
@@ -87,18 +85,9 @@ export function CheckoutForm(props: {
           </div>
         </Step>
 
-        <Step n={2} title={tr("Delivery day")} icon={CalendarDays}>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {props.dates.map((d, i) => (
-              <label key={d} className="cursor-pointer">
-                <input type="radio" name="deliveryDate" value={d} defaultChecked={i === 0} className="peer sr-only" />
-                <span className="block rounded-xl border border-leaf-950/15 bg-white px-3 py-2.5 text-center text-sm peer-checked:border-leaf-700 peer-checked:bg-leaf-50 peer-checked:font-semibold peer-focus-visible:ring-2 peer-focus-visible:ring-leaf-600">
-                  {<Tx>{prettyDate(d, { weekday: "short", day: "numeric", month: "short" })}</Tx>}
-                </span>
-              </label>
-            ))}
-          </div>
-          <div className="mt-4 grid max-w-sm grid-cols-2 gap-3">
+        {/* No day to pick: the order goes on our next delivery run (the server picks the day). */}
+        <Step n={2} title={tr("Delivery window")} icon={Clock}>
+          <div className="grid max-w-sm grid-cols-2 gap-3">
             <Label text={tr("Receive from (optional)")}>
               <input name="windowStart" type="time" className={input} />
             </Label>
