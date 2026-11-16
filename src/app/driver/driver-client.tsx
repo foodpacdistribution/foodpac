@@ -45,6 +45,8 @@ type Props = {
   today: string;
   /** Days from today on with a route sent to this driver, and how many stops each has. */
   days: { date: string; stops: number }[];
+  /** Earlier days with stops still to confirm (newest first). */
+  unconfirmed: { date: string; pending: number }[];
   nowS: number;
   depot: { id: string; lat: number; lng: number; name: string } | null;
   route: RouteView | null;
@@ -65,13 +67,14 @@ function greeting(nowS: number) {
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-export function DriverClient({ name, linked, date, today, days, nowS, depot, route, items, photos, roles, canTellCustomer, requirePhoto, requireSignature }: Props) {
+export function DriverClient({ name, linked, date, today, days, unconfirmed, nowS, depot, route, items, photos, roles, canTellCustomer, requirePhoto, requireSignature }: Props) {
   const tr = useT();
   // Clock times read "2:44pm" in English and "14:44" in Chinese.
   const clock = (s: number | null) => tr(formatClock(s));
   const locale = intlLocale(useLocale());
   const [sharePref, setSharePref] = useState(readSharePref);
-  const sharing = useLocationSharing(route?.status === "in_progress" && sharePref);
+  // Only on the day: a route left "on the road" yesterday doesn't share where the driver is now.
+  const sharing = useLocationSharing(route?.status === "in_progress" && sharePref && date >= today);
   const [pending, startTransition] = useTransition();
   // The stop the sheet was opened for. Saving refreshes the route, so `current` can already be the next stop by the time it's done.
   const [sheet, setSheet] = useState<null | { kind: "delivered" | "failed"; stopId: string; name: string; reference: string }>(null);
@@ -251,6 +254,32 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
     </nav>
   );
 
+  // Earlier days with deliveries never confirmed on the phone: finish them here, with the signature from the album.
+  const otherUnconfirmed = unconfirmed.filter((u) => u.date !== date);
+  const unconfirmedBanner = otherUnconfirmed.length > 0 && (
+    <section className="overflow-hidden rounded-2xl bg-amber-50 shadow-card ring-1 ring-amber-200">
+      <p className="flex items-center gap-2 px-4 pt-3 text-sm font-semibold text-amber-900">
+        <TriangleAlert className="size-4 shrink-0 text-amber-600" /> {tr("Deliveries not confirmed yet")}
+      </p>
+      <p className="px-4 pt-0.5 text-xs text-amber-800">{tr("Confirm each one with the customer's signature photo from your album.")}</p>
+      <ul className="mt-2 divide-y divide-amber-200 border-t border-amber-200">
+        {otherUnconfirmed.map((u) => (
+          <li key={u.date}>
+            <Link href={dayHref(u.date)} className="flex items-center gap-3 px-4 py-2.5 text-sm active:bg-amber-100">
+              <span className="min-w-0 flex-1 font-medium text-amber-950">
+                {u.date === shiftDate(today, -1) ? tr("Yesterday") : <Tx>{prettyDate(u.date, { weekday: "short", day: "numeric", month: "short" })}</Tx>}
+                <span className="ml-1.5 font-normal text-amber-800">· {tr(u.pending === 1 ? "1 stop to confirm" : "{n} stops to confirm", { n: u.pending })}</span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-amber-700" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+  // A day gone by: stops still open were (most likely) delivered and only need confirming.
+  const late = date < today;
+
   if (!linked || !route) {
     return (
       <div className="min-h-dvh">
@@ -258,6 +287,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
         <main className="mx-auto -mt-10 max-w-lg space-y-4 px-4">
           {dayBar}
           {dayTabs}
+          {unconfirmedBanner}
           <div className="rounded-2xl bg-white p-8 text-center shadow-card">
             <Truck className="mx-auto size-10 text-slate-300" />
             <p className="mt-3 font-semibold text-slate-900">{!linked ? tr("Account not linked") : date < today ? tr("No deliveries on this day") : tr("No deliveries dispatched yet")}</p>
@@ -298,10 +328,21 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
       <main className="mx-auto -mt-12 max-w-lg space-y-4 px-4">
         {dayBar}
         {dayTabs}
-        {date !== today && (
-          <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-900 ring-1 ring-blue-200">
-            {tr("This shipment is for {day}. You can look it over now; deliver it on the day.", { day: tr(prettyDate(date, { weekday: "long", day: "numeric", month: "long" })) })}
-          </p>
+        {unconfirmedBanner}
+        {late ? (
+          pendingStops.length > 0 && (
+            <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200">
+              {tr("This was {day}'s shipment. For each stop you delivered but didn't confirm: choose it, tap Delivered and add the customer's signature photo from your album.", {
+                day: tr(prettyDate(date, { weekday: "long", day: "numeric", month: "long" })),
+              })}
+            </p>
+          )
+        ) : (
+          date !== today && (
+            <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-900 ring-1 ring-blue-200">
+              {tr("This shipment is for {day}. You can look it over now; deliver it on the day.", { day: tr(prettyDate(date, { weekday: "long", day: "numeric", month: "long" })) })}
+            </p>
+          )
         )}
         <OutboxBanner items={outbox.items} busy={outbox.busy} persistent={outbox.persistent} />
         {/* Progress */}
@@ -330,7 +371,7 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
           </p>
         </section>
 
-        {route.status === "in_progress" && (
+        {route.status === "in_progress" && !late && (
           <LocationBar
             status={sharing.status}
             lastSentAt={sharing.lastSentAt}
@@ -720,14 +761,15 @@ export function DriverClient({ name, linked, date, today, days, nowS, depot, rou
             save={save("delivered", sheet)}
             fields={{ stopId: sheet.stopId }}
             reference={sheet.reference}
-            requirePhoto={requirePhoto}
-            requireSignature={requireSignature}
+            late={late}
+            requirePhoto={requirePhoto && !late}
+            requireSignature={requireSignature && !late}
             onDone={() => finishSheet({ tone: "ok", text: `Delivered · ${sheet.name}` })}
           />
         )}
       </Modal>
       <Modal open={sheet?.kind === "failed"} onClose={() => setSheet(null)} title={tr("Report a delivery problem")}>
-        {sheet && <OutcomeForm kind="failed" save={save("failed", sheet)} fields={{ stopId: sheet.stopId }} onDone={() => finishSheet({ tone: "warn", text: `Problem reported · ${sheet.name}` })} />}
+        {sheet && <OutcomeForm kind="failed" late={late} save={save("failed", sheet)} fields={{ stopId: sheet.stopId }} onDone={() => finishSheet({ tone: "warn", text: `Problem reported · ${sheet.name}` })} />}
       </Modal>
       <Toast toast={toast} onDone={clearToast} />
     </div>

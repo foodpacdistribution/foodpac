@@ -2,10 +2,12 @@
 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { attempt } from "@/lib/action";
+import { type ActionResult, attempt } from "@/lib/action";
 import { assertUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { plans, routes } from "@/lib/db/schema";
+import { finishStopFromOffice } from "@/lib/driver-stops";
+import { readOutcome } from "@/lib/outcome";
 import { getT } from "@/lib/i18n/server";
 import { UserError } from "@/lib/planning";
 import { buildShipment, deleteShipment as removeShipment, recallShipment as recall, sendShipment as send, splitIntoShipments, transferOrder as transfer } from "@/lib/shipments";
@@ -143,5 +145,23 @@ export async function deleteShipment(routeId: string) {
     await removeShipment(await getDb(), routeId);
     revalidate();
     return { message: "Shipment deleted; its orders are ready to ship again" };
+  });
+}
+
+/**
+ * The office confirms a stop for the driver (delivered but never confirmed on the phone, often
+ * found the next day): the signed docket from the album, or a photo, completes it. Or records
+ * that it couldn't be delivered.
+ */
+export async function recordStopOutcome(_prev: unknown, form: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const kind = form.get("kind") === "failed" ? "failed" : "delivered";
+    // The rules for a confirmation after the fact (a photo or a signature) are applied with the stop.
+    const outcome = await readOutcome(form, kind, { requirePhoto: false, requireSignature: false });
+    // The office isn't at the door: where this computer is says nothing about the delivery.
+    outcome.at = null;
+    await finishStopFromOffice(String(form.get("stopId") ?? ""), outcome);
+    revalidate();
+    return { message: kind === "delivered" ? "Marked as delivered" : "Delivery issue reported" };
   });
 }

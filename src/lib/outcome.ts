@@ -34,7 +34,7 @@ export const clean = (v: FormDataEntryValue | null, max = 500) => {
 export async function readOutcome(
   form: FormData,
   type: "delivered" | "failed",
-  rules: { requirePhoto: boolean; requireSignature: boolean; proofRequired?: boolean },
+  rules: ProofRules,
 ): Promise<Outcome> {
   const at = readFix(form);
   const note = clean(form.get("note"));
@@ -47,8 +47,23 @@ export async function readOutcome(
   }
   const signature = await readUpload(form.get("signature"), "Signature");
   const recipient = clean(form.get("recipient"), 120);
-  if (rules.requirePhoto && !photo) throw new UserError("A delivery photo is required.");
-  if (rules.requireSignature && !signature) throw new UserError("The customer's signature is required.");
-  if (rules.proofRequired && !photo && !signature) throw new UserError("Take a photo or get a signature to confirm the delivery.");
-  return { type, recipient, note, photo, signature, at };
+  const outcome: Outcome = { type, recipient, note, photo, signature, at };
+  checkProof(outcome, rules);
+  return outcome;
 }
+
+export type ProofRules = { requirePhoto: boolean; requireSignature: boolean; proofRequired?: boolean };
+
+/** Throws when a delivery is missing the photo / signature the rules ask for. */
+export function checkProof(o: Outcome, rules: ProofRules) {
+  if (o.type !== "delivered") return;
+  if (rules.requirePhoto && !o.photo) throw new UserError("A delivery photo is required.");
+  if (rules.requireSignature && !o.signature) throw new UserError("The customer's signature is required.");
+  if (rules.proofRequired && !o.photo && !o.signature) throw new UserError("Take a photo or get a signature to confirm the delivery.");
+}
+
+/**
+ * A delivery confirmed after its day (forgotten, or entered by the office): nobody can take a
+ * photo at the door any more, so the signed docket (a photo from the album) or any photo will do.
+ */
+export const LATE_PROOF: ProofRules = { requirePhoto: false, requireSignature: false, proofRequired: true };

@@ -32,8 +32,10 @@ export async function POST(req: Request) {
 
   try {
     const db = await getDb();
-    const outcome = await readOutcome(form, kind, await getSettings(db));
-    const r = await finishStop(String(form.get("stopId") ?? ""), outcome, doneAt(form.get("doneAt")));
+    // Which photo / signature it needs depends on the stop's day (a stop confirmed late can't
+    // have a photo taken at the door), so that's checked once the stop is loaded.
+    const outcome = await readOutcome(form, kind, { requirePhoto: false, requireSignature: false });
+    const r = await finishStop(String(form.get("stopId") ?? ""), outcome, doneAt(form.get("doneAt")), await getSettings(db));
     return answer({ ok: true, already: r.already });
   } catch (err) {
     if (err instanceof UserError || err instanceof AuthError) return answer({ ok: false, error: err.message, retry: false }, 422);

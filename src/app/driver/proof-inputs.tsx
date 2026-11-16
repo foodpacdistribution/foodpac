@@ -166,6 +166,9 @@ async function renderProof(strokes: Stroke[], lines: [string, string]) {
  * Customer signature. Tapping opens a full-screen pad (more room, works sideways); the
  * finished signature is stamped with the order, time and GPS (and the receiver's name, if the
  * driver entered one) before upload. The customer only signs: no name to type.
+ *
+ * Or a photo of the signature from the album: the signed paper docket, or a delivery confirmed
+ * the day after, with the customer's signature saved on the phone.
  */
 export function SignaturePad({
   onChange,
@@ -173,8 +176,11 @@ export function SignaturePad({
   signer,
   reference,
   accuracyM,
+  albumOnly = false,
 }: {
   onChange: (f: File | null) => void;
+  /** Only a photo of the signature (the office, or a delivery confirmed after the day): no one is there to sign. */
+  albumOnly?: boolean;
   required?: boolean;
   /** "Received by", if entered: added to the stamp. */
   signer: string;
@@ -185,6 +191,9 @@ export function SignaturePad({
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [strokes, setStrokes] = useState<Stroke[] | null>(null);
+  // The signature is a photo from the album rather than drawn here.
+  const [fromAlbum, setFromAlbum] = useState(false);
+  const [busy, setBusy] = useState(false);
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
   // The stamp names the receiver when one was entered, so re-stamp if it changes after signing.
@@ -213,9 +222,31 @@ export function SignaturePad({
 
   const clear = () => {
     setStrokes(null);
+    setFromAlbum(false);
     setPreview(null);
     onChange(null);
   };
+
+  const pick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setBusy(true);
+    // Bigger and sharper than a delivery photo, so the handwriting stays readable.
+    const file = await compressPhoto(f, 2000, 0.85);
+    setBusy(false);
+    setStrokes(null);
+    setFromAlbum(true);
+    setPreview(URL.createObjectURL(file));
+    onChange(file);
+  };
+
+  const albumButton = (
+    <label className={cx(btn("secondary", "md", "w-full cursor-pointer rounded-xl border-dashed"), busy && "opacity-60")}>
+      {busy ? <Spinner className="size-4" /> : <ImageIcon className="size-4" />} {busy ? tr("Processing…") : tr(preview ? "Choose another signature photo" : "Signature photo from album")}
+      <input type="file" accept="image/*" className="sr-only" onChange={pick} />
+    </label>
+  );
 
   return (
     <div>
@@ -227,7 +258,18 @@ export function SignaturePad({
           </button>
         )}
       </div>
-      {preview ? (
+      {preview && fromAlbum ? (
+        <div className="space-y-2">
+          <div className="overflow-hidden rounded-xl border border-emerald-300 bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
+            <img src={preview} alt={tr("Customer signature")} className="max-h-72 w-full object-contain" />
+            <span className="flex items-center justify-center gap-1.5 border-t border-line bg-emerald-50 py-1.5 text-xs font-medium text-emerald-800">
+              <Check className="size-3.5" /> {tr("Signature photo added")}
+            </span>
+          </div>
+          {albumButton}
+        </div>
+      ) : preview ? (
         <button type="button" onClick={() => setOpen(true)} className="block w-full overflow-hidden rounded-xl border border-emerald-300 bg-white">
           {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
           <img src={preview} alt={tr("Customer signature")} className="w-full" />
@@ -236,10 +278,15 @@ export function SignaturePad({
           </span>
         </button>
       ) : (
-        <button type="button" onClick={() => setOpen(true)} className={btn("secondary", "lg", "h-28 w-full flex-col gap-1 rounded-xl border-dashed")}>
-          <PenLine className="size-6" />
-          <span>{tr("Tap for the customer to sign")}</span>
-        </button>
+        <div className="space-y-2">
+          {!albumOnly && (
+            <button type="button" onClick={() => setOpen(true)} className={btn("secondary", "lg", "h-28 w-full flex-col gap-1 rounded-xl border-dashed")}>
+              <PenLine className="size-6" />
+              <span>{tr("Tap for the customer to sign")}</span>
+            </button>
+          )}
+          {albumButton}
+        </div>
       )}
       {open && (
         <SignatureScreen

@@ -1,6 +1,6 @@
 "use client";
 
-import { LocateFixed } from "lucide-react";
+import { History, LocateFixed } from "lucide-react";
 import { useActionState, useEffect, useState } from "react";
 import { FormError, SubmitButton } from "@/components/client-ui";
 import { cx, Field, inputCls, Spinner } from "@/components/ui";
@@ -26,6 +26,7 @@ export function OutcomeForm<T>({
   proofRequired = false,
   reference = "",
   save,
+  late = false,
 }: {
   kind: "delivered" | "failed";
   /** Sends the result now (Quick route). Not used with `save`. */
@@ -43,6 +44,11 @@ export function OutcomeForm<T>({
    * signal). Used by the driver app, so a customer never has to sign twice.
    */
   save?: (form: FormData) => Promise<void>;
+  /**
+   * Entered after the delivery (the day after, or by the office): the signature comes from the
+   * album, and the phone's location isn't recorded, as it says nothing about the delivery.
+   */
+  late?: boolean;
 }) {
   const tr = useT();
   const [state, submit] = useActionState<ActionResult<T> | undefined, FormData>(
@@ -62,7 +68,7 @@ export function OutcomeForm<T>({
   const [signature, setSignature] = useState<File | null>(null);
   const [recipient, setRecipient] = useState("");
   const [reason, setReason] = useState("");
-  const fix = useBestFix();
+  const fix = useBestFix(!late);
   useEffect(() => {
     if (state?.ok) onDone(state.data);
   }, [state, onDone]);
@@ -74,8 +80,10 @@ export function OutcomeForm<T>({
         ? "Take a delivery photo."
         : requireSignature && !signature
           ? "Get the customer's signature."
-          : proofRequired && !photo && !signature
-            ? "Take a photo or get a signature to confirm the delivery."
+          : (proofRequired || late) && !photo && !signature
+            ? late
+              ? "Add the signature photo or a delivery photo."
+              : "Take a photo or get a signature to confirm the delivery."
             : null
       : !reason
         ? "Choose what happened."
@@ -114,6 +122,7 @@ export function OutcomeForm<T>({
           </Field>
           <SignaturePad
             onChange={setSignature}
+            albumOnly={late}
             required={requireSignature}
             signer={recipient}
             reference={reference}
@@ -143,10 +152,17 @@ export function OutcomeForm<T>({
           className={cx(inputCls, "h-auto py-2 text-base")}
         />
       </Field>
-      <p className={cx("flex items-center gap-1.5 text-xs", fix && fix.accuracy <= 30 ? "text-emerald-700" : "text-slate-500")}>
-        {fix ? <LocateFixed className="size-3.5" /> : <Spinner className="size-3" />}
-        {fix ? tr("Location recorded with this delivery · ±{m} m", { m: Math.round(fix.accuracy) }) : tr("Getting your exact location…")}
-      </p>
+      {late ? (
+        <p className="flex items-start gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-900">
+          <History className="mt-px size-3.5 shrink-0" />
+          {tr("Confirming after the delivery: add the customer's signature photo (or a delivery photo). The location isn't recorded.")}
+        </p>
+      ) : (
+        <p className={cx("flex items-center gap-1.5 text-xs", fix && fix.accuracy <= 30 ? "text-emerald-700" : "text-slate-500")}>
+          {fix ? <LocateFixed className="size-3.5" /> : <Spinner className="size-3" />}
+          {fix ? tr("Location recorded with this delivery · ±{m} m", { m: Math.round(fix.accuracy) }) : tr("Getting your exact location…")}
+        </p>
+      )}
       <FormError message={state && !state.ok ? state.error : null} />
       {missing && <p className="text-center text-xs font-medium text-amber-700">{tr(missing)}</p>}
       <SubmitButton disabled={!!missing} variant={kind === "delivered" ? "success" : "primary"} size="lg" className="w-full rounded-xl" pendingText={tr(save ? "Saving…" : "Uploading…")}>

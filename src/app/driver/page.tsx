@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { deliveryEvents, deliveryProofs, orders, plans, products, routes, routeStops, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { customerEmailsOn } from "@/lib/delivery-emails";
+import { unconfirmedStops } from "@/lib/driver-stops";
 import { goodsPhotoUrls } from "@/lib/goods-photos";
 import { productImageUrl } from "@/lib/product-image";
 import { depotFor, getDepots, getPlanView, getSettings } from "@/lib/planning";
@@ -37,7 +38,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
   const route = view.routes.find((r) => r.driverId === user.driverId && r.dispatchedAt) ?? null;
   const orderIds = route?.stops.map((s) => s.orderId) ?? [];
   const doneIds = route?.stops.filter((s) => s.status !== "pending").map((s) => s.id) ?? [];
-  const [depotList, lines, photoRows, goodsRows] = await Promise.all([
+  const [depotList, lines, photoRows, goodsRows, unconfirmed] = await Promise.all([
     getDepots(db),
     // What to hand over at each stop (shop and staff orders; other orders only have a unit count).
     orderIds.length
@@ -60,6 +61,8 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
       : [],
     // The goods from each order's imported invoice or delivery order.
     orderIds.length ? db.select({ id: orders.id, goods: orders.goods }).from(orders).where(inArray(orders.id, orderIds)) : [],
+    // Earlier days with stops never confirmed: still to finish, with the signature from the album.
+    user.driverId ? unconfirmedStops(db, today, user.driverId) : [],
   ]);
   const photos = Object.fromEntries(photoRows.map((r) => [r.stopId, r.n]));
   // What each item looks like: the catalogue photo for shop orders, the invoice's for imported ones.
@@ -101,6 +104,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
       date={date}
       today={today}
       days={days}
+      unconfirmed={unconfirmed.map((u) => ({ date: u.date, pending: u.pending }))}
       nowS={nowSecondsIn(s.timezone)}
       depot={depot}
       route={route}

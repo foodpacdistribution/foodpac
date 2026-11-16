@@ -1,14 +1,16 @@
 "use client";
 
-import { AlertTriangle, ArrowRightLeft, CheckCircle2, MapPinOff, PackageCheck, Printer, RefreshCcw, Send, Split, Trash2, Truck, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CheckCircle2, ClipboardCheck, MapPinOff, PackageCheck, Printer, RefreshCcw, Send, Split, Trash2, Truck, Undo2, X } from "lucide-react";
 import Link from "@/components/link";
 import { useMemo, useState, useTransition } from "react";
-import { createShipment, deleteShipment, recallShipment, removeFromShipment, reoptimiseShipment, sendShipment, splitShipments, transferToDriver } from "@/app/actions/shipments";
-import { Toast, type ToastMessage } from "@/components/client-ui";
+import { createShipment, deleteShipment, recallShipment, recordStopOutcome, removeFromShipment, reoptimiseShipment, sendShipment, splitShipments, transferToDriver } from "@/app/actions/shipments";
+import { OutcomeForm } from "@/app/driver/outcome-form";
+import { Modal, Toast, type ToastMessage } from "@/components/client-ui";
 import { DateNav } from "@/components/date-nav";
 import { DeliveryMap, type MapStop } from "@/components/map";
 import { Badge, btn, Card, ColorDot, cx, EmptyState, inputCls, PageHeader, Spinner } from "@/components/ui";
 import { FULFILMENT } from "@/lib/money";
+import { prettyDate } from "@/lib/dates";
 import { formatClock, formatKm, formatMinutesClock } from "@/lib/time";
 import { Tx, useT } from "@/components/i18n";
 
@@ -49,6 +51,7 @@ type Shipment = {
   overtimeS: number;
   overCapacity: number;
   stops: {
+    stopId: string;
     orderId: string;
     seq: number;
     doneS: number | null;
@@ -94,6 +97,8 @@ export function ShipmentsClient(props: {
   hasDepot: boolean;
   depots: { id: string; name: string; lat: number; lng: number }[];
   ready: Ready[];
+  /** Earlier days' shipments with stops the driver never confirmed. */
+  unconfirmed: { date: string; routeId: string; number: string; driverName: string; pending: number }[];
   drivers: Driver[];
   shipments: Shipment[];
 }) {
@@ -108,6 +113,9 @@ export function ShipmentsClient(props: {
   const [pending, start] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  // A stop the office is confirming for the driver (signed docket from the album, or a problem).
+  const [recording, setRecording] = useState<Recording | null>(null);
+  const earlier = props.unconfirmed.filter((u) => u.date !== props.date);
 
   const locatable = props.ready.filter((o) => o.located);
   const chosen = props.ready.filter((o) => selected.has(o.id));
@@ -213,6 +221,34 @@ export function ShipmentsClient(props: {
         </Link>{" "}
         {tr("Both work on the same routes.")}
       </p>
+
+      {earlier.length > 0 && (
+        <Card className="mb-4 overflow-hidden border-amber-200">
+          <div className="bg-amber-50/70 px-4 py-2.5">
+            <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+              <AlertTriangle className="size-4" /> {tr("Deliveries not confirmed by the driver")}
+            </p>
+            <p className="mt-0.5 text-xs text-amber-800">
+              {tr("Open the day and confirm each stop with the customer's signature photo. The driver can also do it from their phone.")}
+            </p>
+          </div>
+          <ul className="divide-y divide-line border-t border-amber-200">
+            {earlier.map((u) => (
+              <li key={u.routeId}>
+                <Link href={`/admin/shipments?date=${u.date}`} className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-amber-50/50">
+                  <span className="w-28 shrink-0 font-medium text-slate-900">
+                    <Tx>{prettyDate(u.date, { weekday: "short", day: "numeric", month: "short" })}</Tx>
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-slate-600">
+                    {u.number} · {u.driverName}
+                  </span>
+                  <Badge tone="amber">{tr(u.pending === 1 ? "1 stop to confirm" : "{n} stops to confirm", { n: u.pending })}</Badge>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {!props.hasDepot && (
         <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
@@ -466,17 +502,66 @@ export function ShipmentsClient(props: {
                 {tr("Tick orders on the left, choose a driver and create a shipment.")}</EmptyState>
             </Card>
           ) : (
-            props.shipments.map((s) => <ShipmentCard key={s.id} s={s} drivers={props.drivers} shipments={props.shipments} busy={busy} pending={pending} run={run} />)
+            props.shipments.map((s) => (
+              <ShipmentCard
+                key={s.id}
+                s={s}
+                past={props.date < props.today}
+                drivers={props.drivers}
+                shipments={props.shipments}
+                busy={busy}
+                pending={pending}
+                run={run}
+                onRecord={(x) => setRecording({ kind: "delivered", stopId: x.stopId, name: x.customerName || x.orderNumber, reference: x.orderNumber, driverName: s.driverName })}
+              />
+            ))
           )}
         </div>
       </div>
+      <Modal open={!!recording} onClose={() => setRecording(null)} title={tr("Confirm a stop for the driver")}>
+        {recording && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              <span className="font-medium text-slate-900">{recording.name}</span> · {recording.reference} · {recording.driverName}
+            </p>
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 text-sm font-medium">
+              {(["delivered", "failed"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setRecording({ ...recording, kind: k })}
+                  className={cx("rounded-md py-1.5", recording.kind === k ? "bg-white text-slate-900 shadow-sm" : "text-slate-500")}
+                >
+                  {k === "delivered" ? tr("Delivered") : tr("Couldn't deliver")}
+                </button>
+              ))}
+            </div>
+            <OutcomeForm
+              key={recording.kind}
+              kind={recording.kind}
+              late
+              action={recordStopOutcome}
+              fields={{ stopId: recording.stopId, kind: recording.kind }}
+              reference={recording.reference}
+              onDone={() => {
+                setToast({ id: Date.now(), tone: "ok", text: recording.kind === "delivered" ? `Delivered · ${recording.name}` : `Problem reported · ${recording.name}` });
+                setRecording(null);
+              }}
+            />
+          </div>
+        )}
+      </Modal>
       <Toast toast={toast} onDone={() => setToast(null)} />
     </>
   );
 }
 
+type Recording = { kind: "delivered" | "failed"; stopId: string; name: string; reference: string; driverName: string };
+
 function ShipmentCard({
   s,
+  past,
+  onRecord,
   drivers,
   shipments,
   busy,
@@ -489,6 +574,9 @@ function ShipmentCard({
   busy: string | null;
   pending: boolean;
   run: (key: string, fn: () => Promise<{ ok: true; message?: string } | { ok: false; error: string }>) => void;
+  /** The shipment's day has gone by. */
+  past: boolean;
+  onRecord: (stop: Shipment["stops"][number]) => void;
 }) {
   const tr = useT();
   const units = s.stops.reduce((t, x) => t + x.demand, 0);
@@ -587,6 +675,12 @@ function ShipmentCard({
         </p>
       )}
 
+      {past && s.dispatchedAt && done < s.stops.length && (
+        <p className="mx-4 mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+          <ClipboardCheck className="mt-px size-3.5 shrink-0" />
+          {tr("{n} stop(s) not confirmed by the driver. Tap Confirm on each and add the customer's signature photo.", { n: s.stops.length - done })}
+        </p>
+      )}
       <ol className="mt-3 divide-y divide-line border-t border-line text-sm">
         {s.stops.map((x) => (
           <li key={x.orderId} className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4">
@@ -620,6 +714,20 @@ function ShipmentCard({
               )}
             </span>
             <span className="hidden w-10 text-right text-xs tabular-nums text-slate-500 sm:block">×{x.demand}</span>
+            {/* On the driver's phone and not confirmed: the office can enter it, e.g. with the signed docket the next day. */}
+            {x.status === "pending" && s.dispatchedAt && (
+              <button
+                type="button"
+                className={btn(past ? "primary" : "ghost", "sm", "shrink-0 px-2")}
+                disabled={pending}
+                title={tr("Confirm delivery for the driver")}
+                aria-label={tr("Confirm {order} for the driver", { order: x.orderNumber })}
+                onClick={() => onRecord(x)}
+              >
+                <ClipboardCheck className="size-3.5" />
+                <span className="hidden sm:inline">{tr("Confirm")}</span>
+              </button>
+            )}
             {x.status === "pending" && otherDrivers.length > 0 && (
               <MoveToDriver
                 label={tr("Move {order} to another driver", { order: x.orderNumber })}

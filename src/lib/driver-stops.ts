@@ -1,12 +1,13 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { assertUser } from "./auth/dal";
+import { assertUser, STAFF } from "./auth/dal";
 import { type DB, getDb } from "./db";
 import { emailDelivered, emailHeadsUp, emailNextStop, emailRouteStarted } from "./delivery-emails";
-import { deliveryEvents, deliveryProofs, orders, plans, routes, routeStops } from "./db/schema";
-import type { Outcome } from "./outcome";
+import { deliveryEvents, deliveryProofs, drivers, orders, plans, routes, routeStops } from "./db/schema";
+import { shiftDate } from "./dates";
+import { checkProof, LATE_PROOF, type Outcome, type ProofRules } from "./outcome";
 import { getSettings, refreshPlanSummary, UserError, writeStopTimes } from "./planning";
 import { saveProof, sha256 } from "./proofs";
 import { buildShipment } from "./shipments";
@@ -18,6 +19,7 @@ export function revalidateDriverPages() {
   revalidatePath("/admin");
   revalidatePath("/admin/planner");
   revalidatePath("/admin/orders");
+  revalidatePath("/admin/shipments");
 }
 
 /** Loads a stop only if it belongs to the signed-in driver's dispatched route. */
@@ -34,6 +36,57 @@ async function ownStop(stopId: string) {
     .limit(1);
   if (!row || !row.route.dispatchedAt) throw new UserError("This stop isn't assigned to you.");
   return { db, user, ...row };
+}
+
+/** Loads any stop on a dispatched route, for the office entering a delivery on a driver's behalf. */
+async function officeStop(stopId: string) {
+  const user = await assertUser(STAFF);
+  const db = await getDb();
+  const [row] = await db
+    .select({ stop: routeStops, route: routes, plan: plans })
+    .from(routeStops)
+    .innerJoin(routes, eq(routes.id, routeStops.routeId))
+    .innerJoin(plans, eq(plans.id, routes.planId))
+    .where(eq(routeStops.id, stopId))
+    .limit(1);
+  if (!row) throw new UserError("Stop not found.");
+  if (!row.route.dispatchedAt) throw new UserError("Send this shipment to the driver first.");
+  return { db, user, ...row };
+}
+
+type StopCtx = Awaited<ReturnType<typeof ownStop>>;
+
+/** How far back stops left unconfirmed are still shown to be finished. */
+export const UNCONFIRMED_LOOKBACK_DAYS = 14;
+
+/**
+ * Earlier days with stops still waiting to be confirmed on a dispatched route (delivered, but
+ * the driver didn't record it): newest first, per day and shipment. One driver's, or everyone's.
+ */
+export async function unconfirmedStops(db: DB, today: string, driverId?: string | null) {
+  return db
+    .select({
+      date: plans.deliveryDate,
+      routeId: routes.id,
+      number: routes.number,
+      driverName: drivers.name,
+      pending: sql<number>`count(*)::int`,
+    })
+    .from(routeStops)
+    .innerJoin(routes, eq(routes.id, routeStops.routeId))
+    .innerJoin(plans, eq(plans.id, routes.planId))
+    .innerJoin(drivers, eq(drivers.id, routes.driverId))
+    .where(
+      and(
+        eq(routeStops.status, "pending"),
+        isNotNull(routes.dispatchedAt),
+        lt(plans.deliveryDate, today),
+        gte(plans.deliveryDate, shiftDate(today, -UNCONFIRMED_LOOKBACK_DAYS)),
+        driverId ? eq(routes.driverId, driverId) : undefined,
+      ),
+    )
+    .groupBy(plans.deliveryDate, routes.id, routes.number, drivers.name)
+    .orderBy(desc(plans.deliveryDate), asc(routes.number));
 }
 
 /** How long a delivery may wait on the phone for signal and still keep the time it was signed. */
@@ -95,16 +148,32 @@ async function retimeRemaining(tx: Tx, route: RouteRow, fromS: number) {
  * The stops still to do are then re-timed from the latest delivery, so every arrival time (on
  * the phone, in the office, on the customer's tracking page) counts from where the van really is.
  */
-export async function finishStop(stopId: string, outcome: Outcome, at = new Date()): Promise<{ already: boolean }> {
-  const { db, user, stop, route, plan } = await ownStop(stopId);
+export async function finishStop(stopId: string, outcome: Outcome, at = new Date(), rules?: ProofRules): Promise<{ already: boolean }> {
+  return recordStop(await ownStop(stopId), outcome, at, rules);
+}
+
+/**
+ * The office records a stop for the driver: usually one delivered but never confirmed on the
+ * phone, with the signed docket photographed or sent in afterwards. A photo or signature is needed.
+ */
+export async function finishStopFromOffice(stopId: string, outcome: Outcome) {
+  return recordStop(await officeStop(stopId), outcome, new Date(), LATE_PROOF);
+}
+
+/**
+ * `rules`: the photo / signature the settings ask for. They apply on the delivery day; a stop
+ * confirmed on a later day needs a photo or a signature (see LATE_PROOF).
+ */
+async function recordStop({ db, user, stop, route, plan }: StopCtx, outcome: Outcome, at: Date, rules?: ProofRules): Promise<{ already: boolean }> {
   if (stop.status === outcome.type) return { already: true };
   if (stop.status !== "pending") throw new UserError("This stop is already completed.");
   const { timezone } = await getSettings(db);
   // Only the delivery day's clock says anything about the stops still to come.
   const sameDay = plan.deliveryDate === todayIn(timezone, at);
+  if (rules) checkProof(outcome, sameDay || plan.deliveryDate > todayIn(timezone, at) ? rules : LATE_PROOF);
   const now = at;
   await db.transaction(async (tx) => {
-    await tx.update(routeStops).set({ status: outcome.type, completedAt: now }).where(eq(routeStops.id, stopId));
+    await tx.update(routeStops).set({ status: outcome.type, completedAt: now }).where(eq(routeStops.id, stop.id));
     await tx.update(orders).set({ status: outcome.type, updatedAt: new Date() }).where(eq(orders.id, stop.orderId));
     const [event] = await tx
       .insert(deliveryEvents)
@@ -172,8 +241,9 @@ export async function finishStop(stopId: string, outcome: Outcome, at = new Date
   after(async () => {
     try {
       if (implicitStart) await emailRouteStarted(route.id);
-      if (outcome.type === "delivered") await emailDelivered(stopId);
-      await emailNextStop(route.id);
+      if (outcome.type === "delivered") await emailDelivered(stop.id);
+      // "You're next" only means something while the van is out that day.
+      if (sameDay) await emailNextStop(route.id);
     } catch (err) {
       console.warn("[delivery-emails] after a delivery:", (err as Error).message);
     }

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { restoreDeliveries } from "@/lib/deliveries";
+import { unconfirmedStops } from "@/lib/driver-stops";
 import { drivers } from "@/lib/db/schema";
 import { getDepots, getPlanView, getSettings } from "@/lib/planning";
 import { readyToShip } from "@/lib/shipments";
@@ -19,11 +20,13 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
   await restoreDeliveries(db, s.timezone);
   const today = todayIn(s.timezone);
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : today;
-  const [ready, view, driverRows, depots] = await Promise.all([
+  const [ready, view, driverRows, depots, unconfirmed] = await Promise.all([
     readyToShip(db, date),
     getPlanView(db, date),
     db.select({ id: drivers.id, name: drivers.name, color: drivers.color, capacity: drivers.capacity }).from(drivers).where(eq(drivers.active, true)).orderBy(asc(drivers.name)),
     getDepots(db),
+    // Shipments from earlier days with stops the driver never confirmed.
+    unconfirmedStops(db, today),
   ]);
 
   return (
@@ -33,6 +36,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
       hasDepot={depots.length > 0}
       depots={depots.map((d) => ({ id: d.id, name: d.name, lat: d.lat, lng: d.lng }))}
       ready={ready}
+      unconfirmed={unconfirmed}
       drivers={driverRows}
       shipments={view.routes.map((r) => ({
         id: r.id,
@@ -52,6 +56,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
         overtimeS: r.overtimeS,
         overCapacity: r.overCapacity,
         stops: r.stops.map((st) => ({
+          stopId: st.id,
           orderId: st.orderId,
           seq: st.seq,
           lateS: st.lateS,
