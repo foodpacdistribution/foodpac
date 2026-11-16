@@ -24,8 +24,8 @@ import { downloadCsv as download, readSpreadsheet, type Sheet } from "@/lib/spre
 
 const TEMPLATE = toCsv([
   TEMPLATE_HEADERS,
-  ["FP-1001", "Kraft takeaway box No.8", "62.00", "Takeaway containers", "200 pcs / carton", "carton", 1, 80, "9300000000017", "Grease-resistant kraft box", "yes", "yes", "yes"],
-  ["FP-6003", "Jasmine rice 10 kg", "27.50", "Pantry & dry goods", "10 kg bag", "bag", 2, 60, "", "", "no", "no", "yes"],
+  ["FP-1001", "Kraft takeaway box No.8", "62.00", "48.50", "Takeaway containers", "200 pcs / carton", "carton", 1, 80, "9300000000017", "Grease-resistant kraft box", "yes", "yes", "yes"],
+  ["FP-6003", "Jasmine rice 10 kg", "27.50", "", "Pantry & dry goods", "10 kg bag", "bag", 2, 60, "", "", "no", "no", "yes"],
 ]);
 
 export function ProductImportClient({ existingSkus }: { existingSkus: string[] }) {

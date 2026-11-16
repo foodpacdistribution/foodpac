@@ -13,6 +13,7 @@ import { BusinessDetailsCard } from "./business-details";
 import { stripeEnabled } from "@/lib/stripe";
 import { databaseUrl } from "@/lib/db/url";
 import { emailDomainStatus, officeEmail, resendKeyHasExtra, senderAddress } from "@/lib/email";
+import { customersDueRestock } from "@/lib/restock";
 import { EmailCard } from "./email-card";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -20,18 +21,20 @@ export const metadata: Metadata = { title: "Settings" };
 export default async function SettingsPage() {
   const me = await requireUser(["admin"]);
   const db = await getDb();
-  const [s, userRows, depotRows, keyRows, feedRows, emailDomain] = await Promise.all([
+  const [s, userRows, depotRows, keyRows, feedRows, emailDomain, restockDue] = await Promise.all([
     getSettings(db),
     db.select({ id: users.id, name: users.name, email: users.email, role: users.role, extraRoles: users.extraRoles, driverId: users.driverId }).from(users).where(ne(users.role, "customer")).orderBy(asc(users.role), asc(users.name)),
     db.select().from(depots).orderBy(asc(depots.createdAt)),
     db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt)),
     db.select().from(orderFeeds).orderBy(asc(orderFeeds.createdAt)),
     emailDomainStatus(),
+    customersDueRestock(db),
   ]);
 
   return (
     <SettingsClient
       settings={s}
+      restockDue={restockDue.map((c) => c.name)}
       meId={me.id}
       users={userRows}
       depots={depotRows.map((d) => ({ id: d.id, name: d.name, address: d.address, located: d.lat !== null, active: d.active }))}

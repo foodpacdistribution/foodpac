@@ -2,10 +2,13 @@ import { asc, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { CATEGORIES } from "@/app/(site)/content";
 import { requireUser, STAFF } from "@/lib/auth/dal";
+import { productCosts } from "@/lib/costs";
 import { getDb } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { productImageUrl } from "@/lib/product-image";
+import { getSettings } from "@/lib/planning";
 import { listWaiting } from "@/lib/stock-allocation";
+import { todayIn } from "@/lib/time";
 import { ProductsClient } from "./products-client";
 
 export const metadata: Metadata = { title: "Products & Stock" };
@@ -24,6 +27,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       packSize: products.packSize,
       unit: products.unit,
       priceCents: products.priceCents,
+      costCents: products.costCents,
       gst: products.gst,
       minQty: products.minQty,
       stock: products.stock,
@@ -34,14 +38,15 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     })
     .from(products)
     .orderBy(asc(products.category), asc(products.name));
-  // Who is waiting for each product, oldest order first.
-  const waiting = await listWaiting(db);
+  // Who is waiting for each product, oldest order first. What each costs us, for its margin.
+  const [waiting, costs] = await Promise.all([listWaiting(db), productCosts(db, todayIn((await getSettings(db)).timezone))]);
   const categories = [...new Set([...CATEGORIES.map((c) => c.title), ...rows.map((r) => r.category)])];
   return (
     <ProductsClient
       products={rows.map(({ updatedAt, ...r }) => ({
         ...r,
         imageUrl: r.hasImage ? productImageUrl({ id: r.id, updatedAt }) : null,
+        cost: costs.get(r.id) ?? null,
         waiting: waiting
           .filter((w) => w.productId === r.id)
           .map((w) => ({ orderId: w.orderId, number: w.number, customer: w.customer, phone: w.phone, qty: w.qty, deliveryDate: w.deliveryDate })),

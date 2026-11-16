@@ -49,6 +49,8 @@ export async function saveProduct(_prev: unknown, form: FormData) {
     if (!sku || !/^[A-Z0-9._-]+$/.test(sku)) throw new UserError("SKU is required (letters, numbers, - . _ only).");
     if (!name) throw new UserError("Name is required.");
     if (priceCents === null) throw new UserError("Enter a price ex GST, e.g. 24.50.");
+    const costCents = get("cost") === "" ? null : parseDollars(get("cost"));
+    if (get("cost") !== "" && costCents === null) throw new UserError("Enter the cost ex GST, e.g. 18.20, or leave it empty.");
     const int = (k: string, min: number) => {
       const n = Math.round(Number(get(k) || min));
       if (!Number.isFinite(n) || n < min) throw new UserError(`${k === "minQty" ? "Minimum order" : "Stock"} must be ${min} or more.`);
@@ -59,6 +61,7 @@ export async function saveProduct(_prev: unknown, form: FormData) {
       sku,
       name,
       priceCents,
+      costCents,
       barcode: get("barcode") || null,
       category: get("category") || "Other",
       description: get("description"),

@@ -23,6 +23,10 @@ type Product = {
   packSize: string;
   unit: string;
   priceCents: number;
+  /** The cost typed in on the product (cents ex GST). */
+  costCents: number | null;
+  /** The cost margins are worked out from: goods received first, then the one typed in, then the last purchase order. */
+  cost: { cents: number; source: "received" | "manual" | "ordered" } | null;
   gst: boolean;
   minQty: number;
   stock: number;
@@ -223,6 +227,7 @@ export function ProductsClient({
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <span className="text-sm font-semibold tabular-nums">{aud(p.priceCents)}</span>
+                      <MarginNote p={p} />
                       <span className={cx("text-xs font-semibold tabular-nums", stockTone(p.stock))}>
                         {tr("Stock")} {p.stock}
                       </span>
@@ -286,6 +291,7 @@ export function ProductsClient({
                     <td className="px-2 py-2.5 text-slate-600">{tr(p.category)}</td>
                     <td className="px-2 py-2.5 text-right tabular-nums">
                       {aud(p.priceCents)}
+                      <MarginNote p={p} className="block" />
                       {!p.gst && <span className="block text-[11px] text-slate-400">{tr("GST free")}</span>}
                     </td>
                     <td className={cx("px-2 py-2.5 text-right font-semibold tabular-nums", stockTone(p.stock))}>
@@ -351,7 +357,7 @@ function exportCsv(products: Product[]) {
   const yn = (b: boolean) => (b ? "yes" : "no");
   const csv = toCsv([
     TEMPLATE_HEADERS,
-    ...products.map((p) => [p.sku, p.name, (p.priceCents / 100).toFixed(2), p.category, p.packSize, p.unit, p.minQty, p.stock, p.barcode ?? "", p.description, yn(p.gst), yn(p.featured), yn(p.active)]),
+    ...products.map((p) => [p.sku, p.name, (p.priceCents / 100).toFixed(2), p.costCents != null ? (p.costCents / 100).toFixed(2) : "", p.category, p.packSize, p.unit, p.minQty, p.stock, p.barcode ?? "", p.description, yn(p.gst), yn(p.featured), yn(p.active)]),
   ]);
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   Object.assign(document.createElement("a"), { href: url, download: `foodpac-products-${new Date().toISOString().slice(0, 10)}.csv` }).click();
@@ -418,6 +424,16 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
       </Field>
       <Field label={tr("List price per unit, ex GST ($)")} hint={tr("Customers with their own price see that instead.")}>
         <input name="price" required inputMode="decimal" defaultValue={p ? (p.priceCents / 100).toFixed(2) : ""} className={inputCls} />
+      </Field>
+      <Field
+        label={tr("Cost per unit, ex GST ($, optional)")}
+        hint={
+          p?.cost?.source === "received"
+            ? tr("Margins use the average cost of goods received: {cost}.", { cost: aud(Math.round(p.cost.cents)) })
+            : tr("What a unit costs you, for margins and below-cost warnings. Goods received replace it with their average cost.")
+        }
+      >
+        <input name="cost" inputMode="decimal" defaultValue={p?.costCents != null ? (p.costCents / 100).toFixed(2) : ""} className={inputCls} />
       </Field>
       <Field label={tr("Minimum order (units)")}>
         <input name="minQty" type="number" min={1} defaultValue={p?.minQty ?? 1} className={inputCls} />
@@ -505,5 +521,20 @@ function WaitingList({ p }: { p: Product }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/** "Margin 23%" under the price; red when it sells below cost, amber when thin. Nothing without a cost. */
+function MarginNote({ p, className }: { p: Pick<Product, "priceCents" | "cost">; className?: string }) {
+  const tr = useT();
+  if (!p.cost || p.priceCents <= 0) return null;
+  const pct = Math.round(((p.priceCents - p.cost.cents) / p.priceCents) * 100);
+  return (
+    <span
+      className={cx("text-[11px] tabular-nums", pct < 0 ? "font-semibold text-red-600" : pct < 10 ? "text-amber-700" : "text-slate-400", className)}
+      title={tr("Cost {cost} ex GST", { cost: aud(Math.round(p.cost.cents)) })}
+    >
+      {pct < 0 ? tr("Below cost") : tr("Margin {pct}%", { pct })}
+    </span>
   );
 }

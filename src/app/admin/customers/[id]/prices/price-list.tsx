@@ -8,7 +8,17 @@ import { btn, Card, cx, EmptyState, inputCls, Spinner } from "@/components/ui";
 import { aud } from "@/lib/money";
 import { useT } from "@/components/i18n";
 
-type Row = { id: string; sku: string; name: string; category: string; priceCents: number; unit: string; ownCents: number | null };
+type Row = {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  priceCents: number;
+  unit: string;
+  ownCents: number | null;
+  /** What a unit costs us (cents ex GST), when known: prices below it are flagged. */
+  costCents: number | null;
+};
 type ActionResult = { ok: boolean; message?: string; error?: string };
 
 const toastFor = (r: ActionResult, prefix = ""): ToastMessage => ({
@@ -106,6 +116,11 @@ export function PriceList({ customerId, rows }: { customerId: string; rows: Row[
         <button disabled={pending || !ids.length} onClick={() => run(null)} className={btn("secondary", "sm")}>
           <RotateCcw className="size-3.5" /> {tr("Back to list price")}
         </button>
+        {ids.length > 0 && pctOk && (() => {
+          // Selected products this discount would take below what they cost us.
+          const under = shown.filter((r) => selected.has(r.id) && r.costCents !== null && Math.round(r.priceCents * (1 - pct / 100)) < r.costCents).length;
+          return under > 0 ? <span className="text-xs font-semibold text-red-600">{tr("{n} of these would be below cost", { n: under })}</span> : null;
+        })()}
         {ids.length > 0 && pctOk && (
           <span className="text-xs text-blue-900/70">
             {tr("e.g. {name}: {from} → {to}", {
@@ -167,6 +182,9 @@ function PriceRow({
     });
   };
   const own = saved ? Math.round(Number(saved) * 100) : null;
+  // Warn while typing, before it's saved: the price being typed, else the list price.
+  const typed = v.trim() && Number.isFinite(Number(v)) ? Math.round(Number(v) * 100) : r.priceCents;
+  const belowCost = r.costCents !== null && typed < r.costCents;
   return (
     <li className={cx("grid grid-cols-[2rem_1fr] items-center gap-x-2 gap-y-1.5 px-4 py-2.5 sm:grid-cols-[2rem_1fr_8rem_14rem]", checked && "bg-blue-50/50")}>
       <input type="checkbox" aria-label={`Select ${r.name}`} checked={checked} onChange={onToggle} />
@@ -182,6 +200,7 @@ function PriceRow({
       </div>
       <p className="hidden text-right text-sm tabular-nums text-slate-600 sm:block">
         {aud(r.priceCents)} <span className="text-xs text-slate-400">/ {tr(r.unit)}</span>
+        {r.costCents !== null && <span className="block text-[11px] text-slate-400">{tr("cost {cost}", { cost: aud(Math.round(r.costCents)) })}</span>}
       </p>
       <div className="col-start-2 flex items-center gap-2 sm:col-start-auto">
         <input
@@ -195,7 +214,11 @@ function PriceRow({
           className={cx(inputCls, "h-9 max-w-28")}
         />
         {pending && <Spinner className="text-slate-400" />}
-        {own !== null && !pending && (
+        {belowCost && !pending ? (
+          <span className="text-xs font-semibold text-red-600" title={tr("Cost {cost} ex GST", { cost: aud(Math.round(r.costCents!)) })}>
+            {tr("Below cost ({cost})", { cost: aud(Math.round(r.costCents!)) })}
+          </span>
+        ) : own !== null && !pending && (
           <span className={cx("text-xs font-medium", own < r.priceCents ? "text-emerald-700" : "text-slate-500")}>
             {own < r.priceCents ? tr("{pct}% off", { pct: Math.round((1 - own / r.priceCents) * 100) }) : own > r.priceCents ? tr("above list") : ""}
           </span>

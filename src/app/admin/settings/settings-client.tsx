@@ -39,6 +39,7 @@ const TIMEZONES = [
 
 export function SettingsClient({
   settings: s,
+  restockDue,
   users,
   depots,
   meId,
@@ -46,6 +47,8 @@ export function SettingsClient({
   children,
 }: {
   settings: Settings;
+  /** Customers a reorder reminder would go to today. */
+  restockDue: string[];
   users: U[];
   depots: Depot[];
   meId: string;
@@ -132,6 +135,16 @@ export function SettingsClient({
                   <input type="checkbox" name="notifyCustomers" defaultChecked={s.notifyCustomers} /> {" "}{tr("Email customers about their delivery")}</label>
                 <p className="text-xs text-slate-500">
                   {tr("When the driver sets off (with the expected time), when they're the next stop, and when it's delivered. Drivers also get a button to say they're about 10 minutes away. Only customers with an email address on file get them.")}
+                </p>
+                <label className="flex items-center gap-2 pt-2">
+                  <input type="checkbox" name="restockReminders" defaultChecked={s.restockReminders} /> {" "}{tr("Remind regular customers when it's time to reorder")}</label>
+                <p className="text-xs text-slate-500">
+                  {tr("Each morning, customers who order regularly and have reached their usual gap without ordering get one email with what they usually buy and a link to their order sheet. Customers can turn it off.")}
+                </p>
+                <p className="text-xs text-slate-600">
+                  {restockDue.length === 0
+                    ? tr("Nobody is due a reminder today.")
+                    : tr("Due today: {names}", { names: restockDue.slice(0, 6).join(", ") + (restockDue.length > 6 ? ` +${restockDue.length - 6}` : "") })}
                 </p>
               </div>
               <FormError message={state && !state.ok ? state.error : null} />

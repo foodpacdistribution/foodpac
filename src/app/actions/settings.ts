@@ -47,6 +47,7 @@ export async function saveSettings(_prev: unknown, form: FormData) {
         requirePhoto: form.get("requirePhoto") === "on",
         requireSignature: form.get("requireSignature") === "on",
         notifyCustomers: form.get("notifyCustomers") === "on",
+        restockReminders: form.get("restockReminders") === "on",
       })
       .where(eq(settings.id, 1));
     const message = "Settings saved";

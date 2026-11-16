@@ -4,6 +4,7 @@ import { NameForm, PasswordForm, ProfileCard } from "@/components/profile-forms"
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { BusinessForm } from "./business-form";
+import { RestockToggle } from "./restock-toggle";
 import { T } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Profile" };
@@ -26,6 +27,9 @@ export default async function ProfilePage() {
       </div>
       <ProfileCard title={<T>{"Business details"}</T>} description={<T>{"Shown on your invoices and used for deliveries."}</T>}>
         <BusinessForm name={c.name} phone={c.phone} email={c.email} address={c.address} abn={c.abn} />
+      </ProfileCard>
+      <ProfileCard title={<T>{"Emails"}</T>}>
+        <RestockToggle on={c.restockEmails} />
       </ProfileCard>
       <ProfileCard title={<T>{"Your login"}</T>} description={<T>{"The person signed in on this account."}</T>}>
         <NameForm name={user.name} email={user.email} />

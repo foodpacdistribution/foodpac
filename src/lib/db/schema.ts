@@ -47,6 +47,8 @@ export const settings = pgTable("settings", {
   requireSignature: boolean("require_signature").notNull().default(false),
   /** Email customers when their delivery is on its way, when they're next, and when it's delivered. */
   notifyCustomers: boolean("notify_customers").notNull().default(false),
+  /** Email regular customers when they reach their usual reorder day without ordering (lib/restock). */
+  restockReminders: boolean("restock_reminders").notNull().default(false),
   /** Online shop. Money is in cents, ex GST. */
   deliveryFeeCents: integer("delivery_fee_cents").notNull().default(1500),
   freeDeliveryOverCents: integer("free_delivery_over_cents").notNull().default(30000),
@@ -117,6 +119,10 @@ export const customers = pgTable("customers", {
   active: boolean("active").notNull().default(true),
   /** Self-registered customers wait for staff approval before they see prices or order. */
   approved: boolean("approved").notNull().default(true),
+  /** When the account could first order: set by the database (trigger) whenever `approved` turns on. */
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  /** Signed up on the website's trade account form (rather than added by staff or imported). */
+  registeredOnline: boolean("registered_online").notNull().default(false),
   /** prepay = card or bank transfer up front; netN = invoice due N days after delivery. */
   paymentTerms: text("payment_terms").$type<PaymentTerms>().notNull().default("prepay"),
   /** Max unpaid invoice balance for account customers. null = no limit. */
@@ -139,6 +145,10 @@ export const customers = pgTable("customers", {
   followUpNote: text("follow_up_note"),
   /** Last time someone marked a follow-up done; quiet-customer reminders wait a full quiet spell after it. */
   contactedAt: timestamp("contacted_at", { withTimezone: true }),
+  /** "Time to reorder" emails: the customer can turn them off (portal profile, or the email's link). */
+  restockEmails: boolean("restock_emails").notNull().default(true),
+  /** When the last "time to reorder" email went: one per gap between orders. */
+  restockRemindedAt: timestamp("restock_reminded_at", { withTimezone: true }),
   /**
    * Where the address is, for the customer map. `geocodedAddress` is the address these were
    * found for: when it no longer matches `address`, the customer is placed again.
@@ -539,6 +549,11 @@ export const products = pgTable(
     unit: text("unit").notNull().default("carton"),
     /** List price per unit in cents, ex GST. Customers can have their own price. */
     priceCents: integer("price_cents").notNull(),
+    /**
+     * What a unit costs us, in cents ex GST, typed in by staff. Only used for products with no
+     * goods received yet: the average cost of what came in counts first (see lib/costs).
+     */
+    costCents: integer("cost_cents"),
     gst: boolean("gst").notNull().default(true),
     minQty: integer("min_qty").notNull().default(1),
     /** On hand, not yet reserved by an order. Reserved when an order is placed, given back if it's cancelled. */

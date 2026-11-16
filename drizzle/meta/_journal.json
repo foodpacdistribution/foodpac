@@ -225,6 +225,27 @@
       "when": 1794747621053,
       "tag": "0031_first_order_offer",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794833223065,
+      "tag": "0032_product_cost",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794833479489,
+      "tag": "0033_restock_reminders",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1794833695414,
+      "tag": "0034_signup_funnel",
+      "breakpoints": true
     }
   ]
 }

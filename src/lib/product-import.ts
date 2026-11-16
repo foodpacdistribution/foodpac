@@ -7,6 +7,7 @@ export const PRODUCT_FIELDS = [
   { key: "sku", label: "SKU *", synonyms: ["sku", "code", "product code", "item code", "item no", "item number", "product id", "article", "编号", "货号", "产品编号", "商品编码", "编码"] },
   { key: "name", label: "Product name *", synonyms: ["name", "product", "product name", "item", "item name", "title", "名称", "产品名称", "商品名称", "品名", "产品"] },
   { key: "price", label: "Price per unit *", synonyms: ["price", "unit price", "price ex gst", "sell price", "wholesale price", "trade price", "list price", "价格", "单价", "批发价", "售价"] },
+  { key: "cost", label: "Cost per unit", synonyms: ["cost", "cost price", "unit cost", "buy price", "purchase price", "cost ex gst", "成本", "成本价", "进价", "进货价", "采购价"] },
   { key: "category", label: "Category", synonyms: ["category", "group", "department", "range", "type", "分类", "类别", "类目"] },
   { key: "packSize", label: "Pack size", synonyms: ["pack size", "pack", "packing", "size", "carton size", "carton", "pack qty", "规格", "包装", "装箱"] },
   { key: "unit", label: "Sold by (unit)", synonyms: ["unit", "uom", "sold by", "sell unit", "单位"] },
@@ -28,6 +29,7 @@ export type ProductValues = {
   sku: string;
   name?: string;
   priceCents?: number;
+  costCents?: number;
   category?: string;
   packSize?: string;
   unit?: string;
@@ -133,6 +135,11 @@ export function checkProductRow(row: ProductImportRow, opts: { pricesIncGst?: bo
     if (cents === null) return { ok: false, error: `Price "${v("price")}" isn't an amount` };
     out.priceCents = opts.pricesIncGst && out.gst !== false ? Math.round(cents / (1 + GST_RATE)) : cents;
   }
+  if (v("cost")) {
+    const cents = parseMoney(v("cost"));
+    if (cents === null) return { ok: false, error: `Cost "${v("cost")}" isn't an amount` };
+    out.costCents = opts.pricesIncGst && out.gst !== false ? Math.round(cents / (1 + GST_RATE)) : cents;
+  }
   return { ok: true, value: out };
 }
 
@@ -154,7 +161,7 @@ const csvCell = (v: string | number | boolean | null | undefined) => {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-export const TEMPLATE_HEADERS = ["SKU", "Name", "Price", "Category", "Pack size", "Unit", "Min qty", "Stock", "Barcode", "Description", "GST", "Featured", "Active"];
+export const TEMPLATE_HEADERS = ["SKU", "Name", "Price", "Cost", "Category", "Pack size", "Unit", "Min qty", "Stock", "Barcode", "Description", "GST", "Featured", "Active"];
 
 export function toCsv(rows: (string | number | boolean | null | undefined)[][]) {
   // BOM so Excel opens UTF-8 (e.g. Chinese product names) correctly.

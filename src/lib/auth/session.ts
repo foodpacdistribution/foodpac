@@ -18,6 +18,9 @@ function secret() {
 
 export { SALES_HOME, salesMayOpen };
 
+/** The key sessions are signed with, for other signed links (e.g. unsubscribe). */
+export const signingKey = secret;
+
 /** Where each role lands after signing in, and where it is sent when it opens a page it can't use. */
 export function homeFor(role: Role) {
   return role === "driver" ? "/driver" : role === "customer" ? "/portal" : role === "sales" ? SALES_HOME : "/admin";

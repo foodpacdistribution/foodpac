@@ -5,9 +5,12 @@ import Link from "@/components/link";
 import { PageHeader } from "@/components/ui";
 import { notFound } from "next/navigation";
 import { requireUser, STAFF } from "@/lib/auth/dal";
+import { productCosts } from "@/lib/costs";
 import { getDb } from "@/lib/db";
 import { customerPrices, customers, products } from "@/lib/db/schema";
 import { PAYMENT_TERMS_LABEL } from "@/lib/money";
+import { getSettings } from "@/lib/planning";
+import { todayIn } from "@/lib/time";
 import { PriceList } from "./price-list";
 import { T } from "@/components/i18n";
 
@@ -20,9 +23,10 @@ export default async function CustomerPricesPage({ params }: { params: Promise<{
   const db = await getDb();
   const [c] = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
   if (!c) notFound();
-  const [rows, own] = await Promise.all([
+  const [rows, own, costs] = await Promise.all([
     db.select({ id: products.id, sku: products.sku, name: products.name, category: products.category, priceCents: products.priceCents, unit: products.unit }).from(products).orderBy(asc(products.category), asc(products.name)),
     db.select().from(customerPrices).where(eq(customerPrices.customerId, id)),
+    getSettings(db).then((s) => productCosts(db, todayIn(s.timezone))),
   ]);
   return (
     <>
@@ -36,7 +40,7 @@ export default async function CustomerPricesPage({ params }: { params: Promise<{
           </>
         }
       />
-      <PriceList customerId={c.id} rows={rows.map((r) => ({ ...r, ownCents: own.find((o) => o.productId === r.id)?.priceCents ?? null }))} />
+      <PriceList customerId={c.id} rows={rows.map((r) => ({ ...r, ownCents: own.find((o) => o.productId === r.id)?.priceCents ?? null, costCents: costs.get(r.id)?.cents ?? null }))} />
     </>
   );
 }

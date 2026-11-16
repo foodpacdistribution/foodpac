@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatClock, formatDuration, nowSecondsIn, parseTime, parseTimeWindow, todayIn } from "./time";
+import { formatClock, formatDuration, nowSecondsIn, parseTime, parseTimeWindow, startOfDayIn, todayIn } from "./time";
 
 describe("parseTime", () => {
   it.each([
@@ -46,5 +46,14 @@ describe("timezone helpers", () => {
   it("formats", () => {
     expect(formatClock(13 * 3600 + 5 * 60)).toBe("1:05pm");
     expect(formatDuration(3 * 3600 + 45 * 60)).toBe("3h 45m");
+  });
+});
+
+describe("startOfDayIn", () => {
+  it("finds local midnight, daylight saving included", () => {
+    expect(startOfDayIn("Australia/Brisbane", "2026-11-16").toISOString()).toBe("2026-11-15T14:00:00.000Z");
+    expect(startOfDayIn("Australia/Sydney", "2026-11-16").toISOString()).toBe("2026-11-15T13:00:00.000Z");
+    expect(startOfDayIn("Australia/Sydney", "2026-06-16").toISOString()).toBe("2026-06-15T14:00:00.000Z");
+    expect(startOfDayIn("UTC", "2026-01-01").toISOString()).toBe("2026-01-01T00:00:00.000Z");
   });
 });

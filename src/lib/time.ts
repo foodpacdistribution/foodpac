@@ -5,6 +5,20 @@ export function todayIn(timeZone: string, now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
+/** The instant local midnight starts `date` (YYYY-MM-DD) in `timeZone`. */
+export function startOfDayIn(timeZone: string, date: string) {
+  const fmt = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  // How far the zone's clock is ahead of UTC at instant t.
+  const offset = (t: number) => {
+    const p = Object.fromEntries(fmt.formatToParts(new Date(t)).map((x) => [x.type, Number(x.value)]));
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - t;
+  };
+  const wall = Date.parse(`${date}T00:00:00Z`);
+  // Twice, in case midnight is on the other side of a daylight-saving change from the first guess.
+  const guess = wall - offset(wall);
+  return new Date(wall - offset(guess));
+}
+
 /** Seconds since local midnight right now in `timeZone`. */
 export function nowSecondsIn(timeZone: string, now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {

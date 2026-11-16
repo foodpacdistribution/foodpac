@@ -2,5 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run db:migrate && npm run build",
   "regions": ["syd1"],
-  "crons": [{ "path": "/api/cron/sync-orders", "schedule": "0 19 * * *" }]
+  "crons": [
+    { "path": "/api/cron/sync-orders", "schedule": "0 19 * * *" },
+    { "path": "/api/cron/restock-reminders", "schedule": "0 23 * * *" }
+  ]
 }

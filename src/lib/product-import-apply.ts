@@ -51,6 +51,7 @@ export async function applyProductImport(
           sku: v.sku,
           name: v.name!,
           priceCents: v.priceCents!,
+          costCents: v.costCents ?? null,
           category: v.category ?? "Other",
           packSize: v.packSize ?? "",
           unit: v.unit ?? "carton",

@@ -16,6 +16,7 @@ import { cartItems, customerAddresses, customers, favourites, orders, type Payme
 import { getSettings, UserError } from "@/lib/planning";
 import { canSeePrices, cancelOrder, placeOrder } from "@/lib/shop";
 import { refundOrExpire } from "@/lib/payments";
+import { readUnsubscribeToken } from "@/lib/restock";
 import { createCheckoutSession, stripeEnabled } from "@/lib/stripe";
 import { geocodeOrderIds } from "@/lib/sync";
 import { locateCustomersLater } from "@/lib/customer-locations";
@@ -286,7 +287,7 @@ export async function registerCustomer(_prev: unknown, form: FormData) {
     const { user, customer } = await db.transaction(async (tx) => {
       const [c] = await tx
         .insert(customers)
-        .values({ name: business, email, phone: str(form, "phone", 40), address: str(form, "address", 300), abn: str(form, "abn", 20), approved: false })
+        .values({ name: business, email, phone: str(form, "phone", 40), address: str(form, "address", 300), abn: str(form, "abn", 20), approved: false, registeredOnline: true })
         .returning();
       const [u] = await tx.insert(users).values({ email, name, role: "customer", customerId: c.id, passwordHash: await hashPassword(password) }).returning();
       return { user: u, customer: c };
@@ -321,6 +322,28 @@ export async function payPendingOrder(salesOrderId: string) {
 }
 
 /** Customers keep their own contact details up to date. The business name stays with staff, since orders are matched on it. */
+/** The customer's own "time to reorder" emails, on or off. */
+export async function setMyRestockEmails(on: boolean) {
+  return attempt(async () => {
+    const { customer } = await assertCustomer();
+    const db = await getDb();
+    await db.update(customers).set({ restockEmails: on === true }).where(eq(customers.id, customer.id));
+    revalidatePath("/portal/profile");
+    return { message: on ? "Reorder reminders on" : "Reorder reminders off" };
+  });
+}
+
+/** "Turn them off" from the email's link: no login needed, the signed link says who. */
+export async function unsubscribeRestock(token: string) {
+  return attempt(async () => {
+    const id = await readUnsubscribeToken(String(token));
+    if (!id) throw new UserError("This link isn't valid any more. Sign in and turn reminders off on your profile.");
+    const db = await getDb();
+    await db.update(customers).set({ restockEmails: false }).where(eq(customers.id, id));
+    return { message: "Reorder reminders turned off" };
+  });
+}
+
 export async function updateMyBusiness(_prev: unknown, form: FormData) {
   return attempt(async () => {
     const { customer } = await assertCustomer();
