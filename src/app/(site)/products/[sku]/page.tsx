@@ -69,20 +69,17 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
                 { "@type": "ListItem", position: 3, name: p.name, item: `${base}/products/${encodeURIComponent(p.sku)}` },
               ],
             },
-            // What the product is. Prices are per trade account, so there's no public offer to list.
+            // Not marked up as a Product: Google requires a Product to carry a public price (an
+            // offer), a review or a rating, and prices here are per trade account behind sign-in.
+            // A Product without one is flagged as an error in Search Console, and a price in the
+            // markup that the page doesn't show is a price mismatch. The page itself, with its photo:
             {
-              "@type": "Product",
-              "@id": `${base}/products/${encodeURIComponent(p.sku)}#product`,
-              name: p.name,
-              sku: p.sku,
+              "@type": "WebPage",
+              "@id": `${base}/products/${encodeURIComponent(p.sku)}`,
               url: `${base}/products/${encodeURIComponent(p.sku)}`,
-              category: p.category,
+              name: p.name,
               ...(p.description.trim() ? { description: p.description.trim() } : {}),
-              ...(p.hasImage ? { image: `${base}${productImageUrl(p)}` } : {}),
-              additionalProperty: [
-                ...(p.packSize.trim() ? [{ "@type": "PropertyValue", name: "Pack size", value: p.packSize.trim() }] : []),
-                { "@type": "PropertyValue", name: "Sold by", value: p.unit },
-              ],
+              ...(p.hasImage ? { primaryImageOfPage: { "@type": "ImageObject", url: `${base}${productImageUrl(p)}` } } : {}),
             },
           ],
         }}
