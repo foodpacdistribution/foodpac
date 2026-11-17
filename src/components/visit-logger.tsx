@@ -324,13 +324,6 @@ function VisitForm({
         <div className="grid grid-cols-2 gap-2">
           {VISIT_OUTCOMES.map((o) => {
             const on = d.outcome === o;
-            const tone = {
-              green: ["border-emerald-500 bg-emerald-50/70 text-emerald-950", "bg-emerald-500 text-white"],
-              blue: ["border-blue-500 bg-blue-50/70 text-blue-950", "bg-blue-500 text-white"],
-              amber: ["border-amber-500 bg-amber-50/70 text-amber-950", "bg-amber-500 text-white"],
-              slate: ["border-slate-500 bg-slate-50 text-slate-950", "bg-slate-500 text-white"],
-              red: ["border-rose-500 bg-rose-50/70 text-rose-950", "bg-rose-500 text-white"],
-            }[OUTCOMES[o].tone];
             const Icon = OUTCOME_ICON[o];
             return (
               <button
@@ -339,33 +332,28 @@ function VisitForm({
                 aria-pressed={on}
                 onClick={() => pickOutcome(o)}
                 className={cx(
-                  "relative flex min-h-16 items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-all duration-200 active:scale-[0.97]",
-                  on ? cx(tone[0], "shadow-sm") : "border-line bg-white hover:border-slate-300",
+                  "flex min-h-14 items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors duration-150",
+                  on ? "border-blue-600 bg-blue-50/60 ring-1 ring-blue-600" : "border-line bg-white hover:border-slate-300 hover:bg-slate-50/60",
                 )}
               >
-                <span className={cx("grid size-9 shrink-0 place-items-center rounded-lg transition-colors duration-200", on ? tone[1] : "bg-slate-100 text-slate-500")}>
-                  <Icon className="size-[18px]" />
-                </span>
+                <Icon className={cx("size-[18px] shrink-0", on ? "text-blue-700" : "text-slate-400")} />
                 <span className="min-w-0">
-                  <span className="block text-sm leading-tight font-semibold">{tr(OUTCOMES[o].label)}</span>
+                  <span className={cx("block text-sm leading-tight font-medium", on ? "text-blue-950" : "text-slate-900")}>{tr(OUTCOMES[o].label)}</span>
                   <span className="block text-[11px] leading-snug text-slate-500">{tr(OUTCOMES[o].hint)}</span>
                 </span>
-                {on && (
-                  <span className={cx("absolute -top-1.5 -right-1.5 grid size-5 animate-check place-items-center rounded-full ring-2 ring-white", tone[1])}>
-                    <Check className="size-3" strokeWidth={3} />
-                  </span>
-                )}
               </button>
             );
           })}
         </div>
       </fieldset>
 
-      {d.outcome === "not_now" && (
-        <fieldset className="animate-fade-in">
-          <legend className="mb-1.5 text-xs font-medium text-slate-600">
-            {tr("Why?")}
-          </legend>
+      {/* Opens smoothly under the results when "not now" is picked (the space-y gap goes with it). */}
+      <div
+        className={cx("grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out", d.outcome === "not_now" ? "grid-rows-[1fr] opacity-100" : "-mt-4 grid-rows-[0fr] opacity-0")}
+        inert={d.outcome !== "not_now"}
+      >
+        <fieldset className="min-h-0 overflow-hidden">
+          <legend className="mb-1.5 text-xs font-medium text-slate-600">{tr("Why?")}</legend>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(NOT_NOW_REASONS) as NotNowReason[]).map((r) => (
               <button
@@ -374,10 +362,8 @@ function VisitForm({
                 aria-pressed={d.reason === r}
                 onClick={() => set({ reason: r })}
                 className={cx(
-                  "h-9 rounded-full border px-3.5 text-sm transition-colors",
-                  d.reason === r
-                    ? "border-rose-500 bg-rose-50 font-medium text-rose-900"
-                    : "border-line hover:border-slate-300",
+                  "h-9 rounded-full border px-3.5 text-sm transition-colors duration-150",
+                  d.reason === r ? "border-blue-600 bg-blue-50/60 font-medium text-blue-950 ring-1 ring-blue-600" : "border-line hover:border-slate-300",
                 )}
               >
                 {tr(NOT_NOW_REASONS[r])}
@@ -385,7 +371,7 @@ function VisitForm({
             ))}
           </div>
         </fieldset>
-      )}
+      </div>
 
       <Field label={tr("What was said (optional)")}>
         <textarea

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { cx } from "./ui";
 
 /**
@@ -66,9 +67,17 @@ export function Drawer({ open, onClose, label, className, children }: { open: bo
     }
   };
 
-  return (
+  // Rendered into <body>, not where it's used: a frosted bar around it would otherwise confine it.
+  // Only in the browser (nothing to show before then, and the server and first render then match).
+  const browser = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
+  if (!browser) return null;
+  return createPortal(
     <div className={cx("fixed inset-0 z-50", !open && "pointer-events-none")} inert={!open}>
-      <div ref={backdrop} aria-hidden onClick={onClose} className="drawer-backdrop absolute inset-0 bg-black/45" style={{ opacity: open ? 1 : 0 }} />
+      <div ref={backdrop} aria-hidden onClick={onClose} className="drawer-backdrop absolute inset-0 bg-slate-900/15" style={{ opacity: open ? 1 : 0 }} />
       <div
         ref={panel}
         role="dialog"
@@ -78,11 +87,14 @@ export function Drawer({ open, onClose, label, className, children }: { open: bo
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchEnd}
-        className={cx("drawer-panel absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col overflow-y-auto overscroll-contain shadow-2xl", className)}
+        className={cx("drawer-panel absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col overflow-y-auto overscroll-contain", className)}
         style={{ transform: open ? "translateX(0)" : "translateX(-100%)" }}
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
+
+const noSubscribe = () => () => {};

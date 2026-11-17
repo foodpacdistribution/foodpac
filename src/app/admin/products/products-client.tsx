@@ -136,7 +136,7 @@ export function ProductsClient({
             </option>
           ))}
         </select>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {(["all", "instock", "low", "waiting", "inactive"] as const).map((f) =>
             f === "waiting" && !waitingCount ? null : (
               <button key={f} onClick={() => setFilter(f)} className={cx(btn(filter === f ? "primary" : "ghost", "sm"), f === "waiting" && filter !== f && "text-red-600")}>
