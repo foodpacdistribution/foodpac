@@ -3,6 +3,7 @@
 import { ClipboardCheck, Search, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useMemo, useState, useTransition } from "react";
+import { LoadMore, usePaged } from "@/components/load-more";
 import { adjustStock } from "@/app/actions/products";
 import { FormError, Modal, Toast, type ToastMessage } from "@/components/client-ui";
 import { useT } from "@/components/i18n";
@@ -32,6 +33,8 @@ export function InventoryClient({ tab, filters, stock, ledger }: { tab: "stock" 
     const s = dq.trim().toLowerCase();
     return stock.filter((p) => (!low || (p.active && p.stock <= LOW_STOCK)) && (!s || `${p.sku} ${p.name} ${p.category}`.toLowerCase().includes(s)));
   }, [stock, dq, low]);
+  // Drawn a page at a time (phone cards and table), so the page stays quick with hundreds of products.
+  const paged = usePaged(shown, `${dq}|${low}`);
   const lowCount = stock.filter((p) => p.active && p.stock <= LOW_STOCK).length;
   const go = (patch: Record<string, string>) => {
     const qs = new URLSearchParams({ tab: "ledger", ...(filters.productId && { product: filters.productId }), ...(filters.type && { type: filters.type }), ...patch });
@@ -68,7 +71,7 @@ export function InventoryClient({ tab, filters, stock, ledger }: { tab: "stock" 
           </div>
           {/* Phones: one row per product, what's free to sell first. */}
           <Card className="divide-y divide-line md:hidden">
-            {shown.map((p) => {
+            {paged.visible.map((p) => {
               const extra = [
                 p.reserved ? `${tr("Reserved for orders")} ${p.reserved}` : null,
                 p.waiting ? `${tr("Customers waiting")} ${p.waiting}` : null,
@@ -100,6 +103,7 @@ export function InventoryClient({ tab, filters, stock, ledger }: { tab: "stock" 
                 </div>
               );
             })}
+            <LoadMore remaining={paged.remaining} onMore={paged.more} />
           </Card>
           <Card className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[820px] text-sm">
@@ -116,7 +120,7 @@ export function InventoryClient({ tab, filters, stock, ledger }: { tab: "stock" 
                 </tr>
               </thead>
               <tbody>
-                {shown.map((p) => (
+                {paged.visible.map((p) => (
                   <tr key={p.id} className="border-b border-line last:border-0">
                     <td className="px-4 py-2.5">
                       <p className="font-medium text-slate-900">{p.name} {!p.active && <Badge tone="slate">{tr("Hidden")}</Badge>}</p>
@@ -144,6 +148,7 @@ export function InventoryClient({ tab, filters, stock, ledger }: { tab: "stock" 
                 ))}
               </tbody>
             </table>
+            <LoadMore remaining={paged.remaining} onMore={paged.more} />
           </Card>
         </>
       ) : (

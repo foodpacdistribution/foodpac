@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, use, useMemo } from "react";
+import { createContext, use, useCallback, useMemo } from "react";
 import { type Dictionary, type Locale, loadZh, translate } from "@/lib/i18n";
 
 const LocaleContext = createContext<{ locale: Locale; dict: Dictionary | null }>({ locale: "en", dict: null });
@@ -19,7 +19,8 @@ export function useLocale() {
 /** `const t = useT(); t("Save")` in client components. */
 export function useT() {
   const { dict } = use(LocaleContext);
-  return (text: string, vars?: Record<string, string | number>) => translate(dict, text, vars);
+  // The same function until the language changes, so lists that use it aren't rebuilt for nothing.
+  return useCallback((text: string, vars?: Record<string, string | number>) => translate(dict, text, vars), [dict]);
 }
 
 /** `<T>Save</T>`: translated text that works inside server and client components alike. */

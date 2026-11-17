@@ -142,7 +142,8 @@ export function CustomersClient({
         <>
           <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
             {shown.slice(0, limit).map((c, i) => (
-              <div key={c.id} className="stagger flex min-w-0" style={{ "--i": Math.min(i, 8) } as React.CSSProperties}>
+              // Cards off screen aren't laid out or painted until scrolled to (keeps the page quick on phones).
+              <div key={c.id} className="stagger flex min-w-0" style={{ "--i": Math.min(i, 8), contentVisibility: "auto", containIntrinsicSize: "auto 260px" } as React.CSSProperties}>
               <Card className={cx("group relative flex w-full min-w-0 flex-col p-3.5 transition-[box-shadow,border-color] duration-150 hover:border-slate-300 hover:shadow-pop sm:p-4", !c.active && "opacity-60")}>
                 {/* The whole card opens the customer's page; the phone / email / map links and buttons sit above it. */}
                 <Link href={`/admin/customers/${c.id}`} className="absolute inset-0 z-0 rounded-xl" aria-label={tr("View {name}", { name: c.name })} />
