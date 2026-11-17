@@ -7,19 +7,19 @@ import Link from "@/components/link";
 import { btn, Card, CardHeader, cx } from "@/components/ui";
 import { aud } from "@/lib/money";
 
-export type Offer = { id: string; name: string; sku: string; packSize: string; priceCents: number; stock: number; stores: number; of: number };
+export type Offer = { id: string; name: string; sku: string; packSize: string; priceCents: number; stock: number; stores: number; of: number; basis: "alike" | "type" | "all" };
 
 /**
  * Products this customer doesn't buy from us yet but stores like them do: something to bring up
  * on the next visit. Tick some and start a quote or an order with them already on it.
  */
-export function WorthOffering({ customerId, items, canAct }: { customerId: string; items: Offer[]; canAct: boolean }) {
+export function WorthOffering({ customerId, items, canAct, storeType = null }: { customerId: string; items: Offer[]; canAct: boolean; storeType?: string | null }) {
   const tr = useT();
   const [picked, setPicked] = useState<string[]>([]);
   if (!items.length) return null;
   const add = picked.length ? picked : items.map((i) => i.id);
   const query = `customer=${customerId}&add=${add.join(",")}`;
-  const history = items[0].of > 0;
+  const basis = items[0].basis;
   return (
     <Card>
       <CardHeader
@@ -28,7 +28,13 @@ export function WorthOffering({ customerId, items, canAct }: { customerId: strin
             <Lightbulb className="size-4 text-amber-500" /> {tr("Worth offering")}
           </span>
         }
-        subtitle={history ? tr("Bought by stores that buy what this one buys, but not by this one yet.") : tr("No orders yet: what sells to the most stores.")}
+        subtitle={
+          basis === "alike"
+            ? tr("Bought by stores that buy what this one buys, but not by this one yet.")
+            : basis === "type" && storeType
+              ? tr("No orders yet: what other {type} stores buy most.", { type: tr(storeType) })
+              : tr("No orders yet: what sells to the most stores.")
+        }
       />
       <ul className="divide-y divide-line text-sm">
         {items.map((i) => (
@@ -49,7 +55,7 @@ export function WorthOffering({ customerId, items, canAct }: { customerId: strin
                   {i.stock <= 0 && <span className="text-red-600"> · {tr("Out of stock")}</span>}
                 </span>
                 <span className="block text-xs text-slate-500">
-                  {history ? tr("{n} of {of} similar stores buy it", { n: i.stores, of: i.of }) : tr(i.stores === 1 ? "1 store buys it" : "{n} stores buy it", { n: i.stores })}
+                  {basis !== "all" ? tr("{n} of {of} similar stores buy it", { n: i.stores, of: i.of }) : tr(i.stores === 1 ? "1 store buys it" : "{n} stores buy it", { n: i.stores })}
                 </span>
               </span>
             </label>

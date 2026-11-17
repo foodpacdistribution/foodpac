@@ -267,6 +267,13 @@
       "when": 1794915847885,
       "tag": "0037_staff_phone",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794917585360,
+      "tag": "0038_store_details",
+      "breakpoints": true
     }
   ]
 }

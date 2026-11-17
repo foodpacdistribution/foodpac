@@ -104,6 +104,9 @@ export async function loadPipeline(db: DB) {
         followUpOn: customers.followUpOn,
         followUpNote: customers.followUpNote,
         notNowReason: customers.notNowReason,
+        storeType: customers.storeType,
+        contactName: customers.contactName,
+        bestTime: customers.bestTime,
         contactedAt: customers.contactedAt,
         createdAt: customers.createdAt,
       })

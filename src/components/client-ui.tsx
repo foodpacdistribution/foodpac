@@ -102,20 +102,23 @@ export function Modal({
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
       className={cx(
-        // The animation replays each time showModal() makes the dialog visible.
+        // The animation replays each time showModal() makes the dialog visible. On phones it's a
+        // sheet that slides up from the bottom edge, within thumb reach; elsewhere a centred window.
         "m-auto w-[calc(100%-2rem)] animate-pop rounded-2xl border border-line bg-white p-0 text-slate-900 shadow-pop",
+        "max-sm:mx-0 max-sm:mt-auto max-sm:mb-0 max-sm:w-full max-sm:max-w-none max-sm:animate-sheet max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0",
         wide ? "max-w-3xl" : "max-w-lg",
       )}
     >
       {open && (
-        <div>
-          <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+        <div className="max-sm:pb-[env(safe-area-inset-bottom)]">
+          <span aria-hidden className="mx-auto mt-2 block h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
+          <div className="flex items-center justify-between border-b border-line px-5 py-3.5 max-sm:pt-2">
             <h2 className="text-base font-semibold">{title}</h2>
             <button type="button" onClick={onClose} className={btn("ghost", "icon")} aria-label="Close">
               <X className="size-4" />
             </button>
           </div>
-          <div className="max-h-[75dvh] overflow-y-auto px-5 py-4">{children}</div>
+          <div className="max-h-[75dvh] overflow-y-auto overscroll-contain px-5 py-4 max-sm:max-h-[82dvh]">{children}</div>
         </div>
       )}
     </dialog>

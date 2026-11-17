@@ -1,21 +1,14 @@
 "use client";
 
-import {
-  Camera,
-  Check,
-  LoaderCircle,
-  MapPin,
-  Phone,
-  Store,
-  X,
-} from "lucide-react";
+import { Ban, Camera, Check, DoorClosed, Hourglass, LoaderCircle, MapPin, Package, Phone, ShoppingCart, Store, ThumbsUp, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { logVisit } from "@/app/actions/visits";
 import { FormError, Modal } from "@/components/client-ui";
 import { useT } from "@/components/i18n";
 import { btn, cx, Field, inputCls } from "@/components/ui";
 import { prettyDate, shiftDate } from "@/lib/dates";
-import type { NotNowReason, SalesStage, VisitOutcome } from "@/lib/db/schema";
+import type { NotNowReason, SalesStage, StoreType, VisitOutcome } from "@/lib/db/schema";
+import { StoreTypePicker } from "@/app/admin/customers/[id]/store-details";
 import { resizeImage } from "@/lib/resize-image";
 import {
   MAX_VISIT_PHOTOS,
@@ -32,7 +25,18 @@ import {
 // they're picked, the location is found in the background, and saving closes the form straight
 // away while it's sent; if it can't be sent, the form comes back with everything still in it.
 
-export type VisitTarget = { id: string; name: string; stage: SalesStage };
+/** The store: its stage, and what's known about it (shown at the top; the kind is asked for until known). */
+/** An icon for each result, so the right one is found at a glance. */
+const OUTCOME_ICON: Record<VisitOutcome, typeof Check> = { ordered: ShoppingCart, interested: ThumbsUp, thinking: Hourglass, samples: Package, not_in: DoorClosed, not_now: Ban };
+
+export type VisitTarget = {
+  id: string;
+  name: string;
+  stage: SalesStage;
+  storeType?: StoreType | null;
+  contactName?: string | null;
+  bestTime?: string | null;
+};
 
 /** What the form changed, for showing it before the server confirms. */
 export type VisitSaved = {
@@ -50,6 +54,8 @@ type Draft = {
   target: VisitTarget;
   channel: "visit" | "call";
   outcome: VisitOutcome | null;
+  /** Only asked for while the store's kind isn't known. */
+  storeType: StoreType | null;
   reason: NotNowReason | null;
   note: string;
   followUpOn: string | null;
@@ -122,6 +128,7 @@ export function useVisitLogger({
         channel: "visit",
         outcome,
         reason: null,
+        storeType: null,
         note: "",
         followUpOn: outcome ? suggestedFollowUp(outcome, today) : null,
         followPicked: false,
@@ -173,6 +180,7 @@ export function useVisitLogger({
         fd.set("outcome", outcome);
         fd.set("note", d.note);
         if (d.reason) fd.set("reason", d.reason);
+        if (d.storeType) fd.set("storeType", d.storeType);
         if (d.followUpOn) fd.set("followUpOn", d.followUpOn);
         if (d.channel === "visit" && typeof d.where === "object") {
           fd.set("lat", String(d.where.lat));
@@ -279,6 +287,11 @@ function VisitForm({
 
   return (
     <div className="space-y-4">
+      {(d.target.contactName || d.target.bestTime) && (
+        <p className="-mt-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          {[d.target.contactName && tr("Talk to {name}", { name: d.target.contactName }), d.target.bestTime].filter(Boolean).join(" · ")}
+        </p>
+      )}
       {/* In the store or on the phone. */}
       <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 text-sm font-medium">
         {(["visit", "call"] as const).map((ch) => (
@@ -312,12 +325,13 @@ function VisitForm({
           {VISIT_OUTCOMES.map((o) => {
             const on = d.outcome === o;
             const tone = {
-              green: "border-emerald-500 bg-emerald-50 text-emerald-900",
-              blue: "border-blue-500 bg-blue-50 text-blue-900",
-              amber: "border-amber-500 bg-amber-50 text-amber-900",
-              slate: "border-slate-500 bg-slate-50 text-slate-900",
-              red: "border-rose-500 bg-rose-50 text-rose-900",
+              green: ["border-emerald-500 bg-emerald-50/70 text-emerald-950", "bg-emerald-500 text-white"],
+              blue: ["border-blue-500 bg-blue-50/70 text-blue-950", "bg-blue-500 text-white"],
+              amber: ["border-amber-500 bg-amber-50/70 text-amber-950", "bg-amber-500 text-white"],
+              slate: ["border-slate-500 bg-slate-50 text-slate-950", "bg-slate-500 text-white"],
+              red: ["border-rose-500 bg-rose-50/70 text-rose-950", "bg-rose-500 text-white"],
             }[OUTCOMES[o].tone];
+            const Icon = OUTCOME_ICON[o];
             return (
               <button
                 key={o}
@@ -325,19 +339,22 @@ function VisitForm({
                 aria-pressed={on}
                 onClick={() => pickOutcome(o)}
                 className={cx(
-                  "min-h-14 rounded-xl border px-3 py-2 text-left transition-colors active:scale-[0.98]",
-                  on
-                    ? cx(tone, "ring-2 ring-current/15")
-                    : "border-line hover:border-slate-300",
+                  "relative flex min-h-16 items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-all duration-200 active:scale-[0.97]",
+                  on ? cx(tone[0], "shadow-sm") : "border-line bg-white hover:border-slate-300",
                 )}
               >
-                <span className="flex items-center gap-1.5 text-sm font-semibold">
-                  {on && <Check className="size-4 shrink-0" />}
-                  {tr(OUTCOMES[o].label)}
+                <span className={cx("grid size-9 shrink-0 place-items-center rounded-lg transition-colors duration-200", on ? tone[1] : "bg-slate-100 text-slate-500")}>
+                  <Icon className="size-[18px]" />
                 </span>
-                <span className="block text-xs text-slate-500">
-                  {tr(OUTCOMES[o].hint)}
+                <span className="min-w-0">
+                  <span className="block text-sm leading-tight font-semibold">{tr(OUTCOMES[o].label)}</span>
+                  <span className="block text-[11px] leading-snug text-slate-500">{tr(OUTCOMES[o].hint)}</span>
                 </span>
+                {on && (
+                  <span className={cx("absolute -top-1.5 -right-1.5 grid size-5 animate-check place-items-center rounded-full ring-2 ring-white", tone[1])}>
+                    <Check className="size-3" strokeWidth={3} />
+                  </span>
+                )}
               </button>
             );
           })}
@@ -383,6 +400,7 @@ function VisitForm({
         />
       </Field>
 
+      {!d.target.storeType && <StoreTypePicker value={d.storeType} onChange={(storeType) => set({ storeType })} />}
       <div>
         <p className="mb-1.5 text-xs font-medium text-slate-600">
           {tr("Photos (optional)")}

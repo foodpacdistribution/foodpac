@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { signingKey } from "./auth/session";
 import type { DB } from "./db";
-import { customers, products, salesOrderItems, salesOrders, users } from "./db/schema";
+import { customers, products, salesOrderItems, salesOrders, type StoreType, users } from "./db/schema";
 
 // The sales leave-behind: a printed page a salesperson leaves at a store, whose QR code opens
 // the sign-up form. The code carries a short signed reference: who left it, and (when printed
@@ -46,11 +46,13 @@ export async function readLeaveBehindRef(db: DB, ref: string | null | undefined)
 }
 
 /**
- * Products to show on the page by default: what sells to the most stores over the last year,
- * in stock and with a photo first.
+ * Products to show on the page by default: what sells to the most stores over the last year (to
+ * the most stores of `storeType`, when given), in stock and with a photo first.
  */
-export async function popularProducts(db: DB, limit: number) {
-  const stores = sql<number>`count(distinct ${salesOrders.customerId})`;
+export async function popularProducts(db: DB, limit: number, storeType: StoreType | null = null) {
+  const stores = storeType
+    ? sql<number>`count(distinct ${salesOrders.customerId}) filter (where ${customers.storeType} = ${storeType})`
+    : sql<number>`count(distinct ${salesOrders.customerId})`;
   return db
     .select({
       id: products.id,
@@ -64,6 +66,7 @@ export async function popularProducts(db: DB, limit: number) {
     .from(products)
     .leftJoin(salesOrderItems, eq(salesOrderItems.productId, products.id))
     .leftJoin(salesOrders, and(eq(salesOrders.id, salesOrderItems.salesOrderId), ne(salesOrders.status, "cancelled"), sql`${salesOrders.createdAt} > now() - interval '365 days'`))
+    .leftJoin(customers, eq(customers.id, salesOrders.customerId))
     .where(eq(products.active, true))
     .groupBy(products.id)
     .orderBy(sql`${products.image} is null`, sql`${products.stock} <= 0`, sql`${stores} desc`, products.name)

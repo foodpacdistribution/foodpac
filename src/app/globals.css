@@ -33,6 +33,10 @@
   --animate-toast: toast 2.6s ease both;
   --animate-fade-in: fade-in 200ms ease-out both;
   --animate-bump: bump 380ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  /* Charts: bars grow from their base. Forms on phones: a sheet slides up from the bottom edge. */
+  --animate-grow-y: grow-y 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-grow-x: grow-x 640ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-sheet: sheet-up 340ms cubic-bezier(0.32, 0.72, 0, 1) both;
   /* Navigation bar: fills quickly, then creeps, and never claims to be done until the page swaps. */
   --animate-progress: progress 8s cubic-bezier(0.1, 0.7, 0.3, 1) both;
 
@@ -68,6 +72,21 @@
     }
   }
 
+  @keyframes grow-y {
+    from {
+      transform: scaleY(0);
+    }
+  }
+  @keyframes grow-x {
+    from {
+      transform: scaleX(0);
+    }
+  }
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
   @keyframes rise {
     from {
       opacity: 0;

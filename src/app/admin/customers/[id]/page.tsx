@@ -52,7 +52,9 @@ import { todayIn } from "@/lib/time";
 import { CreditAdjust } from "./credit-adjust";
 import { EditCustomer, ProfileTabs } from "./profile-client";
 import { VisitButton, VisitList } from "./visits-client";
+import { StoreDetails } from "./store-details";
 import { NOT_NOW_REASONS } from "@/lib/visits";
+import { STORE_TYPES } from "@/lib/store-types";
 import { type Offer, WorthOffering } from "./worth-offering";
 
 export const metadata: Metadata = { title: "Customer" };
@@ -87,7 +89,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const st = p.stats;
   const creditLeft = c.creditLimitCents !== null ? c.creditLimitCents - st.unpaidCents : null;
 
-  const target = { id: c.id, name: c.name, stage: c.salesStage };
+  const target = { id: c.id, name: c.name, stage: c.salesStage, storeType: c.storeType, contactName: c.contactName, bestTime: c.bestTime };
   const visitsTab = {
     key: "visits",
     label: "Visits",
@@ -264,6 +266,11 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         </div>
 
         <aside className="space-y-4">
+          <StoreDetails
+            customerId={c.id}
+            canEdit={serve}
+            value={{ storeType: c.storeType, contactName: c.contactName, bestTime: c.bestTime, currentSupplier: c.currentSupplier }}
+          />
           <Card>
             <CardHeader title={<T>{"Contact"}</T>} />
             <dl className="divide-y divide-line text-sm">
@@ -371,7 +378,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
               </ul>
             </Card>
           )}
-          <WorthOffering customerId={c.id} items={offers} canAct={serve && c.active} />
+          <WorthOffering customerId={c.id} items={offers} canAct={serve && c.active} storeType={c.storeType ? STORE_TYPES[c.storeType] : null} />
         </aside>
       </div>
     </>
@@ -717,6 +724,6 @@ async function offersFor(db: Awaited<ReturnType<typeof getDb>>, customerId: stri
   return picks.flatMap((x) => {
     const r = rows.find((row) => row.id === x.productId);
     if (!r) return [];
-    return [{ ...r, priceCents: own.find((o) => o.productId === r.id)?.priceCents ?? r.priceCents, stores: x.stores, of: x.of }];
+    return [{ ...r, priceCents: own.find((o) => o.productId === r.id)?.priceCents ?? r.priceCents, stores: x.stores, of: x.of, basis: x.basis }];
   });
 }

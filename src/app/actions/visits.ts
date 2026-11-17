@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { attempt } from "@/lib/action";
 import { assertUser, PIPELINE } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import type { SalesStage } from "@/lib/db/schema";
+import type { SalesStage, StoreType } from "@/lib/db/schema";
+import { isStoreType } from "@/lib/store-types";
 import { getSettings, UserError } from "@/lib/planning";
 import { readUpload } from "@/lib/proofs";
 import { STAGE_INFO } from "@/lib/sales-stage";
@@ -49,6 +50,7 @@ export async function logVisit(form: FormData) {
         outcome,
         note: get("note"),
         reason: isNotNowReason(reason) ? reason : null,
+        storeType: isStoreType(get("storeType")) ? (get("storeType") as StoreType) : null,
         followUpOn,
         lat: num("lat"),
         lng: num("lng"),
