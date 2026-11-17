@@ -9,6 +9,7 @@ import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@
 import { aud } from "@/lib/money";
 import { prettyDate } from "@/lib/dates";
 import { LOW_STOCK } from "@/lib/stock";
+import { formatCartons, perCarton } from "@/lib/stock-units";
 import { TEMPLATE_HEADERS, toCsv } from "@/lib/product-import";
 import { useT } from "@/components/i18n";
 import { ImageInput } from "@/components/image-input";
@@ -232,6 +233,7 @@ export function ProductsClient({
                       <MarginNote p={p} />
                       <span className={cx("text-xs font-semibold tabular-nums", stockTone(p.stock))}>
                         {tr("Stock")} {p.stock}
+                        {perCarton(p.packSize) && p.stock > 0 && <span className="font-normal text-slate-500"> ({formatCartons(p.stock, perCarton(p.packSize))})</span>}
                       </span>
                       {p.waiting.length > 0 && <WaitingChip p={p} onClick={() => setShowWaiting(p)} />}
                       {p.featured && <Badge tone="violet">{tr("Featured")}</Badge>}
@@ -284,7 +286,7 @@ export function ProductsClient({
                             {p.name} {p.featured && <Badge tone="violet">{tr("Featured")}</Badge>} {!p.active && <Badge>{tr("Hidden")}</Badge>}
                           </p>
                           <p className="text-xs text-slate-500">
-                            {p.sku} · {p.packSize} {" "}{tr("· per")}{" "}{tr(p.unit)}
+                            {[p.sku, p.packSize].filter(Boolean).join(" · ")} {" "}{tr("· per")}{" "}{tr(p.unit)}
                             {p.minQty > 1 && <> {tr(`· min ${p.minQty}`)}</>}
                           </p>
                         </div>
@@ -298,6 +300,7 @@ export function ProductsClient({
                     </td>
                     <td className={cx("px-2 py-2.5 text-right font-semibold tabular-nums", stockTone(p.stock))}>
                       {p.stock}
+                      {perCarton(p.packSize) && p.stock > 0 && <span className="block text-[11px] font-normal whitespace-nowrap text-slate-500">{formatCartons(p.stock, perCarton(p.packSize))}</span>}
                       {p.waiting.length > 0 && (
                         <span className="mt-0.5 block">
                           <WaitingChip p={p} onClick={() => setShowWaiting(p)} />

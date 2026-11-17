@@ -14,6 +14,7 @@ import { applyProductImport, type ProductImportResult } from "@/lib/product-impo
 import { readUpload } from "@/lib/proofs";
 import { fillWaiting } from "@/lib/stock-allocation";
 import { changeStock, setStock } from "@/lib/stock-ledger";
+import { stocktake, type StocktakeLine, type StocktakeRow } from "@/lib/stocktake";
 
 function revalidate() {
   revalidatePath("/admin/products");
@@ -114,6 +115,26 @@ export async function adjustStock(productId: string, delta: number, reason?: str
     revalidatePath("/admin/sales");
     const toWaiting = filled.reduce((t, f) => t + f.qty, 0);
     return { message: toWaiting ? `${p.name}: ${toWaiting} to waiting orders, ${p.stock} in stock` : `${p.name}: ${p.stock} in stock` };
+  });
+}
+
+/**
+ * A stocktake: SKU and what was counted on the shelf ("20ctn+7pk"). Without `apply` it only shows
+ * what would change; with it, stock is set to the count less goods already sold but not delivered.
+ */
+export async function runStocktake(lines: StocktakeLine[], apply: boolean) {
+  return attempt<{ rows: StocktakeRow[]; changed: number }>(async () => {
+    const user = await assertUser(STAFF);
+    if (!Array.isArray(lines) || !lines.length) throw new UserError("Add at least one line: SKU and count.");
+    if (lines.length > MAX_IMPORT_ROWS) throw new UserError(`Count at most ${MAX_IMPORT_ROWS} products at a time.`);
+    const clean = lines.map((l) => ({ sku: String(l?.sku ?? "").trim().slice(0, 100), count: String(l?.count ?? "").trim().slice(0, 100) }));
+    const r = await stocktake(await getDb(), clean, { apply: !!apply, by: user.id });
+    if (apply && r.changed) {
+      revalidate();
+      revalidatePath("/admin/inventory");
+      revalidatePath("/admin/sales");
+    }
+    return { data: r, message: apply ? `Stock updated for ${r.changed} products` : undefined };
   });
 }
 

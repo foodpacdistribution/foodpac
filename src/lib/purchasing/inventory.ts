@@ -8,23 +8,31 @@ import { inventoryMovements, type MovementType, orders, users, products, purchas
  * confirmed customer orders not yet delivered, so on hand = stock + reserved. `onOrder` is still
  * to come from suppliers; `toReturn` is accepted by a supplier but not yet sent back.
  */
+/**
+ * Per product: `reserved` is taken off stock for customer orders not yet delivered (still on the
+ * shelf or on the truck), `waiting` is ordered but not yet in stock.
+ */
+export function heldForOrders(db: DB) {
+  return db
+    .select({
+      id: salesOrderItems.productId,
+      reserved: sql<number>`sum(${salesOrderItems.qty} - ${salesOrderItems.backorderQty})::int`,
+      waiting: sql<number>`sum(${salesOrderItems.backorderQty})::int`,
+    })
+    .from(salesOrderItems)
+    .innerJoin(salesOrders, eq(salesOrders.id, salesOrderItems.salesOrderId))
+    .leftJoin(orders, eq(orders.id, salesOrders.deliveryOrderId))
+    .where(and(inArray(salesOrders.status, ["pending", "confirmed"]), sql`coalesce(${orders.status}, '') <> 'delivered'`))
+    .groupBy(salesOrderItems.productId);
+}
+
 export async function stockOverview(db: DB) {
   const [rows, reserved, onOrder, toReturn] = await Promise.all([
     db
-      .select({ id: products.id, sku: products.sku, name: products.name, unit: products.unit, category: products.category, stock: products.stock, active: products.active })
+      .select({ id: products.id, sku: products.sku, name: products.name, unit: products.unit, packSize: products.packSize, category: products.category, stock: products.stock, active: products.active })
       .from(products)
       .orderBy(asc(products.category), asc(products.name)),
-    db
-      .select({
-        id: salesOrderItems.productId,
-        reserved: sql<number>`sum(${salesOrderItems.qty} - ${salesOrderItems.backorderQty})::int`,
-        waiting: sql<number>`sum(${salesOrderItems.backorderQty})::int`,
-      })
-      .from(salesOrderItems)
-      .innerJoin(salesOrders, eq(salesOrders.id, salesOrderItems.salesOrderId))
-      .leftJoin(orders, eq(orders.id, salesOrders.deliveryOrderId))
-      .where(and(inArray(salesOrders.status, ["pending", "confirmed"]), sql`coalesce(${orders.status}, '') <> 'delivered'`))
-      .groupBy(salesOrderItems.productId),
+    heldForOrders(db),
     db
       .select({ id: purchaseOrderItems.productId, qty: sql<number>`sum(${purchaseOrderItems.orderedQty} - ${purchaseOrderItems.receivedQty})::float8` })
       .from(purchaseOrderItems)

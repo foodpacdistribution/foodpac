@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, SlidersHorizontal } from "lucide-react";
+import { ClipboardCheck, Search, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useMemo, useState, useTransition } from "react";
 import { adjustStock } from "@/app/actions/products";
@@ -11,8 +11,9 @@ import { Badge, btn, Card, cx, Field, inputCls, PageHeader } from "@/components/
 import type { MovementType } from "@/lib/db/schema";
 import { MOVEMENT_LABEL, qtyText } from "@/lib/purchasing/labels";
 import { LOW_STOCK } from "@/lib/stock";
+import { formatCartons, perCarton } from "@/lib/stock-units";
 
-type StockRow = { id: string; sku: string; name: string; unit: string; category: string; stock: number; active: boolean; reserved: number; waiting: number; onOrder: number; toReturn: number };
+type StockRow = { id: string; sku: string; name: string; unit: string; packSize: string; category: string; stock: number; active: boolean; reserved: number; waiting: number; onOrder: number; toReturn: number };
 type Movement = { id: string; productId: string; sku: string; productName: string; movementType: MovementType; qty: number; balanceAfter: number; referenceType: string | null; referenceId: string | null; referenceNumber: string | null; note: string | null; by: string | null; createdAt: string };
 
 const refLink = (m: Movement) =>
@@ -40,7 +41,15 @@ export function InventoryClient({ tab, filters, stock, ledger }: { tab: "stock" 
 
   return (
     <>
-      <PageHeader title={tr("Inventory")} subtitle={tr("Stock by product, and every change to it. The stock movements can't be edited or deleted: a mistake is fixed with a new adjustment.")} />
+      <PageHeader
+        title={tr("Inventory")}
+        subtitle={tr("Stock by product, and every change to it. The stock movements can't be edited or deleted: a mistake is fixed with a new adjustment.")}
+        actions={
+          <Link href="/admin/inventory/stocktake" className={btn("secondary")}>
+            <ClipboardCheck className="size-4" /> {tr("Stocktake")}
+          </Link>
+        }
+      />
       <div className="mb-3 flex flex-wrap gap-2">
         <Link href="/admin/inventory" className={btn(tab === "stock" ? "primary" : "ghost", "sm")}>{tr("Stock overview")}</Link>
         <Link href="/admin/inventory?tab=ledger" className={btn(tab === "ledger" ? "primary" : "ghost", "sm")}>{tr("Stock movements")}</Link>
@@ -78,6 +87,7 @@ export function InventoryClient({ tab, filters, stock, ledger }: { tab: "stock" 
                     <div className="shrink-0 text-right">
                       <p className={cx("text-lg font-semibold leading-tight tabular-nums", p.active && p.stock <= LOW_STOCK ? "text-red-600" : "text-slate-900")}>{p.stock}</p>
                       <p className="text-[11px] text-slate-500">{tr("Available")}</p>
+                      <Cartons stock={p.stock} packSize={p.packSize} />
                     </div>
                   </div>
                   {extra.length > 0 && <p className={cx("mt-1 text-xs", p.waiting ? "text-red-600" : "text-slate-500")}>{extra.join(" · ")}</p>}
@@ -112,9 +122,15 @@ export function InventoryClient({ tab, filters, stock, ledger }: { tab: "stock" 
                       <p className="font-medium text-slate-900">{p.name} {!p.active && <Badge tone="slate">{tr("Hidden")}</Badge>}</p>
                       <p className="text-xs text-slate-500">{p.sku} · {tr(p.category)}</p>
                     </td>
-                    <td className={cx("px-2 py-2.5 text-right font-semibold tabular-nums", p.active && p.stock <= LOW_STOCK && "text-red-600")}>{p.stock}</td>
+                    <td className={cx("px-2 py-2.5 text-right font-semibold tabular-nums", p.active && p.stock <= LOW_STOCK && "text-red-600")}>
+                      {p.stock}
+                      <Cartons stock={p.stock} packSize={p.packSize} />
+                    </td>
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-600">{p.reserved || "—"}</td>
-                    <td className="px-2 py-2.5 text-right tabular-nums">{p.stock + p.reserved}</td>
+                    <td className="px-2 py-2.5 text-right tabular-nums">
+                      {p.stock + p.reserved}
+                      <Cartons stock={p.stock + p.reserved} packSize={p.packSize} />
+                    </td>
                     <td className={cx("px-2 py-2.5 text-right tabular-nums", p.waiting ? "font-medium text-red-600" : "text-slate-400")}>{p.waiting || "—"}</td>
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-600">{p.onOrder ? qtyText(p.onOrder) : "—"}</td>
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-600">{p.toReturn ? qtyText(p.toReturn) : "—"}</td>
@@ -237,4 +253,11 @@ function AdjustForm({ p, onDone }: { p: StockRow; onDone: () => void }) {
       <Toast toast={toast} onDone={() => setToast(null)} />
     </div>
   );
+}
+
+/** The same stock in cartons and loose packs ("20 ctn + 7 pk"), when the product has a carton size. */
+function Cartons({ stock, packSize }: { stock: number; packSize: string }) {
+  const per = perCarton(packSize);
+  if (!per || stock <= 0) return null;
+  return <span className="block text-[11px] font-normal whitespace-nowrap text-slate-500">{formatCartons(stock, per)}</span>;
 }
