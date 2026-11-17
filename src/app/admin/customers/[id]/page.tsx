@@ -14,6 +14,7 @@ import {
   Package,
   Phone,
   PhoneCall,
+  QrCode,
   RotateCcw,
   ShoppingCart,
   Coins,
@@ -208,6 +209,11 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
               <Link href={`/admin/customers/${c.id}/list`} className={btn("secondary")}>
                 <Heart className="size-4" /> <T>{"Their list"}</T>
               </Link>
+              {!p.login && (
+                <Link href={`/admin/leave-behind?store=${c.id}`} className={btn("secondary")}>
+                  <QrCode className="size-4" /> <T>{"Leave-behind"}</T>
+                </Link>
+              )}
             </>
           )}
           {/* Sales staff quote and take orders on the spot for their own customers. */}

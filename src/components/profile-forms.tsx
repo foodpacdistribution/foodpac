@@ -40,7 +40,8 @@ export function ProfileCard({ title, description, children }: { title: React.Rea
   );
 }
 
-export function NameForm({ name, email }: { name: string; email: string }) {
+/** `phone`: staff only, the number printed on the sales leave-behind. */
+export function NameForm({ name, email, phone }: { name: string; email: string; phone?: string }) {
   const tr = useT();
   const [state, form] = useKeptForm(updateMyName);
   return (
@@ -51,6 +52,11 @@ export function NameForm({ name, email }: { name: string; email: string }) {
       <ProfileLabel text={tr("Login email")} hint={tr("Ask Foodpac to change the email you sign in with.")}>
         <input value={email} disabled className={profileInput} />
       </ProfileLabel>
+      {phone !== undefined && (
+        <ProfileLabel text={tr("Your phone")} hint={tr("Printed on the leave-behind you give stores.")}>
+          <input name="phone" type="tel" defaultValue={phone} autoComplete="tel" className={profileInput} />
+        </ProfileLabel>
+      )}
       <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
         <SubmitButton pendingText={tr("Saving…")} className="rounded-full bg-leaf-700 px-5 hover:bg-leaf-800">
           {tr("Save")}</SubmitButton>

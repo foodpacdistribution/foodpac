@@ -20,7 +20,8 @@ function Label({ text, children, className }: { text: string; children: React.Re
   );
 }
 
-export function RegisterForm() {
+/** `invite`: from a salesperson's leave-behind; `store` is the business it was printed for. */
+export function RegisterForm({ invite = null }: { invite?: { ref: string; rep: string; store: string | null } | null }) {
   const tr = useT();
   const [state, form] = useKeptForm(registerCustomer);
   const router = useRouter();
@@ -29,8 +30,14 @@ export function RegisterForm() {
   }, [state, router]);
   return (
     <KeptForm form={form} className="grid gap-4 rounded-3xl border border-leaf-950/10 bg-white p-6 sm:grid-cols-2">
+      {invite && (
+        <>
+          <input type="hidden" name="ref" value={invite.ref} />
+          <p className="rounded-xl bg-leaf-50 px-3.5 py-2.5 text-sm text-leaf-900 sm:col-span-2">{tr("{name} from Foodpac will look after your account.", { name: invite.rep })}</p>
+        </>
+      )}
       <Label text={tr("Business name")} className="sm:col-span-2">
-        <input name="business" required autoComplete="organization" className={input} />
+        <input name="business" required autoComplete="organization" defaultValue={invite?.store ?? undefined} readOnly={!!invite?.store} className={cx(input, invite?.store && "bg-leaf-50/60")} />
       </Label>
       <Label text={tr("ABN (optional)")}>
         <input name="abn" inputMode="numeric" className={input} />

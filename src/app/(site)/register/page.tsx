@@ -5,6 +5,8 @@ import { homeFor } from "@/lib/auth/session";
 import { RegisterForm } from "./register-form";
 import { T } from "@/components/i18n";
 import { getT, languageAlternates } from "@/lib/i18n/server";
+import { getDb } from "@/lib/db";
+import { readLeaveBehindRef } from "@/lib/leave-behind";
 
 export async function generateMetadata(): Promise<Metadata> {
   const tr = await getT();
@@ -20,9 +22,12 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function RegisterPage() {
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ ref?: string }> }) {
   const user = await getCurrentUser();
   if (user) redirect(homeFor(user.role));
+  // From a salesperson's leave-behind (the QR code): say who, and fill in the store.
+  const { ref } = await searchParams;
+  const invite = ref ? await readLeaveBehindRef(await getDb(), ref) : null;
   return (
     <main className="mx-auto grid max-w-5xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_1.2fr]">
       <div>
@@ -36,7 +41,9 @@ export default async function RegisterPage() {
           <li><T>{"• Invoice terms for approved accounts"}</T></li>
         </ul>
       </div>
-      <RegisterForm />
+      <RegisterForm
+        invite={invite && !invite.customer?.hasLogin ? { ref: ref!, rep: invite.rep.name.split(" ")[0], store: invite.customer?.name ?? null } : null}
+      />
     </main>
   );
 }

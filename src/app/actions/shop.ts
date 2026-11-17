@@ -17,6 +17,7 @@ import { getSettings, UserError } from "@/lib/planning";
 import { canSeePrices, cancelOrder, placeOrder } from "@/lib/shop";
 import { refundOrExpire } from "@/lib/payments";
 import { readUnsubscribeToken } from "@/lib/restock";
+import { readLeaveBehindRef } from "@/lib/leave-behind";
 import { createCheckoutSession, stripeEnabled } from "@/lib/stripe";
 import { geocodeOrderIds } from "@/lib/sync";
 import { locateCustomersLater } from "@/lib/customer-locations";
@@ -266,7 +267,12 @@ export async function deleteAddress(id: string) {
   });
 }
 
-/** Self sign-up for businesses. The account can browse straight away; prices and ordering open once staff approve it. */
+/**
+ * Self sign-up for businesses. The account can browse straight away; prices and ordering open once
+ * staff approve it. From a salesperson's leave-behind (`ref`), the account is theirs to look after;
+ * one printed for a particular store joins that store's record (keeping its approval) rather than
+ * adding it again.
+ */
 export async function registerCustomer(_prev: unknown, form: FormData) {
   return attempt(async () => {
     const business = str(form, "business", 120);
@@ -283,20 +289,42 @@ export async function registerCustomer(_prev: unknown, form: FormData) {
     if ((await countAttempt(db, [{ key: `register:${ip}`, max: 5 }])) > 0) throw new UserError("Too many sign-ups from this network. Please try again later.");
     const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (taken) throw new UserError("An account with this email already exists. Sign in instead.");
+    const ref = await readLeaveBehindRef(db, str(form, "ref", 40));
+    if (ref?.customer?.hasLogin) throw new UserError("Your business already has an account. Sign in instead, or ask us for a login of your own.");
 
+    const details = { phone: str(form, "phone", 40), address: str(form, "address", 300), abn: str(form, "abn", 20) };
     const { user, customer } = await db.transaction(async (tx) => {
-      const [c] = await tx
-        .insert(customers)
-        .values({ name: business, email, phone: str(form, "phone", 40), address: str(form, "address", 300), abn: str(form, "abn", 20), approved: false, registeredOnline: true })
-        .returning();
+      let c: typeof customers.$inferSelect;
+      if (ref?.customer) {
+        // The store's own record: fill in what it's missing, keep what staff already have.
+        [c] = await tx
+          .update(customers)
+          .set({
+            email: sql`coalesce(${customers.email}, ${email})`,
+            phone: sql`coalesce(${customers.phone}, ${details.phone})`,
+            address: sql`coalesce(${customers.address}, ${details.address})`,
+            abn: sql`coalesce(${customers.abn}, ${details.abn})`,
+            registeredOnline: true,
+            salesRepId: sql`coalesce(${customers.salesRepId}, ${ref.rep.id}::uuid)`,
+          })
+          .where(eq(customers.id, ref.customer.id))
+          .returning();
+      } else {
+        [c] = await tx
+          .insert(customers)
+          .values({ name: business, email, ...details, approved: false, registeredOnline: true, ...(ref ? { salesRepId: ref.rep.id, salesStage: "interested" as const } : {}) })
+          .returning();
+      }
       const [u] = await tx.insert(users).values({ email, name, role: "customer", customerId: c.id, passwordHash: await hashPassword(password) }).returning();
       return { user: u, customer: c };
     });
-    after(() => accountRequested({ id: customer.id, name: business, contact: name, email, phone: customer.phone, address: customer.address }));
+    // An account that's already approved (a store staff set up) needs nothing from the office.
+    if (!customer.approved) after(() => accountRequested({ id: customer.id, name: customer.name, contact: name, email, phone: customer.phone, address: customer.address }));
     locateCustomersLater();
     const token = await signSession({ sub: user.id, role: "customer", name: user.name, driverId: null });
     (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
     revalidatePath("/admin/customers");
+    revalidatePath("/admin/pipeline");
     return { message: "registered" };
   });
 }
