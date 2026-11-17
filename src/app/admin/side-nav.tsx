@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeDollarSign, BarChart3, Boxes, Building2, ClipboardList, Factory, FileText, GalleryHorizontal, HandCoins, Inbox, LayoutDashboard, Map, MapPinned, Package, PackageCheck, PackagePlus, Radio, RotateCcw, Settings, ShoppingBag, Target, TrendingUp, Truck, Undo2, Wallet, Warehouse, Zap, ChevronDown, Menu as MenuIcon, X } from "lucide-react";
+import { BadgeDollarSign, BarChart3, Boxes, Building2, ClipboardList, Factory, FileText, GalleryHorizontal, HandCoins, Inbox, LayoutDashboard, Map, MapPinned, Package, PackageCheck, PackagePlus, Radio, RotateCcw, Scale, Settings, ShoppingBag, Target, TrendingUp, Truck, Undo2, Wallet, Warehouse, Zap, ChevronDown, Menu as MenuIcon, X } from "lucide-react";
 import Link from "@/components/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -50,6 +50,7 @@ const SECTIONS = [
     items: [
       { href: "/admin/pipeline", label: "Sales Pipeline", icon: Target },
       { href: "/admin/customers", label: "Customers", icon: Building2 },
+      { href: "/admin/price-matches", label: "Price Matches", icon: Scale },
       { href: "/admin/customer-map", label: "Customer Map", icon: MapPinned },
       { href: "/admin/drivers", label: "Drivers", icon: Truck },
     ],
@@ -76,9 +77,10 @@ export type NavBadges = Partial<Record<string, number>>;
 
 /**
  * Counts that mean "something needs you" are red; the rest are plain to-do counts. Deliveries
- * not yet on a shipment are normal every morning, so that count isn't an alarm.
+ * not yet on a shipment are normal every morning, so that count isn't an alarm. A price match
+ * waiting holds up a store a salesperson is signing, so it is.
  */
-const URGENT = new Set(["/admin/sales", "/admin/enquiries"]);
+const URGENT = new Set(["/admin/sales", "/admin/enquiries", "/admin/price-matches"]);
 
 export type NavItem = (typeof SECTIONS)[number]["items"][number];
 

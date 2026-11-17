@@ -216,15 +216,29 @@ export async function listCategories(db: DB) {
 }
 
 /** Products this customer bought before, most recent first. */
+/** A product on "My list": with the usual quantity (set by them or their salesperson) and whether staff put it there. */
+export type ListedItem = CatalogItem & { listQty: number | null; fromRep: boolean };
+
 /** The customer's own list, newest first, priced for them. */
-export async function listFavourites(db: DB, customer: Customer) {
-  const items = await db
-    .select(catalogColumns)
+export async function listFavourites(db: DB, customer: Customer): Promise<ListedItem[]> {
+  const rows = await db
+    .select({ ...catalogColumns, listQty: favourites.qty, addedBy: favourites.addedBy })
     .from(favourites)
     .innerJoin(products, eq(products.id, favourites.productId))
     .where(and(eq(favourites.customerId, customer.id), eq(products.active, true)))
     .orderBy(desc(favourites.createdAt));
-  return withPrices(db, items, customer);
+  const priced = await withPrices(db, rows.map(({ listQty: _q, addedBy: _a, ...r }) => r), customer);
+  return priced.map((p, i) => ({ ...p, listQty: rows[i].listQty, fromRep: rows[i].addedBy !== null }));
+}
+
+/** How many products are on the customer's list, and how many their salesperson put there. */
+export async function listSize(db: DB, customerId: string) {
+  const [r] = await db
+    .select({ n: sql<number>`count(*)::int`, fromRep: sql<number>`count(${favourites.addedBy})::int` })
+    .from(favourites)
+    .innerJoin(products, eq(products.id, favourites.productId))
+    .where(and(eq(favourites.customerId, customerId), eq(products.active, true)));
+  return { n: r?.n ?? 0, fromRep: r?.fromRep ?? 0 };
 }
 
 export async function recentlyBought(db: DB, customer: Customer, limit = 8) {

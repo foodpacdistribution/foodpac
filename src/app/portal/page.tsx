@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarClock, MapPin, Pencil, Phone, Receipt, ShoppingBag, Truck, Zap } from "lucide-react";
+import { ArrowRight, CalendarClock, Heart, MapPin, Pencil, Phone, Receipt, ShoppingBag, Truck, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { siteInfo } from "@/app/(site)/site-info";
@@ -12,7 +12,7 @@ import { creditBalance } from "@/lib/credit";
 import { getDb } from "@/lib/db";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
-import { canSeePrices, recentlyBought } from "@/lib/shop";
+import { canSeePrices, listSize, recentlyBought } from "@/lib/shop";
 import { formatMinutesClock, todayIn } from "@/lib/time";
 import { StageSteps } from "./stage";
 import { listSalesOrders } from "./orders/data";
@@ -36,7 +36,7 @@ export default async function PortalOverview() {
   const s = await getSettings(db);
   const site = siteInfo(s);
   const today = todayIn(s.timezone);
-  const [orders, again, storeCredit] = await Promise.all([listSalesOrders(db, c.id, 60), recentlyBought(db, c, 4), creditBalance(db, c.id)]);
+  const [orders, again, storeCredit, list] = await Promise.all([listSalesOrders(db, c.id, 60), recentlyBought(db, c, 4), creditBalance(db, c.id), listSize(db, c.id)]);
 
   const month = today.slice(0, 7);
   const monthOf = (d: Date) => todayIn(s.timezone, d).slice(0, 7);
@@ -119,6 +119,22 @@ export default async function PortalOverview() {
           <ArrowRight className="size-4" />
         </Link>
       ))}
+
+      {/* No orders yet and their salesperson set up their list: that's the quickest first order. */}
+      {live.length === 0 && list.fromRep > 0 && canSeePrices(c) && (
+        <Link href="/portal/list" className="mt-4 flex items-center gap-3 rounded-2xl bg-leaf-50 px-4 py-3 text-leaf-900 ring-1 ring-leaf-700/20 hover:bg-leaf-100">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-leaf-700 text-white">
+            <Heart className="size-4" />
+          </span>
+          <span className="flex-1 text-sm">
+            <span className="font-semibold">
+              <T vars={{ n: list.n }}>{list.n === 1 ? "Your list is ready: 1 product at your price." : "Your list is ready: {n} products at your prices."}</T>
+            </span>{" "}
+            <T>{"Check the quantities and order them in one go."}</T>
+          </span>
+          <ArrowRight className="size-4" />
+        </Link>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label={<T>{"Orders this month"}</T>} value={String(thisMonth.length)} />

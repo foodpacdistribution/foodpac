@@ -10,3 +10,13 @@ describe("margins and new customers in Chinese", () => {
     expect(translate(zh, "Margin {pct}%", { pct: 30 })).toBe("毛利 30%");
   });
 });
+
+describe("price match in Chinese", () => {
+  it("translates the messages after saving and deciding", () => {
+    expect(translate(zh, "Paper bowl 750ml: their price is now $20.90")).toBe("Paper bowl 750ml：专属价已改为 $20.90");
+    expect(translate(zh, "Paper bowl 750ml: $1,019.50 sent to the office to approve")).toBe("Paper bowl 750ml：$1,019.50 已提交办公室审批");
+    expect(translate(zh, "Approved: Cling wrap")).toBe("已批准：Cling wrap");
+    expect(translate(zh, "3 products added to their list")).toBe("已将 3 个商品加入客户清单");
+    expect(translate(zh, "They save {amount} each ({pct}%)", { amount: "$1.00", pct: 5 })).toBe("每件省 $1.00（5%）");
+  });
+});

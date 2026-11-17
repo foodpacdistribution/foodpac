@@ -26,6 +26,8 @@ type Lead = {
   paymentTerms: PaymentTerms;
   creditLimitCents: number | null;
   login: { email: string; name: string } | null;
+  /** Products on their list (from price match or set up by hand). */
+  listCount: number;
   stage: SalesStage;
   stageAt: string;
   repId: string | null;

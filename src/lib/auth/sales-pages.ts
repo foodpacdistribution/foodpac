@@ -15,14 +15,17 @@ const EXACT_ONLY = new Set(["/admin/customers"]);
 const UUID = "[0-9a-f-]{36}";
 /** A customer's own page (not its price list below it). */
 const CUSTOMER_PAGE = new RegExp(`^/admin/customers/${UUID}$`, "i");
+/** At a store: price match (and the savings sheet), and setting up the customer's list. */
+const VISIT_PAGES = new RegExp(`^/admin/customers/${UUID}/(price-match(/sheet)?|list)$`, "i");
 /** Taking an order on the spot, and looking at one afterwards (not editing, invoices or pick lists). */
 const ORDER_PAGES = new RegExp(`^/admin/sales/(new|${UUID})$`, "i");
 
-/** True for a path sales staff may open (one of their pages or below it, a customer's page, an order, or their own profile). */
+/** True for a path sales staff may open (one of their pages or below it, a customer's page and its visit pages, an order, or their own profile). */
 export function salesMayOpen(path: string) {
   return (
     path === "/account" ||
     CUSTOMER_PAGE.test(path) ||
+    VISIT_PAGES.test(path) ||
     ORDER_PAGES.test(path) ||
     SALES_PAGES.some((p) => path === p || (!EXACT_ONLY.has(p) && path.startsWith(`${p}/`)))
   );

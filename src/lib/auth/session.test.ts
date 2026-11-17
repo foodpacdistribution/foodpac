@@ -38,6 +38,10 @@ describe("salesMayOpen", () => {
     // A customer's page, but not the price list under it.
     expect(salesMayOpen("/admin/customers/0a6084c0-0000-0000-0000-000000000000")).toBe(true);
     expect(salesMayOpen("/admin/customers/0a6084c0-0000-0000-0000-000000000000/prices")).toBe(false);
+    expect(salesMayOpen("/admin/customers/0a6084c0-0000-0000-0000-000000000000/price-match")).toBe(true);
+    expect(salesMayOpen("/admin/customers/0a6084c0-0000-0000-0000-000000000000/price-match/sheet")).toBe(true);
+    expect(salesMayOpen("/admin/customers/0a6084c0-0000-0000-0000-000000000000/list")).toBe(true);
+    expect(salesMayOpen("/admin/price-matches")).toBe(false);
     expect(salesMayOpen("/admin/customer-map")).toBe(true);
     expect(salesMayOpen("/admin/pipeline")).toBe(true);
     expect(salesMayOpen("/admin/orders")).toBe(false);

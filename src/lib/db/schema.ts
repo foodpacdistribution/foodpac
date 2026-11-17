@@ -69,6 +69,14 @@ export const settings = pgTable("settings", {
   openingHours: text("opening_hours").notNull().default(""),
   /** Sales pipeline: remind sales staff about a customer who hasn't ordered for this many days. */
   quietDays: integer("quiet_days").notNull().default(14),
+  /**
+   * Price match: sales staff can give a customer a price on the spot down to this gross margin
+   * (percent of the price, over what the product costs us). Lower, or with no cost known, waits
+   * for the office to approve.
+   */
+  salesMinMarginPct: integer("sales_min_margin_pct").notNull().default(15),
+  /** Price match: the price suggested is this many percent under the competitor's (0 = match it). */
+  priceMatchBeatPct: real("price_match_beat_pct").notNull().default(0),
 });
 
 export const depots = pgTable("depots", {
@@ -616,6 +624,45 @@ export const customerPrices = pgTable(
   (t) => [uniqueIndex("customer_prices_uq").on(t.customerId, t.productId)],
 );
 
+/** approved = the customer has the price; pending = waiting for the office; rejected = the office said no. */
+export type PriceMatchStatus = "approved" | "pending" | "rejected";
+
+/**
+ * A price match done at a store: what they pay their current supplier for one of our products, and
+ * the price we offered. Approved matches set the customer's own price (customer_prices); the rows
+ * stay as the record, and fill the savings sheet shown to the store.
+ */
+export const priceMatches = pgTable(
+  "price_matches",
+  {
+    id: id(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    /** What they pay now, per unit of our product, in cents ex GST. */
+    competitorCents: integer("competitor_cents").notNull(),
+    /** Who they buy from now (optional). */
+    competitor: text("competitor"),
+    /** The price we offered, in cents ex GST. */
+    priceCents: integer("price_cents").notNull(),
+    /** Our list price and what a unit cost us when it was offered (cost null = not known). */
+    listCents: integer("list_cents").notNull(),
+    costCents: integer("cost_cents"),
+    /** Roughly how many units they use a month, for the savings sheet (optional). */
+    monthlyQty: integer("monthly_qty"),
+    note: text("note"),
+    status: text("status").$type<PriceMatchStatus>().notNull(),
+    requestedBy: uuid("requested_by").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+    decidedBy: uuid("decided_by").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("price_matches_customer_idx").on(t.customerId, t.createdAt), index("price_matches_status_idx").on(t.status)],
+);
+
 export const customerAddresses = pgTable("customer_addresses", {
   id: id(),
   customerId: uuid("customer_id")
@@ -643,7 +690,10 @@ export const cartItems = pgTable(
   (t) => [uniqueIndex("cart_items_uq").on(t.customerId, t.productId)],
 );
 
-/** Products a customer keeps on their own list ("My list") to reorder from quickly. */
+/**
+ * Products a customer keeps on their own list ("My list") to reorder from quickly. Sales staff
+ * set up the list for a store they sign (with the usual quantity), so it's ready on first login.
+ */
 export const favourites = pgTable(
   "favourites",
   {
@@ -653,6 +703,10 @@ export const favourites = pgTable(
     productId: uuid("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
+    /** How many they usually order, filled in on My list. Null = the product's minimum. */
+    qty: integer("qty"),
+    /** The staff member who put it on the list; null when the customer added it themselves. */
+    addedBy: uuid("added_by").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("favourites_uq").on(t.customerId, t.productId)],

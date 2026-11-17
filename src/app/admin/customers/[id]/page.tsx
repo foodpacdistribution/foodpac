@@ -17,7 +17,9 @@ import {
   Coins,
   Flag,
   Gift,
+  Heart,
   History,
+  Scale,
   UserPlus,
   Tags,
   Truck,
@@ -165,6 +167,17 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
             <Link href={`/admin/customers/${c.id}/prices`} className={btn("secondary")}>
               <Tags className="size-4" /> <T>{"Price list"}</T>
             </Link>
+          )}
+          {/* At the store: what they pay now against our price, and the list they'll order from. */}
+          {serve && (
+            <>
+              <Link href={`/admin/customers/${c.id}/price-match`} className={btn("secondary")}>
+                <Scale className="size-4" /> <T>{"Price match"}</T>
+              </Link>
+              <Link href={`/admin/customers/${c.id}/list`} className={btn("secondary")}>
+                <Heart className="size-4" /> <T>{"Their list"}</T>
+              </Link>
+            </>
           )}
           {/* Sales staff quote and take orders on the spot for their own customers. */}
           {serve && c.active && (
