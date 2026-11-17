@@ -15,6 +15,7 @@ import {
   Phone,
   PhoneCall,
   QrCode,
+  LayoutGrid,
   RotateCcw,
   ShoppingCart,
   Coins,
@@ -205,6 +206,9 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           {/* At the store: what they pay now against our price, and the list they'll order from. */}
           {serve && (
             <>
+              <Link href={`/admin/catalog?customer=${c.id}`} className={btn("secondary")}>
+                <LayoutGrid className="size-4" /> <T>{"Catalogue"}</T>
+              </Link>
               <Link href={`/admin/customers/${c.id}/price-match`} className={btn("secondary")}>
                 <Scale className="size-4" /> <T>{"Price match"}</T>
               </Link>

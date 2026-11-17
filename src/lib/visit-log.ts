@@ -10,6 +10,10 @@ import { followUpNoteFor, MAX_VISIT_PHOTOS, stageAfter } from "./visits";
 type Who = Pick<CurrentUser, "id" | "role">;
 
 export type VisitInput = {
+  /** Made on the phone, so a visit sent twice (signal lost after it was saved) is kept once. */
+  id?: string;
+  /** When it happened, if logged earlier and sent later (no signal at the time). */
+  at?: Date;
   customerId: string;
   channel: "visit" | "call";
   outcome: VisitOutcome;
@@ -29,6 +33,8 @@ export type VisitInput = {
  * Records a visit and, in the same go, moves the customer along: the stage the result implies,
  * the next reminder (replacing any earlier one), "last contacted" now, and the reason when they
  * said not now. A salesperson logging a visit for a customer nobody looks after takes it on.
+ * `today` is the day of the visit (in the business's time zone), which reminders are checked
+ * against. A visit with an id already saved changes nothing the second time.
  */
 export async function recordVisit(db: DB, user: Who, input: VisitInput, today: string) {
   await assertMayServe(db, user, input.customerId);
@@ -45,10 +51,17 @@ export async function recordVisit(db: DB, user: Who, input: VisitInput, today: s
       .for("update")
       .limit(1);
     if (!c) throw new UserError("Customer not found.");
+    if (input.id) {
+      const [done] = await tx.select({ id: customerVisits.id }).from(customerVisits).where(eq(customerVisits.id, input.id)).limit(1);
+      if (done) return { visitId: done.id, name: c.name, stage: c.stage as SalesStage, from: c.stage as SalesStage };
+    }
+    const at = input.at ?? new Date();
     const stage = stageAfter(input.outcome, c.stage);
     const [visit] = await tx
       .insert(customerVisits)
       .values({
+        ...(input.id ? { id: input.id } : {}),
+        createdAt: at,
         customerId: input.customerId,
         userId: user.id,
         channel: input.channel,
@@ -63,10 +76,11 @@ export async function recordVisit(db: DB, user: Who, input: VisitInput, today: s
     await tx
       .update(customers)
       .set({
-        contactedAt: new Date(),
+        // A visit sent late doesn't move "last contacted" back past a later one.
+        contactedAt: sql`greatest(coalesce(${customers.contactedAt}, ${at}), ${at})`,
         followUpOn: input.followUpOn,
         followUpNote: input.followUpOn ? followUpNoteFor(input.outcome, input.note, input.reason) : null,
-        ...(stage !== c.stage ? { salesStage: stage, salesStageAt: new Date() } : {}),
+        ...(stage !== c.stage ? { salesStage: stage, salesStageAt: at } : {}),
         // The reason stays while they're "not now", and goes once they move on.
         notNowReason: stage === "not_now" ? (input.outcome === "not_now" ? input.reason : sql`${customers.notNowReason}`) : null,
         ...(user.role === "sales" && !c.rep ? { salesRepId: user.id } : {}),
