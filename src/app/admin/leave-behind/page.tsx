@@ -37,7 +37,7 @@ export default async function LeaveBehindPage({ searchParams }: { searchParams: 
   const [[rep], s, candidates, storeLogin] = await Promise.all([
     db.select({ name: users.name, email: users.email, phone: users.phone }).from(users).where(eq(users.id, me.id)).limit(1),
     getSettings(db),
-    popularProducts(db, 60),
+    popularProducts(db, 60, store?.storeType ?? null),
     store ? db.select({ id: users.id }).from(users).where(eq(users.customerId, store.id)).limit(1) : [],
   ]);
   // A store that already has a login doesn't need to sign up: the code then just says who left it.

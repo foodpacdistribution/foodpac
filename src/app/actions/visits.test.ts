@@ -114,6 +114,16 @@ describe("logging a visit", () => {
   });
 });
 
+describe("the store's kind", () => {
+  it("is saved with a visit when the form asked for it, and left alone otherwise", async () => {
+    await visit({ customerId: mine, outcome: "interested", storeType: "bubble_tea" });
+    expect((await customer(mine)).storeType).toBe("bubble_tea");
+    await visit({ customerId: mine, outcome: "thinking" });
+    await visit({ customerId: mine, outcome: "thinking", storeType: "not-a-type" });
+    expect((await customer(mine)).storeType).toBe("bubble_tea");
+  });
+});
+
 describe("deleting a visit", () => {
   it("is for the person who logged it, or an admin", async () => {
     const [v] = await state.db.select().from(customerVisits).where(eq(customerVisits.customerId, nobodys));

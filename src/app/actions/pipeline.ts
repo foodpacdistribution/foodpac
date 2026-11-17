@@ -17,6 +17,8 @@ import { accountApproved } from "@/lib/notify";
 import { getSettings, UserError } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
 import { isSalesStage, STAGE_INFO } from "@/lib/sales-stage";
+import { assertMayServe } from "@/lib/rep-scope";
+import { isStoreType } from "@/lib/store-types";
 
 function refresh() {
   revalidatePath("/admin/pipeline");
@@ -64,7 +66,15 @@ export async function saveLead(_prev: unknown, form: FormData) {
 
     await assertNameFree(db, name, id);
 
-    const details = { name, phone: get("phone") || null, email, address: get("address") || null };
+    const storeType = get("storeType");
+    const details = {
+      name,
+      phone: get("phone") || null,
+      email,
+      address: get("address") || null,
+      storeType: isStoreType(storeType) ? storeType : null,
+      contactName: get("contactName").slice(0, 200) || null,
+    };
     let customerId = id;
     if (id) {
       const [before] = await db.select({ stage: customers.salesStage, rep: customers.salesRepId }).from(customers).where(eq(customers.id, id)).limit(1);
@@ -196,6 +206,30 @@ export async function setQuietDays(days: number) {
     await (await getDb()).update(settings).set({ quietDays: days }).where(eq(settings.id, 1));
     refresh();
     revalidatePath("/admin", "layout");
+    return { message: "Saved" };
+  });
+}
+
+/** What the salesperson knows about the store: its kind, who to talk to, when to come by, who supplies it now. */
+export async function saveStoreDetails(customerId: string, details: { storeType: string; contactName: string; bestTime: string; currentSupplier: string }) {
+  return attempt(async () => {
+    const user = await assertUser(PIPELINE);
+    const db = await getDb();
+    await assertMayServe(db, user, customerId);
+    const text = (v: string) => String(v ?? "").trim().slice(0, 200) || null;
+    const [c] = await db
+      .update(customers)
+      .set({
+        storeType: isStoreType(details.storeType) ? details.storeType : null,
+        contactName: text(details.contactName),
+        bestTime: text(details.bestTime),
+        currentSupplier: text(details.currentSupplier),
+      })
+      .where(eq(customers.id, customerId))
+      .returning({ name: customers.name });
+    if (!c) throw new UserError("Customer not found.");
+    refresh();
+    revalidatePath(`/admin/customers/${customerId}`);
     return { message: "Saved" };
   });
 }

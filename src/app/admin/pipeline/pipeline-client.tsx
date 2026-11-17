@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, BellRing, Check, ClipboardPen, Clock, KeyRound, Mail, Pencil, Phone, Plus, Search, Store, Target, UserRound } from "lucide-react";
+import { Bell, BellRing, Check, ClipboardPen, Gauge, Clock, KeyRound, Mail, Pencil, Phone, Plus, Search, Store, Target, UserRound } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { markFollowedUp, saveLead, setFollowUp, setQuietDays, setSalesStage } from "@/app/actions/pipeline";
 import { AddressInput } from "@/components/address-input";
@@ -9,12 +9,15 @@ import { useT } from "@/components/i18n";
 import { btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import { prettyDate, shiftDate } from "@/lib/dates";
 import { useVisitLogger, type VisitSaved } from "@/components/visit-logger";
-import type { NotNowReason, PaymentTerms, Role, SalesStage } from "@/lib/db/schema";
+import type { NotNowReason, PaymentTerms, Role, SalesStage, StoreType } from "@/lib/db/schema";
+import { STORE_TYPES } from "@/lib/store-types";
+import { StoreTypePicker } from "@/app/admin/customers/[id]/store-details";
 import { daysBetween, type DueFollowUp, QUIET_CHOICES, REMIND_IN } from "@/lib/follow-up";
 import { dueText } from "@/lib/follow-up-text";
 import { SALES_STAGES, STAGE_INFO } from "@/lib/sales-stage";
 import type { LastVisit } from "@/lib/visit-log";
 import { NOT_NOW_REASONS, OUTCOMES } from "@/lib/visits";
+import Link from "@/components/link";
 import { OpenAccountForm } from "./open-account-form";
 
 type Lead = {
@@ -38,6 +41,9 @@ type Lead = {
   followUpOn: string | null;
   followUpNote: string | null;
   notNowReason: NotNowReason | null;
+  storeType: StoreType | null;
+  contactName: string | null;
+  bestTime: string | null;
   lastVisit: LastVisit | null;
   lastOrderOn: string | null;
   due: DueFollowUp | null;
@@ -60,7 +66,20 @@ function ago(day: string, today: string, tr: Tr) {
   return shortDate(day, tr);
 }
 
-export function PipelineClient({ customers, me, today, quietDays }: { customers: Lead[]; me: { id: string; role: Role }; today: string; quietDays: number }) {
+export function PipelineClient({
+  customers,
+  me,
+  today,
+  quietDays,
+  week = null,
+}: {
+  customers: Lead[];
+  me: { id: string; role: Role };
+  today: string;
+  quietDays: number;
+  /** This person's last seven days: visits logged and stores won. */
+  week?: { visits: number; won: number } | null;
+}) {
   const tr = useT();
   const [editing, setEditing] = useState<Lead | "new" | null>(null);
   // The store whose account is being opened ("new" for one not on the pipeline yet).
@@ -132,9 +151,10 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
         // "All" leaves out stores that said not now, unless they're being searched for.
         (stage === "all" ? c.stage !== "not_now" || !!s : c.stage === stage) &&
         (!mine || c.repId === me.id) &&
-        (!s || [c.name, c.phone, c.email, c.address, c.repName, c.followUpNote, c.lastVisit?.note].some((v) => v?.toLowerCase().includes(s))),
+        (!s || [c.name, c.phone, c.email, c.address, c.repName, c.followUpNote, c.lastVisit?.note, c.contactName, c.storeType && tr(STORE_TYPES[c.storeType])].some((v) => v?.toLowerCase().includes(s))),
     );
-  }, [rows, stage, mine, deferredQ, me.id]);
+    // tr: the store type is searched in the language on screen.
+  }, [rows, stage, mine, deferredQ, me.id, tr]);
   // Overdue reminders first, then the longest-quiet customers.
   const toFollow = useMemo(
     () =>
@@ -176,6 +196,24 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
         }
       />
 
+      {week && (
+        <Link
+          href="/admin/my-sales?days=7"
+          className="group mb-4 flex animate-rise items-center gap-3 rounded-2xl bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-3 text-white shadow-card transition-shadow hover:shadow-pop"
+        >
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/10">
+            <Gauge className="size-[18px]" />
+          </span>
+          <span className="min-w-0 flex-1 text-sm">
+            <span className="block text-xs text-white/60">{tr("Last 7 days")}</span>
+            <span className="font-semibold tabular-nums">
+              {tr(week.visits === 1 ? "1 visit" : "{n} visits", { n: week.visits })} · {tr("{n} won", { n: week.won })}
+            </span>
+          </span>
+          <span className="text-xs font-medium text-white/70 transition-transform duration-200 group-hover:translate-x-0.5">{tr("My Sales")} →</span>
+        </Link>
+      )}
+
       <FollowUpList
         items={toFollow}
         today={today}
@@ -186,8 +224,8 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
         onQuietDays={(d) => start(async () => say(await setQuietDays(d)))}
       />
 
-      {/* One tile per stage: how many are there, and a click shows just those. */}
-      <div className="mb-4 grid grid-cols-3 gap-2 lg:grid-cols-6">
+      {/* One chip per stage: how many are there, and a tap shows just those. Scrolls sideways on phones. */}
+      <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0">
         <StageTile label={tr("All")} n={counts.all} on={stage === "all"} onClick={() => setStage("all")} />
         {SALES_STAGES.map((s) => (
           <StageTile key={s} label={tr(STAGE_INFO[s].label)} hint={tr(STAGE_INFO[s].hint)} dot={STAGE_INFO[s].dot} n={counts[s]} on={stage === s} onClick={() => setStage(stage === s ? "all" : s)} />
@@ -227,19 +265,30 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
             <span>{tr("Salesperson")}</span>
             <span />
           </div>
-          <ul className="divide-y divide-line">
-            {shown.map((c) => (
+          {/* Keyed by the filter, so a new filter's rows rise in again. */}
+          <ul key={`${stage}|${mine}`} className="divide-y divide-line">
+            {shown.map((c, i) => (
               <li
                 key={c.id}
+                style={i < 14 ? ({ "--i": i } as React.CSSProperties) : undefined}
                 className={cx(
-                  "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 md:grid-cols-[minmax(0,1.5fr)_10.5rem_minmax(0,1fr)_minmax(0,0.9fr)_2.5rem]",
+                  "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-slate-50/60 md:grid-cols-[minmax(0,1.5fr)_10.5rem_minmax(0,1fr)_minmax(0,0.9fr)_2.5rem]",
+                  i < 14 && "stagger",
                   !c.active && "opacity-60",
                 )}
               >
-                <div className="min-w-0">
-                  <button onClick={() => setEditing(c)} className="block max-w-full truncate text-left text-sm font-semibold text-slate-900 hover:underline">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className={cx("mt-0.5 hidden size-9 shrink-0 place-items-center rounded-full text-sm font-semibold sm:grid", AVATAR[c.stage])}>{initial(c.name)}</span>
+                  <div className="min-w-0">
+                  <Link href={`/admin/customers/${c.id}`} className="line-clamp-2 block max-w-full text-sm leading-snug font-semibold break-words text-slate-900 hover:text-blue-700 md:truncate">
                     {c.name}
-                  </button>
+                  </Link>
+                  {(c.storeType || c.contactName) && (
+                    <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+                      {c.storeType && <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-px text-[11px] font-medium text-slate-600">{tr(STORE_TYPES[c.storeType])}</span>}
+                      {c.contactName && <span className="truncate">{tr("Talk to {name}", { name: c.contactName })}</span>}
+                    </p>
+                  )}
                   <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-500">
                     {c.phone && (
                       <a href={`tel:${c.phone.replace(/\s/g, "")}`} className="inline-flex items-center gap-1 hover:text-slate-800">
@@ -260,6 +309,7 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
                       <KeyRound className="size-3" /> {tr("Finish opening the account")}
                     </button>
                   )}
+                  </div>
                 </div>
                 <div className="flex min-w-0 items-center gap-1">
                   <StageSelect value={c.stage} onChange={(to) => move(c, to)} label={tr("Stage for {name}", { name: c.name })} />
@@ -272,7 +322,6 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
                   <UserRound className="size-3.5 shrink-0 text-slate-400 md:hidden" />
                   <span className="truncate">{c.repName ? (c.repId === me.id ? tr("You") : c.repName) : <span className="text-slate-400">{tr("Unassigned")}</span>}</span>
                 </p>
-                {/* On phones the name itself opens the form. */}
                 <div className="hidden md:block">
                   <button className={btn("ghost", "icon")} onClick={() => setEditing(c)} aria-label={tr("Edit {name}", { name: c.name })}>
                     <Pencil className="size-3.5" />
@@ -335,6 +384,16 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
     </>
   );
 }
+
+/** Each stage's soft colour, for the round initial beside a customer. */
+const AVATAR: Record<SalesStage, string> = {
+  new: "bg-slate-100 text-slate-600",
+  interested: "bg-blue-50 text-blue-700",
+  negotiating: "bg-amber-50 text-amber-800",
+  won: "bg-emerald-50 text-emerald-700",
+  not_now: "bg-rose-50 text-rose-600",
+};
+const initial = (name: string) => (name.replace(/^(the|a)\s+/i, "").match(/[\p{L}\p{N}]/u)?.[0] ?? "?").toUpperCase();
 
 /** Under the name: why a "not now" store said no, or how the last visit went (`brief`: without its note). */
 function VisitLine({ c, today, brief }: { c: Lead; today: string; brief?: boolean }) {
@@ -413,8 +472,9 @@ function FollowUpList({
         <p className="px-4 py-3 text-sm text-slate-500">{tr("Nothing due today. Set a reminder on any customer with the bell.")}</p>
       ) : (
         <ul className="max-h-[22rem] divide-y divide-line overflow-y-auto">
-          {items.map((c) => (
-            <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+          {items.map((c, i) => (
+            <li key={c.id} style={{ "--i": Math.min(i, 10) } as React.CSSProperties} className="stagger relative flex flex-wrap items-center gap-x-4 gap-y-2 py-2.5 pr-4 pl-5">
+              <span aria-hidden className={cx("absolute inset-y-2.5 left-0 w-1 rounded-r-full", c.due!.kind === "reminder" && c.due!.late > 0 ? "bg-red-500" : "bg-amber-400")} />
               <div className="min-w-0 flex-1 basis-56">
                 <p className="truncate text-sm font-semibold text-slate-900">{c.name}</p>
                 <p className={cx("text-xs", c.due!.kind === "reminder" && c.due!.late > 0 ? "text-red-600" : "text-amber-700")}>
@@ -566,7 +626,7 @@ function FollowUpForm({
   );
 }
 
-function StageTile({ label, hint, dot, n, on, onClick, className }: { label: string; hint?: string; dot?: string; n: number; on: boolean; onClick: () => void; className?: string }) {
+function StageTile({ label, hint, dot, n, on, onClick }: { label: string; hint?: string; dot?: string; n: number; on: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -574,16 +634,13 @@ function StageTile({ label, hint, dot, n, on, onClick, className }: { label: str
       aria-pressed={on}
       title={hint}
       className={cx(
-        "rounded-xl border bg-white px-3.5 py-3 text-left shadow-sm transition-colors",
-        className,
-        on ? "border-blue-500 ring-2 ring-blue-500/20" : "border-line hover:border-slate-300",
+        "flex h-10 shrink-0 items-center gap-2 rounded-full border pr-1.5 pl-3.5 text-sm font-medium whitespace-nowrap transition-all duration-200 active:scale-[0.97]",
+        on ? "border-navy-900 bg-navy-900 text-white shadow-sm" : "border-line bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900",
       )}
     >
-      <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-        {dot && <span className={cx("size-2 rounded-full", dot)} />}
-        {label}
-      </span>
-      <span className="mt-1 block text-2xl font-semibold tabular-nums text-slate-900">{n}</span>
+      {dot && <span className={cx("size-2 rounded-full", dot)} />}
+      {label}
+      <span className={cx("min-w-7 rounded-full px-2 py-0.5 text-center text-xs tabular-nums transition-colors", on ? "bg-white/15 text-white" : "bg-slate-100 text-slate-700")}>{n}</span>
     </button>
   );
 }
@@ -627,6 +684,7 @@ function LeadForm({
 }) {
   const tr = useT();
   const [state, form] = useKeptForm(saveLead);
+  const [storeType, setStoreType] = useState<StoreType | null>(lead?.storeType ?? null);
   useEffect(() => {
     if (state?.ok) onDone(state.message);
   }, [state, onDone]);
@@ -649,6 +707,11 @@ function LeadForm({
           ))}
         </div>
       </fieldset>
+      <StoreTypePicker value={storeType} onChange={setStoreType} />
+      <input type="hidden" name="storeType" value={storeType ?? ""} />
+      <Field label={tr("Talk to")}>
+        <input name="contactName" defaultValue={lead?.contactName ?? ""} maxLength={200} placeholder={tr("e.g. Linda (owner)")} className={inputCls} />
+      </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={tr("Phone")}>
           <input name="phone" type="tel" defaultValue={lead?.phone ?? ""} className={inputCls} />

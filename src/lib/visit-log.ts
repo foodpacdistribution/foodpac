@@ -2,7 +2,7 @@ import "server-only";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { CurrentUser } from "./auth/dal";
 import type { DB } from "./db";
-import { customers, customerVisitPhotos, customerVisits, type NotNowReason, type SalesStage, users, type VisitOutcome } from "./db/schema";
+import { customers, customerVisitPhotos, customerVisits, type NotNowReason, type SalesStage, type StoreType, users, type VisitOutcome } from "./db/schema";
 import { UserError } from "./planning";
 import { assertMayServe } from "./rep-scope";
 import { followUpNoteFor, MAX_VISIT_PHOTOS, stageAfter } from "./visits";
@@ -16,6 +16,8 @@ export type VisitInput = {
   note: string;
   /** Required for "not now". */
   reason: NotNowReason | null;
+  /** The kind of store, when the form asked (it isn't known yet). */
+  storeType?: StoreType | null;
   /** The next reminder (today or later), or null for none. */
   followUpOn: string | null;
   lat: number | null;
@@ -68,6 +70,7 @@ export async function recordVisit(db: DB, user: Who, input: VisitInput, today: s
         // The reason stays while they're "not now", and goes once they move on.
         notNowReason: stage === "not_now" ? (input.outcome === "not_now" ? input.reason : sql`${customers.notNowReason}`) : null,
         ...(user.role === "sales" && !c.rep ? { salesRepId: user.id } : {}),
+        ...(input.storeType ? { storeType: input.storeType } : {}),
       })
       .where(eq(customers.id, input.customerId));
     return { visitId: visit.id, name: c.name, stage, from: c.stage as SalesStage };

@@ -149,6 +149,12 @@ export const customers = pgTable("customers", {
   /** Sales pipeline, set by sales staff. */
   salesStage: text("sales_stage").$type<SalesStage>().notNull().default("new"),
   salesStageAt: timestamp("sales_stage_at", { withTimezone: true }).notNull().defaultNow(),
+  /** What kind of business it is (a StoreType), for suggesting what stores like it buy. */
+  storeType: text("store_type").$type<StoreType>(),
+  /** Who to talk to, when to come by, and who supplies them now: what the salesperson learns at the counter. */
+  contactName: text("contact_name"),
+  bestTime: text("best_time"),
+  currentSupplier: text("current_supplier"),
   /** Why a "not now" customer said no (a NotNowReason); cleared when they move on from "not now". */
   notNowReason: text("not_now_reason").$type<NotNowReason>(),
   /** The salesperson looking after this customer (whoever added it, or first moved it along). */
@@ -175,6 +181,7 @@ export const customers = pgTable("customers", {
 }, (t) => [uniqueIndex("customers_code_key").on(sql`lower(${t.code})`)]);
 
 export type PaymentTerms = "prepay" | "net7" | "net14" | "net30";
+export type StoreType = "bubble_tea" | "cafe" | "takeaway" | "restaurant" | "sushi" | "bakery" | "dessert" | "catering" | "grocery" | "other";
 export type NotNowReason = "price" | "supplier" | "too_small" | "range" | "other";
 
 export const users = pgTable("users", {
