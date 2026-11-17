@@ -16,6 +16,7 @@ import { OrderPill, PaymentPill, Pill, POD_LABEL, WarehousePill } from "../../ba
 import { StageBadge, StageSteps } from "../../stage";
 import { OrderActions } from "./order-actions";
 import { T, Tx } from "@/components/i18n";
+import { asSold } from "@/lib/stock-units";
 
 export const metadata: Metadata = { title: "Order" };
 
@@ -88,21 +89,29 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
               </tr>
             </thead>
             <tbody>
-              {items.map((it) => (
-                <tr key={it.id} className="border-t border-leaf-950/5">
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{it.name}</p>
-                    <p className="text-xs text-leaf-900/50">
-                      {[it.sku, it.packSize].filter(Boolean).join(" · ")}
-                    </p>
-                  </td>
-                  <td className="px-2 py-3 text-right tabular-nums">
-                    {it.qty} <span className="text-xs text-leaf-900/50">{it.unit}</span>
-                  </td>
-                  <td className="px-2 py-3 text-right tabular-nums">{aud(it.unitPriceCents)}</td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">{aud(it.lineCents)}</td>
-                </tr>
-              ))}
+              {items.map((it) => {
+                const sold = asSold(it);
+                return (
+                  <tr key={it.id} className="border-t border-leaf-950/5">
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{it.name}</p>
+                      <p className="text-xs text-leaf-900/50">
+                        {[it.sku, it.packSize].filter(Boolean).join(" · ")}
+                      </p>
+                    </td>
+                    <td className="px-2 py-3 text-right tabular-nums">
+                      {sold.qty} <span className="text-xs text-leaf-900/50"><Tx>{sold.unit}</Tx></span>
+                      {sold.units !== null && (
+                        <span className="block text-xs text-leaf-900/50">
+                          {sold.units} <Tx>{it.unit}</Tx>
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-3 text-right tabular-nums">{aud(sold.priceCents)}</td>
+                    <td className="px-4 py-3 text-right font-medium tabular-nums">{aud(it.lineCents)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <dl className="space-y-1 border-t border-leaf-950/10 px-4 py-3 text-sm">

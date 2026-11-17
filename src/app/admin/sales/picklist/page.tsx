@@ -8,6 +8,7 @@ import { getDb } from "@/lib/db";
 import { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { getSettings } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
+import { cartonSize, formatCartons } from "@/lib/stock-units";
 import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Pick list" };
@@ -39,9 +40,9 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
     ? await db.select().from(salesOrderItems).where(inArray(salesOrderItems.salesOrderId, so.map((r) => r.so.id))).orderBy(asc(salesOrderItems.sku))
     : [];
   // Only what's on the shelf can be picked; units still waiting for stock are shown separately.
-  const totals = new Map<string, { sku: string; name: string; packSize: string; unit: string; qty: number; waiting: number }>();
+  const totals = new Map<string, { sku: string; name: string; packSize: string; unit: string; per: number | null; qty: number; waiting: number }>();
   for (const it of items) {
-    const t = totals.get(it.sku) ?? { sku: it.sku, name: it.name, packSize: it.packSize, unit: it.unit, qty: 0, waiting: 0 };
+    const t = totals.get(it.sku) ?? { sku: it.sku, name: it.name, packSize: it.packSize, unit: it.unit, per: cartonSize(it.packSize, it.unit), qty: 0, waiting: 0 };
     t.qty += it.qty - it.backorderQty;
     t.waiting += it.backorderQty;
     totals.set(it.sku, t);
@@ -81,6 +82,8 @@ export default async function PickListPage({ searchParams }: { searchParams: Pro
                 </td>
                 <td className="px-4 py-2 text-right font-semibold tabular-nums">
                   {t.qty} {t.unit}
+                  {/* Packs that make up whole cartons are picked as cartons. */}
+                  {t.per && t.qty >= t.per && <span className="block text-xs font-normal text-slate-500">= {formatCartons(t.qty, t.per)}</span>}
                   {t.waiting > 0 && (
                     <span className="block text-xs font-medium text-red-600">
                       <T vars={{ n: t.waiting }}>{"{n} waiting for stock"}</T>

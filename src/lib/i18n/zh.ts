@@ -3093,6 +3093,14 @@ export const ZH: Record<string, string> = {
   "1 couldn't be saved": "1 条保存失败",
   "{n} couldn't be saved": "{n} 条保存失败",
   "1 visit sent": "已发送 1 条拜访",
+  "Order by": "下单单位",
+  "By the {unit}": "按{unit}",
+  "By the carton ({n})": "整箱（每箱 {n}）",
+  "Price per carton": "每箱价格",
+  "ctn": "箱",
+  "packet": "包",
+  "sleeve": "条",
+  "A product is on the order twice, once by the carton and once by the unit. Keep one line for it.": "同一商品既按箱又按单件下单了，请只保留一行。",
 };
 
 /** Messages with a variable part. */
@@ -3284,4 +3292,5 @@ export const ZH_PATTERNS: [RegExp, string][] = [
   [new RegExp("^Visit saved: (.+) · Not now$"), "已记录拜访：$1 · 暂不合作"],
   [new RegExp("^Visit saved: (.+)$"), "已记录拜访：$1"],
   [new RegExp("^(\\d+) visits sent$"), "已发送 $1 条拜访"],
+  [new RegExp("^(.+) can't be ordered by the carton: its pack size doesn't say how many are in a carton\\.$"), "$1 不能按箱下单：规格里没有写每箱多少件。"],
 ];

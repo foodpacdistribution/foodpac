@@ -9,6 +9,7 @@ import { applyCreditToOrder, releaseOrderCredit } from "./credit";
 import { firstOrderOfferFor, useFirstOrderOffer } from "./first-order-offer";
 import { createDeliveryOrder, dueIn } from "./shop";
 import { fillWaiting, reserveStock, returnStock } from "./stock-allocation";
+import { cartonSize } from "./stock-units";
 
 /** An order as staff type it in: for phone and email orders, or changes a customer asks for. */
 export type StaffOrderInput = {
@@ -22,8 +23,12 @@ export type StaffOrderInput = {
   windowEndMin: number | null;
   notes: string | null;
   deliveryFeeCents: number;
-  lines: { productId: string; qty: number; unitPriceCents: number }[];
+  /** `qty` and the price are per carton for lines ordered `by: "carton"`, otherwise per unit. */
+  lines: StaffLine[];
 };
+
+export type SellBy = "unit" | "carton";
+export type StaffLine = { productId: string; qty: number; unitPriceCents: number; by?: SellBy };
 
 export const STAFF_METHODS: PaymentMethod[] = ["invoice", "bank_transfer"];
 
@@ -35,13 +40,15 @@ function check(input: StaffOrderInput, today: string) {
   if (input.windowStartMin !== null && input.windowEndMin !== null && input.windowStartMin >= input.windowEndMin) throw new UserError("The delivery window must end after it starts.");
   if (!Number.isInteger(input.deliveryFeeCents) || input.deliveryFeeCents < 0) throw new UserError("The delivery fee must be $0 or more.");
   // One line per product: the same product twice is added together.
-  const merged = new Map<string, { productId: string; qty: number; unitPriceCents: number }>();
+  const merged = new Map<string, StaffLine & { by: SellBy }>();
   for (const l of input.lines) {
     if (!Number.isInteger(l.qty) || l.qty < 0 || l.qty > 99999) throw new UserError("Quantities must be whole numbers.");
     if (!Number.isInteger(l.unitPriceCents) || l.unitPriceCents < 0) throw new UserError("Prices must be $0 or more.");
     if (l.qty === 0) continue;
+    const by = l.by === "carton" ? "carton" : "unit";
     const m = merged.get(l.productId);
-    merged.set(l.productId, m ? { ...m, qty: m.qty + l.qty } : { ...l });
+    if (m && m.by !== by) throw new UserError("A product is on the order twice, once by the carton and once by the unit. Keep one line for it.");
+    merged.set(l.productId, m ? { ...m, qty: m.qty + l.qty } : { ...l, by });
   }
   if (!merged.size) throw new UserError("Add at least one product.");
   return [...merged.values()];
@@ -54,6 +61,27 @@ async function productsFor(tx: DB, ids: string[]) {
 }
 
 const snapshot = (p: typeof products.$inferSelect) => ({ sku: p.sku, name: p.name, packSize: p.packSize, unit: p.unit, gst: p.gst });
+
+/**
+ * A line as it's kept: `qty` in stock units whichever way it was ordered, so stock, picking and
+ * returns work the same. A carton line keeps its carton size and price, and is charged by the carton.
+ */
+export function stockLine(
+  p: Pick<typeof products.$inferSelect, "name" | "packSize" | "unit">,
+  l: { qty: number; unitPriceCents: number; by: SellBy },
+): { qty: number; unitPriceCents: number; lineCents: number; perCarton: number | null; cartonPriceCents: number | null } {
+  if (l.by === "carton") {
+    const per = cartonSize(p.packSize, p.unit);
+    if (!per) throw new UserError(`${p.name} can't be ordered by the carton: its pack size doesn't say how many are in a carton.`);
+    if (l.qty * per > 99999) throw new UserError("Quantities must be whole numbers.");
+    return { qty: l.qty * per, unitPriceCents: Math.round(l.unitPriceCents / per), lineCents: l.qty * l.unitPriceCents, perCarton: per, cartonPriceCents: l.unitPriceCents };
+  }
+  return { qty: l.qty, unitPriceCents: l.unitPriceCents, lineCents: l.qty * l.unitPriceCents, perCarton: null, cartonPriceCents: null };
+}
+
+/** What a line counts for in the totals: cartons at the carton price, or units at the unit price. */
+const charged = (l: { qty: number; unitPriceCents: number; perCarton: number | null; cartonPriceCents: number | null; gst: boolean }) =>
+  l.perCarton && l.cartonPriceCents !== null ? { qty: l.qty / l.perCarton, unitPriceCents: l.cartonPriceCents, gst: l.gst } : l;
 
 /** Places an order for a customer. It's confirmed straight away and goes to the planner; short lines wait for stock. */
 export async function createStaffOrder(db: DB, staffId: string, input: StaffOrderInput & { method: PaymentMethod; idempotencyKey: string; creditCents?: number }, today: string) {
@@ -69,10 +97,12 @@ export async function createStaffOrder(db: DB, staffId: string, input: StaffOrde
     const byId = await productsFor(tx, lines.map((l) => l.productId));
     const items = [];
     for (const l of lines) {
-      const { short } = await reserveStock(tx, l.productId, l.qty, { note: `New order · ${customer.name}`, by: staffId });
-      items.push({ ...snapshot(byId.get(l.productId)!), productId: l.productId, qty: l.qty, unitPriceCents: l.unitPriceCents, lineCents: l.qty * l.unitPriceCents, backorderQty: short });
+      const p = byId.get(l.productId)!;
+      const line = stockLine(p, l);
+      const { short } = await reserveStock(tx, l.productId, line.qty, { note: `New order · ${customer.name}`, by: staffId });
+      items.push({ ...snapshot(p), productId: l.productId, ...line, backorderQty: short });
     }
-    const totals = orderTotals(items, input.deliveryFeeCents);
+    const totals = orderTotals(items.map(charged), input.deliveryFeeCents);
     const [so] = await tx
       .insert(salesOrders)
       .values({
@@ -138,10 +168,11 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
     const freed: string[] = [];
     const ref = { id: so.id, number: so.number, note: "Order changed" };
     const kept: { qty: number; unitPriceCents: number; gst: boolean }[] = [];
+    const stocked = new Map(lines.map((l) => [l.productId, stockLine(byId.get(l.productId)!, l)]));
 
     // Lines that went or got smaller: waiting units go first, then reserved ones back on the shelf.
     for (const o of old) {
-      const next = lines.find((l) => l.productId === o.productId);
+      const next = o.productId ? stocked.get(o.productId) : undefined;
       if (!o.productId || !next) {
         if (o.productId) {
           await returnStock(tx, o.productId, o.qty - o.backorderQty, ref);
@@ -162,16 +193,17 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
       }
       await tx
         .update(salesOrderItems)
-        .set({ qty: next.qty, unitPriceCents: next.unitPriceCents, lineCents: next.qty * next.unitPriceCents, backorderQty })
+        .set({ ...next, backorderQty })
         .where(eq(salesOrderItems.id, o.id));
-      kept.push({ qty: next.qty, unitPriceCents: next.unitPriceCents, gst: o.gst });
+      kept.push(charged({ ...next, gst: o.gst }));
     }
     // New lines.
     for (const l of lines.filter((l) => !old.some((o) => o.productId === l.productId))) {
       const p = byId.get(l.productId)!;
-      const { short } = await reserveStock(tx, l.productId, l.qty, ref);
-      await tx.insert(salesOrderItems).values({ ...snapshot(p), salesOrderId: so.id, productId: l.productId, qty: l.qty, unitPriceCents: l.unitPriceCents, lineCents: l.qty * l.unitPriceCents, backorderQty: short });
-      kept.push({ qty: l.qty, unitPriceCents: l.unitPriceCents, gst: p.gst });
+      const line = stocked.get(l.productId)!;
+      const { short } = await reserveStock(tx, l.productId, line.qty, ref);
+      await tx.insert(salesOrderItems).values({ ...snapshot(p), salesOrderId: so.id, productId: l.productId, ...line, backorderQty: short });
+      kept.push(charged({ ...line, gst: p.gst }));
     }
 
     const totals = orderTotals(kept, input.deliveryFeeCents);
@@ -212,7 +244,7 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
           address: input.address.trim(),
           windowStartMin: input.windowStartMin,
           windowEndMin: input.windowEndMin,
-          demand: Math.max(1, kept.reduce((n, l) => n + l.qty, 0)),
+          demand: Math.max(1, [...stocked.values()].reduce((n, l) => n + l.qty, 0)),
           notes: [input.recipient.trim() && `Deliver to ${input.recipient.trim()}`, input.instructions].filter(Boolean).join(" · ") || null,
           updatedAt: new Date(),
           ...(addressChanged ? { lat: null, lng: null, geocodeStatus: "pending" as const, geocodeLabel: null, suburb: null, postcode: null } : {}),

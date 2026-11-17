@@ -167,3 +167,46 @@ describe("missed delivery days", () => {
     expect(after).toMatchObject({ deliveryDate: "2026-11-16", dueDate: "2026-11-30" });
   });
 });
+
+describe("ordering by the carton", () => {
+  let napkins: string;
+  let boxes: string;
+  beforeAll(async () => {
+    [{ id: napkins }] = await db.insert(products).values({ sku: "NAP", name: "Napkins", packSize: "8 packets / carton", unit: "packet", priceCents: 625, stock: 20 }).returning({ id: products.id });
+    [{ id: boxes }] = await db.insert(products).values({ sku: "BOX", name: "Kraft box", packSize: "200 pcs / carton", unit: "carton", priceCents: 6200, stock: 10 }).returning({ id: products.id });
+  });
+  const order = (l: { productId: string; qty: number; unitPriceCents: number; by?: "unit" | "carton" }[]) =>
+    createStaffOrder(db, staff, { ...base, customerId: cust, deliveryFeeCents: 0, lines: l, method: "invoice", idempotencyKey: `k${++key}` }, today);
+
+  it("takes whole cartons of packs from stock and charges the carton price", async () => {
+    const so = await order([{ productId: napkins, qty: 2, unitPriceCents: 4999, by: "carton" }]);
+    const [l] = await lines(so.id);
+    // Kept in packets for stock and picking; charged as 2 cartons at $49.99.
+    expect(l).toMatchObject({ qty: 16, perCarton: 8, cartonPriceCents: 4999, unitPriceCents: 625, lineCents: 9998, backorderQty: 0 });
+    expect(await stock(napkins)).toBe(4);
+    expect(so).toMatchObject({ subtotalCents: 9998, gstCents: 1000, totalCents: 10998 });
+    const [d] = await db.select().from(orders).where(eq(orders.id, so.deliveryOrderId!));
+    expect(d.demand).toBe(16);
+
+    // One more carton than is on the shelf: the short packets wait.
+    await updateStaffOrder(db, so.id, { ...base, deliveryFeeCents: 0, lines: [{ productId: napkins, qty: 3, unitPriceCents: 4999, by: "carton" }] }, today);
+    expect((await lines(so.id))[0]).toMatchObject({ qty: 24, lineCents: 14997, backorderQty: 4 });
+    expect(await stock(napkins)).toBe(0);
+
+    // Switched to loose packets: back to the unit price, the waiting packets go first.
+    await updateStaffOrder(db, so.id, { ...base, deliveryFeeCents: 0, lines: [{ productId: napkins, qty: 18, unitPriceCents: 650 }] }, today);
+    expect((await lines(so.id))[0]).toMatchObject({ qty: 18, perCarton: null, cartonPriceCents: null, unitPriceCents: 650, lineCents: 11700, backorderQty: 0 });
+    expect(await stock(napkins)).toBe(2);
+  });
+
+  it("refuses cartons for products with no carton size, or sold by the carton already", async () => {
+    await expect(order([{ productId: cups, qty: 1, unitPriceCents: 4000, by: "carton" }])).rejects.toThrow(/can't be ordered by the carton/);
+    await expect(order([{ productId: boxes, qty: 1, unitPriceCents: 6200, by: "carton" }])).rejects.toThrow(/can't be ordered by the carton/);
+    await expect(
+      order([
+        { productId: napkins, qty: 1, unitPriceCents: 5000, by: "carton" },
+        { productId: napkins, qty: 1, unitPriceCents: 625 },
+      ]),
+    ).rejects.toThrow(/twice/);
+  });
+});
