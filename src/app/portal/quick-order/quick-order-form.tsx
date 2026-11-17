@@ -19,7 +19,7 @@ export function QuickOrderForm() {
         name="lines"
         rows={7}
         required
-        placeholder={"FP-1001 10\nFP-2003 4\nFP-3002 2"}
+        placeholder={"FP-1001 10\nFP-2003 4\nFP-3002 2 ctn"}
         className="w-full rounded-xl border border-leaf-950/15 bg-white px-3.5 py-3 font-mono text-sm placeholder:text-leaf-900/35 focus:border-leaf-600 focus:ring-2 focus:ring-leaf-600/20 focus:outline-none"
       />
       <FormError message={state && !state.ok ? state.error : null} />

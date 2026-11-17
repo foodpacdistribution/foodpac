@@ -5,15 +5,32 @@ import { useTransition } from "react";
 import { setCartQty } from "@/app/actions/shop";
 import { cx, Spinner } from "@/components/ui";
 import { useT } from "@/components/i18n";
+import { SellBy } from "../sell-by";
 
-export function CartQty({ productId, qty, minQty }: { productId: string; qty: number; minQty: number }) {
+/**
+ * Quantity on a cart line: whole cartons when `byCarton`, otherwise units. Products with a carton
+ * size can switch between the two, keeping about the same amount of goods.
+ */
+export function CartQty({ productId, qty, minQty, unit, per, byCarton }: { productId: string; qty: number; minQty: number; unit: string; per: number | null; byCarton: boolean }) {
   const tr = useT();
   const [pending, start] = useTransition();
-  const set = (n: number) => start(async () => void (await setCartQty(productId, n)));
+  const set = (n: number, carton = byCarton) => start(async () => void (await setCartQty(productId, n, carton)));
+  const least = byCarton ? 1 : minQty;
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      {per && (
+        <SellBy
+          unit={unit}
+          per={per}
+          byCarton={byCarton}
+          onChange={(c) => {
+            if (c === byCarton || pending) return;
+            set(c ? Math.max(1, Math.round(qty / per)) : Math.max(minQty, qty * per), c);
+          }}
+        />
+      )}
       <div className={cx("flex h-9 items-center rounded-md border border-leaf-950/15 bg-white", pending && "opacity-60")}>
-        <button type="button" aria-label={tr("Less")} disabled={pending || qty <= minQty} onClick={() => set(qty - 1)} className="grid size-9 place-items-center disabled:opacity-30">
+        <button type="button" aria-label={tr("Less")} disabled={pending || qty <= least} onClick={() => set(qty - 1)} className="grid size-9 place-items-center disabled:opacity-30">
           <Minus className="size-3.5" />
         </button>
         <span className="w-8 text-center text-sm font-semibold tabular-nums">{pending ? <Spinner className="size-3" /> : qty}</span>

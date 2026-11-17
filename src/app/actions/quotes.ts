@@ -14,6 +14,7 @@ import { shiftDate } from "@/lib/dates";
 import { QUOTE_VALID_DAYS } from "@/lib/quote-status";
 import { assertMayServe, takeOn } from "@/lib/rep-scope";
 import { todayIn } from "@/lib/time";
+import { asEntered } from "@/lib/stock-units";
 
 /** What the quote form sends. Checked again in lib/quotes.ts. */
 export type QuotePayload = {
@@ -22,7 +23,8 @@ export type QuotePayload = {
   deliveryFee: string;
   notes: string;
   internalNote: string;
-  lines: { productId: string; qty: number; unitPrice: string }[];
+  /** `qty` and `unitPrice` are per carton for lines quoted `by: "carton"`. */
+  lines: { productId: string; qty: number; unitPrice: string; by?: "unit" | "carton" }[];
 };
 
 /** The quote, if this person may work on it: sales staff only touch their own customers' quotes. */
@@ -51,7 +53,7 @@ function parse(p: QuotePayload) {
     deliveryFeeCents: cents(p.deliveryFee, "Delivery fee"),
     notes: text(p.notes, 2000),
     internalNote: text(p.internalNote, 1000),
-    lines: (Array.isArray(p.lines) ? p.lines : []).slice(0, 300).map((l) => ({ productId: String(l.productId), qty: Math.round(Number(l.qty)), unitPriceCents: cents(l.unitPrice, "Price") })),
+    lines: (Array.isArray(p.lines) ? p.lines : []).slice(0, 300).map((l) => ({ productId: String(l.productId), qty: Math.round(Number(l.qty)), unitPriceCents: cents(l.unitPrice, "Price"), by: l.by === "carton" ? ("carton" as const) : ("unit" as const) })),
   };
 }
 
@@ -122,7 +124,7 @@ export async function copyQuote(id: string) {
         notes: q.notes,
         internalNote: `Copied from ${q.number}`,
         // Products deleted since then are left out.
-        lines: items.filter((it) => it.productId).map((it) => ({ productId: it.productId!, qty: it.qty, unitPriceCents: it.unitPriceCents })),
+        lines: items.filter((it) => it.productId).map((it) => ({ productId: it.productId!, ...asEntered(it) })),
       },
       today,
     );

@@ -14,6 +14,7 @@ import { schema } from "./db";
 import { customers, products, quoteItems, quotes, users } from "./db/schema";
 import { linkQuoteToOrder, quoteEditBlocker, quoteForOrder, quoteWithItems, saveQuote } from "./quotes";
 import { createStaffOrder } from "./staff-orders";
+import { asEntered } from "./stock-units";
 
 let db: DB;
 let staff: string;
@@ -164,5 +165,16 @@ describe("quotes", () => {
     await expect(quoteForOrder(db, quoteId, cust, "k1")).resolves.toBeTruthy();
     await expect(quoteForOrder(db, quoteId, cust, "k2")).rejects.toThrow(/already become order FP-/);
     await expect(saveQuote(db, staff, quoteId, { customerId: cust, validUntil: "2026-12-10", deliveryFeeCents: 0, notes: null, internalNote: null, lines: [{ productId: cups, qty: 1, unitPriceCents: 1 }] }, today)).rejects.toThrow(/sales order/);
+  });
+});
+
+describe("quoting by the carton", () => {
+  it("keeps cartons at the carton price, and gives them back to the order form as cartons", async () => {
+    const [{ id: napkins }] = await db.insert(products).values({ sku: "NAPQ", name: "Napkins", packSize: "8 packets / carton", unit: "packet", priceCents: 625 }).returning({ id: products.id });
+    const q = await saveQuote(db, staff, null, { customerId: cust, validUntil: "2026-11-30", deliveryFeeCents: 0, notes: null, internalNote: null, lines: [{ productId: napkins, qty: 3, unitPriceCents: 4800, by: "carton" }] }, today);
+    expect(q).toMatchObject({ subtotalCents: 14400, gstCents: 1440 });
+    const { items } = (await quoteWithItems(db, q.id))!;
+    expect(items[0]).toMatchObject({ qty: 24, perCarton: 8, cartonPriceCents: 4800, unitPriceCents: 600, lineCents: 14400 });
+    expect(asEntered(items[0])).toEqual({ qty: 3, unitPriceCents: 4800, by: "carton" });
   });
 });

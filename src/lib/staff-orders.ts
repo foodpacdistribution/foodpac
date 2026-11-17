@@ -80,7 +80,7 @@ export function stockLine(
 }
 
 /** What a line counts for in the totals: cartons at the carton price, or units at the unit price. */
-const charged = (l: { qty: number; unitPriceCents: number; perCarton: number | null; cartonPriceCents: number | null; gst: boolean }) =>
+export const chargedLine = (l: { qty: number; unitPriceCents: number; perCarton: number | null; cartonPriceCents: number | null; gst: boolean }) =>
   l.perCarton && l.cartonPriceCents !== null ? { qty: l.qty / l.perCarton, unitPriceCents: l.cartonPriceCents, gst: l.gst } : l;
 
 /** Places an order for a customer. It's confirmed straight away and goes to the planner; short lines wait for stock. */
@@ -102,7 +102,7 @@ export async function createStaffOrder(db: DB, staffId: string, input: StaffOrde
       const { short } = await reserveStock(tx, l.productId, line.qty, { note: `New order · ${customer.name}`, by: staffId });
       items.push({ ...snapshot(p), productId: l.productId, ...line, backorderQty: short });
     }
-    const totals = orderTotals(items.map(charged), input.deliveryFeeCents);
+    const totals = orderTotals(items.map(chargedLine), input.deliveryFeeCents);
     const [so] = await tx
       .insert(salesOrders)
       .values({
@@ -195,7 +195,7 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
         .update(salesOrderItems)
         .set({ ...next, backorderQty })
         .where(eq(salesOrderItems.id, o.id));
-      kept.push(charged({ ...next, gst: o.gst }));
+      kept.push(chargedLine({ ...next, gst: o.gst }));
     }
     // New lines.
     for (const l of lines.filter((l) => !old.some((o) => o.productId === l.productId))) {
@@ -203,7 +203,7 @@ export async function updateStaffOrder(db: DB, salesOrderId: string, input: Omit
       const line = stocked.get(l.productId)!;
       const { short } = await reserveStock(tx, l.productId, line.qty, ref);
       await tx.insert(salesOrderItems).values({ ...snapshot(p), salesOrderId: so.id, productId: l.productId, ...line, backorderQty: short });
-      kept.push(charged({ ...line, gst: p.gst }));
+      kept.push(chargedLine({ ...line, gst: p.gst }));
     }
 
     const totals = orderTotals(kept, input.deliveryFeeCents);

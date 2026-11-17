@@ -22,6 +22,7 @@ import { orderConfirmed } from "./notify";
 import { UserError } from "./planning";
 import { fillWaiting, returnStock } from "./stock-allocation";
 import { withStockContext } from "./stock-ledger";
+import { cartonSize, formatCartons } from "./stock-units";
 import { applyCreditToOrder, creditBalance, releaseOrderCredit } from "./credit";
 import { firstOrderOfferFor, returnFirstOrderOffer, useFirstOrderOffer } from "./first-order-offer";
 import { nowSecondsIn, todayIn } from "./time";
@@ -297,7 +298,11 @@ export async function usualItems(db: DB, customer: Customer, limit = 40) {
 // Cart
 // ---------------------------------------------------------------------------
 
-export type CartLine = CatalogItem & { qty: number; lineCents: number; issue: string | null };
+/**
+ * `qty` is what the customer chose: whole cartons when `byCarton`, otherwise units. `units` is the
+ * stock it takes. A carton costs the customer's unit price times the units in it.
+ */
+export type CartLine = CatalogItem & { qty: number; byCarton: boolean; per: number | null; units: number; lineCents: number; issue: string | null };
 
 export async function getCart(db: DB, customer: Customer) {
   const rows = await db.select().from(cartItems).where(eq(cartItems.customerId, customer.id));
@@ -309,18 +314,22 @@ export async function getCart(db: DB, customer: Customer) {
     .orderBy(asc(products.name));
   const priced = await withPrices(db, items, customer);
   return priced.map((p): CartLine => {
-    const qty = rows.find((r) => r.productId === p.id)!.qty;
+    const row = rows.find((r) => r.productId === p.id)!;
+    const per = cartonSize(p.packSize, p.unit);
+    // A carton line for a product that no longer has a carton size counts as units.
+    const byCarton = row.byCarton && per !== null;
+    const units = byCarton ? row.qty * per : row.qty;
     const active = items.find((i) => i.id === p.id)!.active;
     const issue = !active
       ? "No longer available"
       : p.stock <= 0
         ? "Out of stock"
-        : qty > p.stock
-          ? `Only ${p.stock} in stock`
-          : qty < p.minQty
+        : units > p.stock
+          ? `Only ${byCarton ? formatCartons(p.stock, per) : p.stock} in stock`
+          : units < p.minQty
             ? `Minimum order is ${p.minQty}`
             : null;
-    return { ...p, qty, lineCents: (p.priceCents ?? 0) * qty, issue };
+    return { ...p, qty: row.qty, byCarton, per, units, lineCents: (p.priceCents ?? 0) * units, issue };
   });
 }
 
@@ -458,8 +467,8 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
       for (const l of lines) {
         const ok = await t
           .update(products)
-          .set({ stock: sql`${products.stock} - ${l.qty}` })
-          .where(and(eq(products.id, l.id), eq(products.active, true), gte(products.stock, l.qty)))
+          .set({ stock: sql`${products.stock} - ${l.units}` })
+          .where(and(eq(products.id, l.id), eq(products.active, true), gte(products.stock, l.units)))
           .returning({ id: products.id });
         if (!ok.length) throw new UserError(`${l.name} just sold out. Please update your cart.`);
       }
@@ -504,13 +513,15 @@ export async function placeOrder(db: DB, customer: Customer, userId: string, c: 
         packSize: l.packSize,
         unit: l.unit,
         unitPriceCents: l.priceCents!,
-        qty: l.qty,
+        qty: l.units,
         gst: l.gst,
         lineCents: l.lineCents,
+        perCarton: l.byCarton ? l.per : null,
+        cartonPriceCents: l.byCarton ? l.priceCents! * l.per! : null,
       })),
     );
     await tx.delete(cartItems).where(eq(cartItems.customerId, customer.id));
-    return confirmed ? { ...so, deliveryOrderId: await createDeliveryOrder(tx as unknown as DB, so, customer, lines) } : so;
+    return confirmed ? { ...so, deliveryOrderId: await createDeliveryOrder(tx as unknown as DB, so, customer, lines.map((l) => ({ qty: l.units }))) } : so;
   });
   return order;
 }

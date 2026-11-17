@@ -80,6 +80,11 @@ export default async function CartPage() {
                   <p className="mt-0.5 text-xs text-leaf-900/55">
                     {[l.sku, l.packSize, `${aud(l.priceCents)} / ${l.unit}`].filter(Boolean).join(" · ")}
                   </p>
+                  {l.byCarton && l.per && (
+                    <p className="mt-0.5 text-xs text-leaf-900/70">
+                      <T vars={{ n: l.qty, units: l.units, unit: l.unit, price: aud((l.priceCents ?? 0) * l.per) }}>{"{n} × carton ({units} {unit}) · {price} a carton"}</T>
+                    </p>
+                  )}
                   {l.issue && (
                     <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-700">
                       <TriangleAlert className="size-3.5" /> {l.issue}
@@ -87,7 +92,7 @@ export default async function CartPage() {
                   )}
                 </div>
                 <div className="col-start-2 flex items-center justify-between gap-4 sm:contents">
-                  <CartQty productId={l.id} qty={l.qty} minQty={l.minQty} />
+                  <CartQty productId={l.id} qty={l.qty} minQty={l.minQty} unit={l.unit} per={l.per} byCarton={l.byCarton} />
                   <p className="text-right font-semibold tabular-nums sm:w-24">{aud(l.lineCents)}</p>
                 </div>
               </div>

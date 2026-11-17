@@ -22,6 +22,7 @@ import { createCheckoutSession, stripeEnabled } from "@/lib/stripe";
 import { geocodeOrderIds } from "@/lib/sync";
 import { locateCustomersLater } from "@/lib/customer-locations";
 import { inputToMinutes } from "@/lib/time";
+import { asSold, cartonSize } from "@/lib/stock-units";
 
 const MAX_QTY = 9999;
 
@@ -30,42 +31,61 @@ function revalidateShop() {
   revalidatePath("/", "layout");
 }
 
-async function addLines(customerId: string, lines: { productId: string; qty: number }[], mode: "add" | "set") {
+type CartAdd = { productId: string; qty: number; byCarton?: boolean };
+
+/**
+ * `qty` is whole cartons for `byCarton` lines (products with a carton size), otherwise units. One
+ * line per product: adding cartons to a line of loose units (or the other way) makes it all units.
+ */
+async function addLines(customerId: string, lines: CartAdd[], mode: "add" | "set") {
   const db = await getDb();
-  for (const { productId, qty } of lines) {
+  const ids = lines.map((l) => l.productId);
+  const [sizes, have] = ids.length
+    ? await Promise.all([
+        db.select({ id: products.id, packSize: products.packSize, unit: products.unit }).from(products).where(inArray(products.id, ids)),
+        db.select().from(cartItems).where(and(eq(cartItems.customerId, customerId), inArray(cartItems.productId, ids))),
+      ])
+    : [[], []];
+  for (const { productId, qty, byCarton } of lines) {
     const q = Math.min(MAX_QTY, Math.max(0, Math.round(qty)));
     if (mode === "set" && q === 0) {
       await db.delete(cartItems).where(and(eq(cartItems.customerId, customerId), eq(cartItems.productId, productId)));
       continue;
     }
     if (q === 0) continue;
+    const size = sizes.find((x) => x.id === productId);
+    const per = size ? cartonSize(size.packSize, size.unit) : null;
+    let next = { qty: q, byCarton: !!byCarton && per !== null };
+    const old = have.find((h) => h.productId === productId);
+    if (mode === "add" && old) {
+      const units = (l: { qty: number; byCarton: boolean }) => (l.byCarton && per ? l.qty * per : l.qty);
+      next = old.byCarton === next.byCarton ? { ...next, qty: old.qty + q } : { qty: units(old) + units(next), byCarton: false };
+    }
+    next.qty = Math.min(MAX_QTY, next.qty);
     await db
       .insert(cartItems)
-      .values({ customerId, productId, qty: q })
-      .onConflictDoUpdate({
-        target: [cartItems.customerId, cartItems.productId],
-        set: { qty: mode === "add" ? sql`least(${cartItems.qty} + ${q}, ${MAX_QTY})` : q },
-      });
+      .values({ customerId, productId, ...next })
+      .onConflictDoUpdate({ target: [cartItems.customerId, cartItems.productId], set: next });
   }
 }
 
-export async function addToCart(productId: string, qty: number) {
+export async function addToCart(productId: string, qty: number, byCarton = false) {
   return attempt(async () => {
     const { customer } = await assertCustomer();
     if (!canSeePrices(customer)) throw new UserError("Your account is waiting for approval.");
     const db = await getDb();
     const [p] = await db.select({ id: products.id, name: products.name, minQty: products.minQty }).from(products).where(and(eq(products.id, productId), eq(products.active, true))).limit(1);
     if (!p) throw new UserError("This product isn't available.");
-    await addLines(customer.id, [{ productId, qty: Math.max(qty, 1) }], "add");
+    await addLines(customer.id, [{ productId, qty: Math.max(qty, 1), byCarton }], "add");
     revalidateShop();
     return { message: `${p.name} added to cart` };
   });
 }
 
-export async function setCartQty(productId: string, qty: number) {
+export async function setCartQty(productId: string, qty: number, byCarton = false) {
   return attempt(async () => {
     const { customer } = await assertCustomer();
-    await addLines(customer.id, [{ productId, qty }], "set");
+    await addLines(customer.id, [{ productId, qty, byCarton }], "set");
     revalidateShop();
   });
 }
@@ -88,7 +108,7 @@ export async function setFavourite(productId: string, on: boolean) {
 }
 
 /** Several products at once (My list), each at least its minimum order. */
-export async function addManyToCart(lines: { productId: string; qty: number }[]) {
+export async function addManyToCart(lines: CartAdd[]) {
   return attempt(async () => {
     const { customer } = await assertCustomer();
     if (!canSeePrices(customer)) throw new UserError("Your account is waiting for approval.");
@@ -101,7 +121,8 @@ export async function addManyToCart(lines: { productId: string; qty: number }[])
       .where(and(eq(products.active, true), inArray(products.id, wanted.map((l) => l.productId))));
     const ok = wanted.flatMap((l) => {
       const p = found.find((f) => f.id === l.productId);
-      return p ? [{ productId: p.id, qty: Math.max(l.qty, p.minQty) }] : [];
+      // A carton is at least one carton; loose units at least the minimum.
+      return p ? [{ productId: p.id, qty: l.byCarton ? l.qty : Math.max(l.qty, p.minQty), byCarton: !!l.byCarton }] : [];
     });
     if (!ok.length) throw new UserError("None of those products are available any more.");
     await addLines(customer.id, ok, "add");
@@ -120,22 +141,28 @@ export async function quickOrder(_prev: unknown, form: FormData) {
       .map((l) => l.trim())
       .filter(Boolean)
       .map((l) => {
-        const m = /^(\S+)[\s,;x×*]+(\d+)$/i.exec(l) ?? /^(\S+)$/.exec(l);
-        return m ? { sku: m[1].toUpperCase(), qty: m[2] ? Number(m[2]) : 1, raw: l } : { sku: "", qty: 0, raw: l };
+        // "FP-1001 5", or "FP-1001 2 ctn" for whole cartons.
+        const m = /^(\S+)[\s,;x×*]+(\d+)\s*(ctns?|cartons?|箱)?$/i.exec(l) ?? /^(\S+)$/.exec(l);
+        return m ? { sku: m[1].toUpperCase(), qty: m[2] ? Number(m[2]) : 1, byCarton: !!m[3], raw: l } : { sku: "", qty: 0, byCarton: false, raw: l };
       });
     if (!wanted.length) throw new UserError("Enter at least one SKU.");
     const db = await getDb();
     const found = await db
-      .select({ id: products.id, sku: products.sku, minQty: products.minQty })
+      .select({ id: products.id, sku: products.sku, name: products.name, minQty: products.minQty, packSize: products.packSize, unit: products.unit })
       .from(products)
       .where(and(eq(products.active, true), inArray(sql`upper(${products.sku})`, wanted.map((w) => w.sku).filter(Boolean))));
     const missing = wanted.filter((w) => !found.some((f) => f.sku.toUpperCase() === w.sku));
     if (missing.length) throw new UserError(`Not found: ${missing.map((m) => m.raw).join(", ")}`);
+    const noCarton = wanted.filter((w) => {
+      const p = found.find((f) => f.sku.toUpperCase() === w.sku)!;
+      return w.byCarton && !cartonSize(p.packSize, p.unit);
+    });
+    if (noCarton.length) throw new UserError(`Not sold by the carton: ${noCarton.map((m) => m.raw).join(", ")}`);
     await addLines(
       customer.id,
       wanted.map((w) => {
         const p = found.find((f) => f.sku.toUpperCase() === w.sku)!;
-        return { productId: p.id, qty: Math.max(w.qty, p.minQty) };
+        return { productId: p.id, qty: w.byCarton ? w.qty : Math.max(w.qty, p.minQty), byCarton: w.byCarton };
       }),
       "add",
     );
@@ -156,12 +183,20 @@ export async function reorder(salesOrderId: string) {
       .limit(1);
     if (!so) throw new UserError("Order not found.");
     const items = await db
-      .select({ productId: salesOrderItems.productId, qty: salesOrderItems.qty })
+      .select({ productId: salesOrderItems.productId, qty: salesOrderItems.qty, unit: salesOrderItems.unit, unitPriceCents: salesOrderItems.unitPriceCents, perCarton: salesOrderItems.perCarton, cartonPriceCents: salesOrderItems.cartonPriceCents })
       .from(salesOrderItems)
       .innerJoin(products, eq(products.id, salesOrderItems.productId))
       .where(and(eq(salesOrderItems.salesOrderId, so.id), eq(products.active, true)));
     if (!items.length) throw new UserError("None of these products are available any more.");
-    await addLines(customer.id, items.map((i) => ({ productId: i.productId!, qty: i.qty })), "add");
+    // Cartons again for lines that were ordered by the carton.
+    await addLines(
+      customer.id,
+      items.map((i) => {
+        const sold = asSold(i);
+        return { productId: i.productId!, qty: sold.qty, byCarton: sold.units !== null };
+      }),
+      "add",
+    );
     revalidateShop();
     return { message: "Added to cart" };
   });

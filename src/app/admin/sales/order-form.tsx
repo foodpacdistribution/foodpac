@@ -30,7 +30,38 @@ export type FormCustomer = {
 export type FormProduct = { id: string; sku: string; name: string; packSize: string; unit: string; priceCents: number; gst: boolean; stock: number; minQty: number; active: boolean; waiting: number };
 
 /** `by: "carton"`: the quantity is whole cartons and the price is per carton. */
-type SellBy = "unit" | "carton";
+export type SellBy = "unit" | "carton";
+
+/**
+ * A line switched between units and whole cartons, keeping about the same amount of goods and the
+ * same price per unit. `fresh` is the customer's price for the new way, for lines not priced by hand.
+ */
+export function switchSellBy(l: { q: number; cents: number | null; priceTouched: boolean }, per: number, by: SellBy, fresh: number) {
+  const qty = by === "carton" ? Math.max(1, Math.round(l.q / per)) : l.q * per;
+  const price = !l.priceTouched || l.cents === null ? fresh : by === "carton" ? l.cents * per : Math.round(l.cents / per);
+  return { by, qty: String(qty), price: dollars(price) };
+}
+
+/** Units or whole cartons, on a line of the order or quote form. */
+export function SellByToggle({ unit, per, by, onChange }: { unit: string; per: number; by: SellBy; onChange: (by: SellBy) => void }) {
+  const tr = useT();
+  return (
+    <div role="radiogroup" aria-label={tr("Order by")} className="mt-1.5 inline-flex rounded-lg border border-line bg-white p-0.5 text-xs">
+      {(["unit", "carton"] as const).map((b) => (
+        <button
+          key={b}
+          type="button"
+          role="radio"
+          aria-checked={by === b}
+          onClick={() => by !== b && onChange(b)}
+          className={cx("rounded-md px-2.5 py-1", by === b ? "bg-blue-600 font-medium text-white" : "text-slate-600 hover:bg-slate-50")}
+        >
+          {b === "unit" ? tr("By the {unit}", { unit: tr(unit) }) : tr("By the carton ({n})", { n: per })}
+        </button>
+      ))}
+    </div>
+  );
+}
 type Line = { key: string; productId: string; qty: string; price: string; priceTouched: boolean; by: SellBy };
 
 export type OrderFormProps = {
@@ -167,14 +198,7 @@ export function OrderForm(p: OrderFormProps) {
     });
   };
   const setLine = (key: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
-  /** Switches a line between units and whole cartons, keeping about the same amount of goods and the same price per unit. */
-  const sellBy = (l: (typeof parsed)[number], by: SellBy) => {
-    if (by === l.by || !l.per) return;
-    const per = l.per;
-    const qty = by === "carton" ? Math.max(1, Math.round(l.q / per)) : l.q * per;
-    const price = !l.priceTouched || l.cents === null ? linePrice(customerId, l.productId, by) : by === "carton" ? l.cents * per : Math.round(l.cents / per);
-    setLine(l.key, { by, qty: String(qty), price: dollars(price) });
-  };
+  const sellBy = (l: (typeof parsed)[number], by: SellBy) => l.per && setLine(l.key, switchSellBy(l, l.per, by, linePrice(customerId, l.productId, by)));
 
   const submit = () => {
     setError(null);
@@ -270,22 +294,7 @@ export function OrderForm(p: OrderFormProps) {
                         <p className="text-xs text-slate-500">
                           {l.p.sku} · {l.p.packSize || l.p.unit}
                         </p>
-                        {l.per && (
-                          <div role="radiogroup" aria-label={tr("Order by")} className="mt-1.5 inline-flex rounded-lg border border-line bg-white p-0.5 text-xs">
-                            {(["unit", "carton"] as const).map((by) => (
-                              <button
-                                key={by}
-                                type="button"
-                                role="radio"
-                                aria-checked={l.by === by}
-                                onClick={() => sellBy(l, by)}
-                                className={cx("rounded-md px-2.5 py-1", l.by === by ? "bg-blue-600 font-medium text-white" : "text-slate-600 hover:bg-slate-50")}
-                              >
-                                {by === "unit" ? tr("By the {unit}", { unit: tr(l.p.unit) }) : tr("By the carton ({n})", { n: l.per! })}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        {l.per && <SellByToggle unit={l.p.unit} per={l.per} by={l.by} onChange={(by) => sellBy(l, by)} />}
                         <p className={cx("mt-0.5 flex items-center gap-1 text-xs", wait ? (avail <= 0 ? "text-red-600" : "text-amber-700") : "text-slate-500")}>
                           {wait > 0 && <AlertTriangle className="size-3 shrink-0" />}
                           {wait === 0

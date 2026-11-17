@@ -700,7 +700,10 @@ export const cartItems = pgTable(
     productId: uuid("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
+    /** In whole cartons when `byCarton`, otherwise in the product's own unit. */
     qty: integer("qty").notNull(),
+    /** Ordered by the carton (packs × carton size, at the same price per pack). */
+    byCarton: boolean("by_carton").notNull().default(false),
   },
   (t) => [uniqueIndex("cart_items_uq").on(t.customerId, t.productId)],
 );
@@ -892,6 +895,9 @@ export const quoteItems = pgTable(
     qty: integer("qty").notNull(),
     gst: boolean("gst").notNull(),
     lineCents: integer("line_cents").notNull(),
+    /** Quoted by the whole carton, as on sales order items: `qty` in units, the carton's size and price. */
+    perCarton: integer("per_carton"),
+    cartonPriceCents: integer("carton_price_cents"),
     position: integer("position").notNull().default(0),
   },
   (t) => [index("quote_items_quote_idx").on(t.quoteId)],

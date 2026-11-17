@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { quoteWithItems } from "@/lib/quotes";
 import { orderFormData } from "../form-data";
 import { OrderForm } from "../order-form";
+import { asEntered } from "@/lib/stock-units";
 
 export const metadata: Metadata = { title: "New Order" };
 
@@ -33,7 +34,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           number: found.quote.number,
           customerId: found.quote.customerId,
           deliveryFeeCents: found.quote.deliveryFeeCents,
-          lines: found.items.filter((it) => it.productId).map((it) => ({ productId: it.productId!, qty: it.qty, unitPriceCents: it.unitPriceCents })),
+          lines: found.items.filter((it) => it.productId).map((it) => ({ productId: it.productId!, ...asEntered(it) })),
         }
       : undefined;
   // A fresh key per form, so a double-click or a retry can't place the order twice.

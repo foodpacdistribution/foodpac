@@ -5,6 +5,7 @@ import { customers, products, quoteItems, quoteNo, quotes, salesOrders } from ".
 import { orderTotals } from "./order-totals";
 import { UserError } from "./planning";
 import { nextNumber } from "./purchasing/common";
+import { chargedLine, type SellBy, type StaffLine, stockLine } from "./staff-orders";
 
 /** A quote as staff type it: who for, until when, which products at what price. */
 export type QuoteInput = {
@@ -13,7 +14,8 @@ export type QuoteInput = {
   deliveryFeeCents: number;
   notes: string | null;
   internalNote: string | null;
-  lines: { productId: string; qty: number; unitPriceCents: number }[];
+  /** `qty` and the price are per carton for lines quoted `by: "carton"`. */
+  lines: StaffLine[];
 };
 
 function check(input: QuoteInput, today: string, keepDate?: string) {
@@ -21,13 +23,15 @@ function check(input: QuoteInput, today: string, keepDate?: string) {
   if (input.validUntil < today && input.validUntil !== keepDate) throw new UserError("The valid-until date can't be in the past.");
   if (!Number.isInteger(input.deliveryFeeCents) || input.deliveryFeeCents < 0) throw new UserError("The delivery fee must be $0 or more.");
   // One line per product, in the order they were added: the same product twice is added together.
-  const merged = new Map<string, { productId: string; qty: number; unitPriceCents: number }>();
+  const merged = new Map<string, StaffLine & { by: SellBy }>();
   for (const l of input.lines) {
     if (!Number.isInteger(l.qty) || l.qty < 0 || l.qty > 99999) throw new UserError("Quantities must be whole numbers.");
     if (!Number.isInteger(l.unitPriceCents) || l.unitPriceCents < 0) throw new UserError("Prices must be $0 or more.");
     if (l.qty === 0) continue;
+    const by = l.by === "carton" ? "carton" : "unit";
     const m = merged.get(l.productId);
-    merged.set(l.productId, m ? { ...m, qty: m.qty + l.qty } : { ...l });
+    if (m && m.by !== by) throw new UserError("A product is on the quote twice, once by the carton and once by the unit. Keep one line for it.");
+    merged.set(l.productId, m ? { ...m, qty: m.qty + l.qty } : { ...l, by });
   }
   if (!merged.size) throw new UserError("Add at least one product.");
   if (merged.size > 300) throw new UserError("A quote can have at most 300 products.");
@@ -40,7 +44,8 @@ async function itemsFor(db: DB, lines: ReturnType<typeof check>) {
   return lines.map((l, position) => {
     const p = byId.get(l.productId);
     if (!p) throw new UserError("One of the products no longer exists. Reload the page and try again.");
-    return { productId: p.id, sku: p.sku, name: p.name, packSize: p.packSize, unit: p.unit, gst: p.gst, qty: l.qty, unitPriceCents: l.unitPriceCents, lineCents: l.qty * l.unitPriceCents, position };
+    // Kept like an order line: units, plus the carton size and price for a carton line.
+    return { productId: p.id, sku: p.sku, name: p.name, packSize: p.packSize, unit: p.unit, gst: p.gst, ...stockLine(p, l), position };
   });
 }
 
@@ -63,7 +68,7 @@ export async function saveQuote(db: DB, userId: string, id: string | null, input
   const [customer] = await db.select({ id: customers.id }).from(customers).where(eq(customers.id, input.customerId)).limit(1);
   if (!customer) throw new UserError("Choose a customer.");
   const items = await itemsFor(db, lines);
-  const totals = orderTotals(items, input.deliveryFeeCents);
+  const totals = orderTotals(items.map(chargedLine), input.deliveryFeeCents);
   const details = { validUntil: input.validUntil, notes: input.notes, internalNote: input.internalNote, ...totals };
 
   return db.transaction(async (t) => {

@@ -77,7 +77,9 @@ export async function recordVisit(db: DB, user: Who, input: VisitInput, today: s
       .update(customers)
       .set({
         // A visit sent late doesn't move "last contacted" back past a later one.
-        contactedAt: sql`greatest(coalesce(${customers.contactedAt}, ${at}), ${at})`,
+        // As text with a cast: a Date inside sql`` reaches postgres.js unconverted (drizzle turns off
+        // its timestamp serializers) and fails on the live database, though PGlite takes it.
+        contactedAt: sql`greatest(coalesce(${customers.contactedAt}, ${at.toISOString()}::timestamptz), ${at.toISOString()}::timestamptz)`,
         followUpOn: input.followUpOn,
         followUpNote: input.followUpOn ? followUpNoteFor(input.outcome, input.note, input.reason) : null,
         ...(stage !== c.stage ? { salesStage: stage, salesStageAt: at } : {}),
