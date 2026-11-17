@@ -121,7 +121,7 @@ function Badge({ href, n, className }: { href: string; n: number; className?: st
     <span
       className={cx(
         "rounded-full px-1.5 py-px text-[10px] font-semibold tabular-nums",
-        URGENT.has(href) ? "bg-red-500 text-white" : "bg-white/15 text-slate-200",
+        URGENT.has(href) ? "bg-red-500 text-white" : "bg-slate-200/80 text-slate-600",
         className,
       )}
     >
@@ -164,17 +164,18 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
                 type="button"
                 onClick={() => opts.foldable && !hasActive && toggle(section.title)}
                 aria-expanded={open}
-                className="flex w-full items-center gap-1 rounded px-2.5 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 hover:text-slate-300"
+                className="flex w-full items-center gap-1 rounded px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 transition-colors duration-150 hover:text-slate-600"
               >
                 {tr(section.title)}
                 {opts.foldable && !open && hidden > 0 && (
-                  <span className={cx("ml-1 rounded-full px-1.5 text-[10px] tracking-normal", urgentHidden ? "bg-red-500 text-white" : "bg-white/15 text-slate-200")}>{hidden}</span>
+                  <span className={cx("ml-1 rounded-full px-1.5 text-[10px] tracking-normal", urgentHidden ? "bg-red-500 text-white" : "bg-slate-200/80 text-slate-600")}>{hidden}</span>
                 )}
-                {opts.foldable && !hasActive && <ChevronDown className={cx("ml-auto size-3 transition-transform", !open && "-rotate-90")} />}
+                {opts.foldable && !hasActive && <ChevronDown className={cx("ml-auto size-3 transition-transform duration-200", !open && "-rotate-90")} />}
               </button>
             )}
-            {open && (
-              <div className="space-y-0.5">
+            {/* Folds open and shut smoothly (its height animates; nothing jumps). */}
+            <div className={cx("grid transition-[grid-template-rows] duration-200 ease-out", open ? "grid-rows-[1fr]" : "grid-rows-[0fr]")} inert={!open}>
+              <div className="min-h-0 space-y-px overflow-hidden">
                 {section.items.map(({ href, label, icon: Icon }) => (
                   <Link
                     key={href}
@@ -182,22 +183,20 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
                     onClick={opts.onNavigate}
                     aria-current={isActive(href) ? "page" : undefined}
                     className={cx(
-                      "relative flex items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors duration-150",
-                      opts.roomy ? "py-2.5" : "py-1.5",
-                      // The current page: a soft lift and a thin accent bar, not a solid block.
-                      isActive(href)
-                        ? "bg-white/[0.09] text-white ring-1 ring-white/[0.06] ring-inset before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-blue-400"
-                        : "hover:bg-white/5 hover:text-white",
+                      "relative flex items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] transition-[background-color,color,box-shadow] duration-200",
+                      opts.roomy ? "py-2.5" : "py-[7px]",
+                      // The current page: a brighter drop of glass and darker text.
+                      isActive(href) ? "glass-pill font-medium text-slate-900" : "text-slate-600 hover:bg-white/55 hover:text-slate-900 active:bg-white/70",
                     )}
                   >
-                    <Icon className={cx("size-4 transition-colors", isActive(href) ? "text-blue-300" : "text-slate-400")} />
+                    <Icon className={cx("size-4 shrink-0 transition-colors duration-150", isActive(href) ? "text-slate-800" : "text-slate-400")} />
                     {tr(label)}
                     {count(href) > 0 && <Badge href={href} n={count(href)} className="ml-auto" />}
                     <LinkPending className="ml-auto" />
                   </Link>
                 ))}
               </div>
-            )}
+            </div>
           </div>
         );
       })}
@@ -214,21 +213,21 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
             type="button"
             onClick={() => setMenuOpen(true)}
             aria-expanded={menuOpen}
-            className="flex h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-sm font-medium text-white transition-transform duration-150 active:scale-95 active:bg-white/15"
+            className="glass-pill flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-slate-700 transition-transform duration-150 active:scale-[0.97]"
           >
             <MenuIcon className="size-4" /> {tr("Menu")}
-            {total > 0 && <span className="rounded-full bg-white/20 px-1.5 text-[10px] font-semibold tabular-nums">{total}</span>}
+            {total > 0 && <span className="rounded-full bg-slate-100 px-1.5 text-[10px] font-semibold text-slate-600 tabular-nums">{total}</span>}
           </button>
           {current && (
-            <span className="flex min-w-0 items-center gap-1.5 truncate text-sm text-slate-300">
+            <span className="flex min-w-0 items-center gap-1.5 truncate text-sm text-slate-500">
               <current.icon className="size-4 shrink-0" /> <span className="truncate">{tr(current.label)}</span>
             </span>
           )}
         </div>
-        <Drawer open={menuOpen} onClose={closeMenu} label={tr("Menu")} className="bg-navy-900 px-3 pt-[max(env(safe-area-inset-top),0.75rem)] pb-6 text-slate-300">
+        <Drawer open={menuOpen} onClose={closeMenu} label={tr("Menu")} className="glass rounded-r-3xl px-3 pt-[max(env(safe-area-inset-top),0.75rem)] pb-[max(env(safe-area-inset-bottom),1.5rem)] text-slate-600">
           <div className="mb-2 flex items-center justify-between px-1">
-            <span className="text-sm font-semibold text-white">{tr("Menu")}</span>
-            <button type="button" onClick={closeMenu} className="grid size-10 place-items-center rounded-lg text-slate-300 transition-colors hover:bg-white/10 active:bg-white/15" aria-label={tr("Close")}>
+            <span className="text-sm font-semibold text-slate-900">{tr("Menu")}</span>
+            <button type="button" onClick={closeMenu} className="grid size-10 place-items-center rounded-full text-slate-500 transition-colors hover:bg-white/60 active:bg-white/80" aria-label={tr("Close")}>
               <X className="size-5" />
             </button>
           </div>

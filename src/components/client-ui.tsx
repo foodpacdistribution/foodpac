@@ -2,7 +2,7 @@
 
 import { CheckCircle2, TriangleAlert, X } from "lucide-react";
 import { useLinkStatus } from "next/link";
-import { createContext, useActionState, useContext, useEffect, useRef, useTransition } from "react";
+import { createContext, useActionState, useContext, useEffect, useRef, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { useT } from "./i18n";
 import { btn, cx, Spinner, TopProgress } from "./ui";
@@ -76,6 +76,14 @@ export function SubmitButton({
   );
 }
 
+const isPhone = () => window.matchMedia("(max-width: 639px)").matches;
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * A window over the page: centred on larger screens, a sheet from the bottom edge on phones,
+ * which can be dragged down to close. Closing animates away (Esc, ✕, a tap outside, or the
+ * parent closing it), with what was in it kept on screen until it's gone.
+ */
 export function Modal({
   open,
   onClose,
@@ -90,16 +98,78 @@ export function Modal({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Shown while open and while closing; what it showed last, so closing doesn't blank it first.
+  const [shown, setShown] = useState(open);
+  const [kept, setKept] = useState({ title, children });
+  if (open && !shown) setShown(true);
+  if (open && (kept.title !== title || kept.children !== children)) setKept({ title, children });
+  const drag = useRef<{ y: number; t: number; dy: number } | null>(null);
+
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
+    if (open) {
+      d.style.transform = "";
+      d.style.transition = "";
+      if (!d.open) d.showModal();
+      return;
+    }
+    if (!d.open) return;
+    if (reducedMotion()) return d.close();
+    // From wherever a drag left it, down and out (phones), or a quick fade and shrink.
+    const phone = isPhone();
+    const from = d.style.transform || "translateY(0)";
+    const anim = d.animate(phone ? [{ transform: from }, { transform: "translateY(100%)" }] : [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(0.97)" }], {
+      duration: phone ? 220 : 130,
+      easing: "cubic-bezier(0.4, 0, 1, 1)",
+      fill: "forwards",
+    });
+    try {
+      d.animate({ opacity: [1, 0] }, { duration: phone ? 220 : 130, pseudoElement: "::backdrop", fill: "forwards" });
+    } catch {
+      // Older browsers can't animate the backdrop; it just goes with the window.
+    }
+    anim.onfinish = () => {
+      d.close();
+      anim.cancel();
+    };
   }, [open]);
+
+  const dragStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPhone() || (e.target as HTMLElement).closest("button")) return;
+    drag.current = { y: e.clientY, t: performance.now(), dy: 0 };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (ref.current) ref.current.style.transition = "none";
+  };
+  const dragMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = drag.current;
+    if (!g || !ref.current) return;
+    g.dy = Math.max(0, e.clientY - g.y);
+    ref.current.style.transform = `translateY(${g.dy}px)`;
+  };
+  const dragEnd = () => {
+    const g = drag.current;
+    drag.current = null;
+    const d = ref.current;
+    if (!g || !d) return;
+    // Far enough, or flicked: close. Otherwise spring back.
+    if (g.dy > 110 || g.dy / (performance.now() - g.t) > 0.6) return onClose();
+    d.style.transition = "transform 260ms cubic-bezier(0.32, 0.72, 0, 1)";
+    d.style.transform = "";
+  };
+
   return (
     <dialog
       ref={ref}
-      onClose={onClose}
+      onClose={() => {
+        setShown(false);
+        onClose();
+      }}
+      onCancel={(e) => {
+        // Esc: animate away like the other ways of closing.
+        e.preventDefault();
+        onClose();
+      }}
       onClick={(e) => e.target === ref.current && onClose()}
       className={cx(
         // The animation replays each time showModal() makes the dialog visible. On phones it's a
@@ -109,16 +179,19 @@ export function Modal({
         wide ? "max-w-3xl" : "max-w-lg",
       )}
     >
-      {open && (
+      {shown && (
         <div className="max-sm:pb-[env(safe-area-inset-bottom)]">
-          <span aria-hidden className="mx-auto mt-2 block h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
-          <div className="flex items-center justify-between border-b border-line px-5 py-3.5 max-sm:pt-2">
-            <h2 className="text-base font-semibold">{title}</h2>
-            <button type="button" onClick={onClose} className={btn("ghost", "icon")} aria-label="Close">
-              <X className="size-4" />
-            </button>
+          {/* The top of the sheet is its handle: drag it down to close (phones). */}
+          <div onPointerDown={dragStart} onPointerMove={dragMove} onPointerUp={dragEnd} onPointerCancel={dragEnd} className="max-sm:touch-none max-sm:select-none">
+            <span aria-hidden className="mx-auto mt-2 block h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
+            <div className="flex items-center justify-between border-b border-line px-5 py-3.5 max-sm:pt-2">
+              <h2 className="text-base font-semibold">{open ? title : kept.title}</h2>
+              <button type="button" onClick={onClose} className={btn("ghost", "icon")} aria-label="Close">
+                <X className="size-4" />
+              </button>
+            </div>
           </div>
-          <div className="max-h-[75dvh] overflow-y-auto overscroll-contain px-5 py-4 max-sm:max-h-[82dvh]">{children}</div>
+          <div className="max-h-[75dvh] overflow-y-auto overscroll-contain px-5 py-4 max-sm:max-h-[82dvh]">{open ? children : kept.children}</div>
         </div>
       )}
     </dialog>

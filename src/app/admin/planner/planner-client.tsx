@@ -366,7 +366,8 @@ export function PlannerClient(props: Props) {
         </div>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-[18.5rem_minmax(0,1fr)_25rem]">
+      {/* One column that fits the screen on phones (grid-cols-1 keeps wide content from stretching it). */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[18.5rem_minmax(0,1fr)_25rem]">
         {/* ---------------- Left: conditions ---------------- */}
         <div className="space-y-4">
           <Card>

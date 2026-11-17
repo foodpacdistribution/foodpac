@@ -1,18 +1,73 @@
 "use client";
 
-import { Bell, BellRing, Check, ClipboardPen, Gauge, Clock, KeyRound, Mail, Pencil, Phone, Plus, Search, Store, Target, UserRound } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
-import { markFollowedUp, saveLead, setFollowUp, setQuietDays, setSalesStage } from "@/app/actions/pipeline";
+import {
+  Bell,
+  BellRing,
+  Check,
+  ClipboardPen,
+  Clock,
+  KeyRound,
+  Mail,
+  Pencil,
+  Phone,
+  Plus,
+  Search,
+  Store,
+  Target,
+  UserRound,
+} from "lucide-react";
+import {
+  startTransition,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  ViewTransition,
+} from "react";
+import {
+  markFollowedUp,
+  saveLead,
+  setFollowUp,
+  setQuietDays,
+  setSalesStage,
+} from "@/app/actions/pipeline";
 import { AddressInput } from "@/components/address-input";
-import { FormError, KeptForm, Modal, SubmitButton, Toast, type ToastMessage, useKeptForm } from "@/components/client-ui";
+import {
+  FormError,
+  KeptForm,
+  Modal,
+  SubmitButton,
+  Toast,
+  type ToastMessage,
+  useKeptForm,
+} from "@/components/client-ui";
 import { useT } from "@/components/i18n";
-import { btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
+import {
+  btn,
+  Card,
+  cx,
+  EmptyState,
+  Field,
+  inputCls,
+  PageHeader,
+} from "@/components/ui";
 import { prettyDate, shiftDate } from "@/lib/dates";
 import { useVisitLogger, type VisitSaved } from "@/components/visit-logger";
-import type { NotNowReason, PaymentTerms, Role, SalesStage, StoreType } from "@/lib/db/schema";
+import type {
+  NotNowReason,
+  PaymentTerms,
+  Role,
+  SalesStage,
+  StoreType,
+} from "@/lib/db/schema";
 import { STORE_TYPES } from "@/lib/store-types";
 import { StoreTypePicker } from "@/app/admin/customers/[id]/store-details";
-import { daysBetween, type DueFollowUp, QUIET_CHOICES, REMIND_IN } from "@/lib/follow-up";
+import {
+  daysBetween,
+  type DueFollowUp,
+  QUIET_CHOICES,
+  REMIND_IN,
+} from "@/lib/follow-up";
 import { dueText } from "@/lib/follow-up-text";
 import { SALES_STAGES, STAGE_INFO } from "@/lib/sales-stage";
 import type { LastVisit } from "@/lib/visit-log";
@@ -54,8 +109,10 @@ type Lead = {
 type Tr = ReturnType<typeof useT>;
 
 /** Signed and set up: approved to order, with a login to order online. */
-const accountOpen = (c: Pick<Lead, "approved" | "login">) => c.approved && !!c.login;
-const shortDate = (d: string, tr: Tr) => tr(prettyDate(d, { weekday: "short", day: "numeric", month: "short" }));
+const accountOpen = (c: Pick<Lead, "approved" | "login">) =>
+  c.approved && !!c.login;
+const shortDate = (d: string, tr: Tr) =>
+  tr(prettyDate(d, { weekday: "short", day: "numeric", month: "short" }));
 
 /** "today", "yesterday", "3 days ago", or the date once it's more than a fortnight back. */
 function ago(day: string, today: string, tr: Tr) {
@@ -102,13 +159,36 @@ export function PipelineClient({
     setVisited({});
   }
   const [, start] = useTransition();
-  const deferredQ = useDeferredValue(q);
-  const say = (r: { ok: true; message?: string } | { ok: false; error: string }) =>
-    setToast((t) => ({ id: (t?.id ?? 0) + 1, text: r.ok ? (r.message ?? "Saved") : r.error, tone: r.ok ? "ok" : "warn" }));
+  // A row just saved gets a brief highlight, so the eye finds it after the form closes.
+  const [flash, setFlash] = useState<Set<string>>(new Set());
+  const highlight = (id: string) => {
+    setFlash((f) => new Set(f).add(id));
+    setTimeout(
+      () =>
+        setFlash((f) => {
+          const n = new Set(f);
+          n.delete(id);
+          return n;
+        }),
+      1500,
+    );
+  };
+  const say = (
+    r: { ok: true; message?: string } | { ok: false; error: string },
+  ) =>
+    setToast((t) => ({
+      id: (t?.id ?? 0) + 1,
+      text: r.ok ? (r.message ?? "Saved") : r.error,
+      tone: r.ok ? "ok" : "warn",
+    }));
   const visits = useVisitLogger({
     today,
     say,
-    onSaved: (v) => setVisited((m) => ({ ...m, [v.customerId]: v })),
+    // In a transition, so rows that move or leave the list glide instead of jumping.
+    onSaved: (v) => {
+      startTransition(() => setVisited((m) => ({ ...m, [v.customerId]: v })));
+      highlight(v.customerId);
+    },
     onFailed: (id) =>
       setVisited((m) => {
         const { [id]: _, ...rest } = m;
@@ -120,10 +200,24 @@ export function PipelineClient({
     () =>
       customers.map((c) => {
         const v = visited[c.id];
-        const row = { ...c, stage: moved[c.id] ?? c.stage, ...(done.has(c.id) ? { due: null, dueForMe: false, followUpOn: null, followUpNote: null } : {}) };
+        const row = {
+          ...c,
+          stage: moved[c.id] ?? c.stage,
+          ...(done.has(c.id)
+            ? {
+                due: null,
+                dueForMe: false,
+                followUpOn: null,
+                followUpNote: null,
+              }
+            : {}),
+        };
         if (!v) return row;
         // A visit just logged: its stage, reminder and line, as the server will have them.
-        const due: DueFollowUp | null = v.followUpOn && v.followUpOn <= today ? { kind: "reminder", on: v.followUpOn, late: 0 } : null;
+        const due: DueFollowUp | null =
+          v.followUpOn && v.followUpOn <= today
+            ? { kind: "reminder", on: v.followUpOn, late: 0 }
+            : null;
         return {
           ...row,
           stage: v.stage,
@@ -131,13 +225,25 @@ export function PipelineClient({
           followUpNote: v.followUpOn ? v.note || row.followUpNote : null,
           due,
           dueForMe: !!due,
-          lastVisit: { day: today, outcome: v.outcome, note: v.note || null, channel: v.channel },
+          lastVisit: {
+            day: today,
+            outcome: v.outcome,
+            note: v.note || null,
+            channel: v.channel,
+          },
         };
       }),
     [customers, moved, done, visited, today],
   );
   const counts = useMemo(() => {
-    const n = { all: 0, new: 0, interested: 0, negotiating: 0, won: 0, not_now: 0 };
+    const n = {
+      all: 0,
+      new: 0,
+      interested: 0,
+      negotiating: 0,
+      won: 0,
+      not_now: 0,
+    };
     for (const c of rows) {
       n[c.stage]++;
       if (c.stage !== "not_now") n.all++;
@@ -145,22 +251,36 @@ export function PipelineClient({
     return n;
   }, [rows]);
   const shown = useMemo(() => {
-    const s = deferredQ.trim().toLowerCase();
+    const s = q.trim().toLowerCase();
     return rows.filter(
       (c) =>
         // "All" leaves out stores that said not now, unless they're being searched for.
         (stage === "all" ? c.stage !== "not_now" || !!s : c.stage === stage) &&
         (!mine || c.repId === me.id) &&
-        (!s || [c.name, c.phone, c.email, c.address, c.repName, c.followUpNote, c.lastVisit?.note, c.contactName, c.storeType && tr(STORE_TYPES[c.storeType])].some((v) => v?.toLowerCase().includes(s))),
+        (!s ||
+          [
+            c.name,
+            c.phone,
+            c.email,
+            c.address,
+            c.repName,
+            c.followUpNote,
+            c.lastVisit?.note,
+            c.contactName,
+            c.storeType && tr(STORE_TYPES[c.storeType]),
+          ].some((v) => v?.toLowerCase().includes(s))),
     );
     // tr: the store type is searched in the language on screen.
-  }, [rows, stage, mine, deferredQ, me.id, tr]);
+  }, [rows, stage, mine, q, me.id, tr]);
   // Overdue reminders first, then the longest-quiet customers.
   const toFollow = useMemo(
     () =>
       rows
         .filter((c) => c.dueForMe && (!mine || c.repId === me.id))
-        .sort((a, b) => weight(b.due!) - weight(a.due!) || a.name.localeCompare(b.name)),
+        .sort(
+          (a, b) =>
+            weight(b.due!) - weight(a.due!) || a.name.localeCompare(b.name),
+        ),
     [rows, mine, me.id],
   );
   const hasMine = rows.some((c) => c.repId === me.id);
@@ -169,7 +289,7 @@ export function PipelineClient({
     // Saying no for now goes through the visit form, for why and when to try again.
     if (to === "not_now") return visits.open(c, "not_now");
     const from = c.stage;
-    setMoved((m) => ({ ...m, [c.id]: to }));
+    startTransition(() => setMoved((m) => ({ ...m, [c.id]: to })));
     start(async () => {
       const r = await setSalesStage(c.id, to);
       say(r);
@@ -183,13 +303,21 @@ export function PipelineClient({
     <>
       <PageHeader
         title={tr("Sales Pipeline")}
-        subtitle={tr("Move each customer along as talks go: new customer, interested, in talks, won.")}
+        subtitle={tr(
+          "Move each customer along as talks go: new customer, interested, in talks, won.",
+        )}
         actions={
           <>
-            <button className={btn("secondary")} onClick={() => setEditing("new")}>
+            <button
+              className={btn("secondary")}
+              onClick={() => setEditing("new")}
+            >
               <Plus className="size-4" /> {tr("Add lead")}
             </button>
-            <button className={btn("primary")} onClick={() => setOpening("new")}>
+            <button
+              className={btn("primary")}
+              onClick={() => setOpening("new")}
+            >
               <Store className="size-4" /> {tr("Open account")}
             </button>
           </>
@@ -197,21 +325,25 @@ export function PipelineClient({
       />
 
       {week && (
-        <Link
-          href="/admin/my-sales?days=7"
-          className="group mb-4 flex animate-rise items-center gap-3 rounded-2xl bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-3 text-white shadow-card transition-shadow hover:shadow-pop"
-        >
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/10">
-            <Gauge className="size-[18px]" />
+        <p className="mb-3 text-sm text-slate-600">
+          {tr("Last 7 days")}:{" "}
+          <span className="font-medium text-slate-900 tabular-nums">
+            {tr(week.visits === 1 ? "1 visit" : "{n} visits", {
+              n: week.visits,
+            })}
           </span>
-          <span className="min-w-0 flex-1 text-sm">
-            <span className="block text-xs text-white/60">{tr("Last 7 days")}</span>
-            <span className="font-semibold tabular-nums">
-              {tr(week.visits === 1 ? "1 visit" : "{n} visits", { n: week.visits })} · {tr("{n} won", { n: week.won })}
-            </span>
+          {" · "}
+          <span className="font-medium text-slate-900 tabular-nums">
+            {tr("{n} won", { n: week.won })}
           </span>
-          <span className="text-xs font-medium text-white/70 transition-transform duration-200 group-hover:translate-x-0.5">{tr("My Sales")} →</span>
-        </Link>
+          {" · "}
+          <Link
+            href="/admin/my-sales?days=7"
+            className="text-blue-700 hover:underline"
+          >
+            {tr("My Sales")}
+          </Link>
+        </p>
       )}
 
       <FollowUpList
@@ -226,20 +358,49 @@ export function PipelineClient({
 
       {/* One chip per stage: how many are there, and a tap shows just those. Scrolls sideways on phones. */}
       <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0">
-        <StageTile label={tr("All")} n={counts.all} on={stage === "all"} onClick={() => setStage("all")} />
+        <StageTile
+          label={tr("All")}
+          n={counts.all}
+          on={stage === "all"}
+          onClick={() => startTransition(() => setStage("all"))}
+        />
         {SALES_STAGES.map((s) => (
-          <StageTile key={s} label={tr(STAGE_INFO[s].label)} hint={tr(STAGE_INFO[s].hint)} dot={STAGE_INFO[s].dot} n={counts[s]} on={stage === s} onClick={() => setStage(stage === s ? "all" : s)} />
+          <StageTile
+            key={s}
+            label={tr(STAGE_INFO[s].label)}
+            hint={tr(STAGE_INFO[s].hint)}
+            dot={STAGE_INFO[s].dot}
+            n={counts[s]}
+            on={stage === s}
+            onClick={() =>
+              startTransition(() => setStage(stage === s ? "all" : s))
+            }
+          />
         ))}
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-80">
           <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-slate-400" />
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Search name, phone, email, address")} className={cx(inputCls, "pl-9")} />
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={tr("Search name, phone, email, address")}
+            className={cx(inputCls, "pl-9")}
+          />
         </div>
         {(me.role === "sales" || hasMine) && (
           <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> {tr("Only my customers")}
+            <input
+              type="checkbox"
+              checked={mine}
+              onChange={(e) => {
+                const on = e.target.checked;
+                startTransition(() => setMine(on));
+              }}
+            />{" "}
+            {tr("Only my customers")}
           </label>
         )}
       </div>
@@ -247,7 +408,9 @@ export function PipelineClient({
       {customers.length === 0 ? (
         <Card>
           <EmptyState icon={Target} title={tr("No customers yet")}>
-            {tr("Add the first business you're talking to and set where things are at.")}
+            {tr(
+              "Add the first business you're talking to and set where things are at.",
+            )}
           </EmptyState>
         </Card>
       ) : shown.length === 0 ? (
@@ -265,75 +428,130 @@ export function PipelineClient({
             <span>{tr("Salesperson")}</span>
             <span />
           </div>
-          {/* Keyed by the filter, so a new filter's rows rise in again. */}
-          <ul key={`${stage}|${mine}`} className="divide-y divide-line">
+          <ul className="divide-y divide-line">
             {shown.map((c, i) => (
-              <li
-                key={c.id}
-                style={i < 14 ? ({ "--i": i } as React.CSSProperties) : undefined}
-                className={cx(
-                  "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-slate-50/60 md:grid-cols-[minmax(0,1.5fr)_10.5rem_minmax(0,1fr)_minmax(0,0.9fr)_2.5rem]",
-                  i < 14 && "stagger",
-                  !c.active && "opacity-60",
-                )}
-              >
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className={cx("mt-0.5 hidden size-9 shrink-0 place-items-center rounded-full text-sm font-semibold sm:grid", AVATAR[c.stage])}>{initial(c.name)}</span>
-                  <div className="min-w-0">
-                  <Link href={`/admin/customers/${c.id}`} className="line-clamp-2 block max-w-full text-sm leading-snug font-semibold break-words text-slate-900 hover:text-blue-700 md:truncate">
-                    {c.name}
-                  </Link>
-                  {(c.storeType || c.contactName) && (
-                    <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
-                      {c.storeType && <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-px text-[11px] font-medium text-slate-600">{tr(STORE_TYPES[c.storeType])}</span>}
-                      {c.contactName && <span className="truncate">{tr("Talk to {name}", { name: c.contactName })}</span>}
-                    </p>
+              <RowTransition key={c.id} animate={i < MAX_ANIMATED_ROWS}>
+                <li
+                  className={cx(
+                    "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 bg-white px-4 py-3 transition-colors hover:bg-slate-50/60 md:grid-cols-[minmax(0,1.5fr)_10.5rem_minmax(0,1fr)_minmax(0,0.9fr)_2.5rem]",
+                    flash.has(c.id) && "row-flash",
+                    !c.active && "opacity-60",
                   )}
-                  <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-500">
-                    {c.phone && (
-                      <a href={`tel:${c.phone.replace(/\s/g, "")}`} className="inline-flex items-center gap-1 hover:text-slate-800">
-                        <Phone className="size-3" /> {c.phone}
-                      </a>
-                    )}
-                    {c.email && (
-                      <a href={`mailto:${c.email}`} className="inline-flex min-w-0 items-center gap-1 hover:text-slate-800">
-                        <Mail className="size-3 shrink-0" /> <span className="truncate">{c.email}</span>
-                      </a>
-                    )}
-                    {!c.phone && !c.email && <span>{tr("No contact details")}</span>}
-                  </p>
-                  <VisitLine c={c} today={today} />
-                  {/* Won, but not set up to order yet. */}
-                  {c.stage === "won" && !accountOpen(c) && (
-                    <button onClick={() => setOpening(c)} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900 hover:underline">
-                      <KeyRound className="size-3" /> {tr("Finish opening the account")}
-                    </button>
-                  )}
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/admin/customers/${c.id}`}
+                        className="line-clamp-2 block max-w-full text-sm leading-snug font-semibold break-words text-slate-900 hover:text-blue-700 md:truncate"
+                      >
+                        {c.name}
+                      </Link>
+                      {(c.storeType || c.contactName) && (
+                        <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+                          {c.storeType && (
+                            <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-px text-[11px] font-medium text-slate-600">
+                              {tr(STORE_TYPES[c.storeType])}
+                            </span>
+                          )}
+                          {c.contactName && (
+                            <span className="truncate">
+                              {tr("Talk to {name}", { name: c.contactName })}
+                            </span>
+                          )}
+                        </p>
+                      )}
+                      <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-500">
+                        {c.phone && (
+                          <a
+                            href={`tel:${c.phone.replace(/\s/g, "")}`}
+                            className="inline-flex items-center gap-1 hover:text-slate-800"
+                          >
+                            <Phone className="size-3" /> {c.phone}
+                          </a>
+                        )}
+                        {c.email && (
+                          <a
+                            href={`mailto:${c.email}`}
+                            className="inline-flex min-w-0 items-center gap-1 hover:text-slate-800"
+                          >
+                            <Mail className="size-3 shrink-0" />{" "}
+                            <span className="truncate">{c.email}</span>
+                          </a>
+                        )}
+                        {!c.phone && !c.email && (
+                          <span>{tr("No contact details")}</span>
+                        )}
+                      </p>
+                      <VisitLine c={c} today={today} />
+                      {/* Won, but not set up to order yet. */}
+                      {c.stage === "won" && !accountOpen(c) && (
+                        <button
+                          onClick={() => setOpening(c)}
+                          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900 hover:underline"
+                        >
+                          <KeyRound className="size-3" />{" "}
+                          {tr("Finish opening the account")}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex min-w-0 items-center gap-1">
-                  <StageSelect value={c.stage} onChange={(to) => move(c, to)} label={tr("Stage for {name}", { name: c.name })} />
-                  <button className={btn("ghost", "icon", "shrink-0 text-blue-700")} onClick={() => visits.open(c)} aria-label={tr("Log visit · {name}", { name: c.name })} title={tr("Log visit")}>
-                    <ClipboardPen className="size-4" />
-                  </button>
-                </div>
-                <FollowUpCell c={c} today={today} onClick={() => setReminding(c)} />
-                <p className="flex min-w-0 items-center gap-1.5 text-xs text-slate-500 max-md:justify-end md:text-sm">
-                  <UserRound className="size-3.5 shrink-0 text-slate-400 md:hidden" />
-                  <span className="truncate">{c.repName ? (c.repId === me.id ? tr("You") : c.repName) : <span className="text-slate-400">{tr("Unassigned")}</span>}</span>
-                </p>
-                <div className="hidden md:block">
-                  <button className={btn("ghost", "icon")} onClick={() => setEditing(c)} aria-label={tr("Edit {name}", { name: c.name })}>
-                    <Pencil className="size-3.5" />
-                  </button>
-                </div>
-              </li>
+                  <div className="flex min-w-0 items-center gap-1">
+                    <StageSelect
+                      value={c.stage}
+                      onChange={(to) => move(c, to)}
+                      label={tr("Stage for {name}", { name: c.name })}
+                    />
+                    <button
+                      className={btn("ghost", "icon", "shrink-0 text-blue-700")}
+                      onClick={() => visits.open(c)}
+                      aria-label={tr("Log visit · {name}", { name: c.name })}
+                      title={tr("Log visit")}
+                    >
+                      <ClipboardPen className="size-4" />
+                    </button>
+                  </div>
+                  <FollowUpCell
+                    c={c}
+                    today={today}
+                    onClick={() => setReminding(c)}
+                  />
+                  <p className="flex min-w-0 items-center gap-1.5 text-xs text-slate-500 max-md:justify-end md:text-sm">
+                    <UserRound className="size-3.5 shrink-0 text-slate-400 md:hidden" />
+                    <span className="truncate">
+                      {c.repName ? (
+                        c.repId === me.id ? (
+                          tr("You")
+                        ) : (
+                          c.repName
+                        )
+                      ) : (
+                        <span className="text-slate-400">
+                          {tr("Unassigned")}
+                        </span>
+                      )}
+                    </span>
+                  </p>
+                  <div className="hidden md:block">
+                    <button
+                      className={btn("ghost", "icon")}
+                      onClick={() => setEditing(c)}
+                      aria-label={tr("Edit {name}", { name: c.name })}
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                  </div>
+                </li>
+              </RowTransition>
             ))}
           </ul>
         </Card>
       )}
 
-      <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? tr("Add lead") : tr("Edit customer")}>
+      <Modal
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title={editing === "new" ? tr("Add lead") : tr("Edit customer")}
+      >
         {editing !== null && (
           <LeadForm
             lead={editing === "new" ? null : editing}
@@ -352,7 +570,11 @@ export function PipelineClient({
       <Modal
         open={opening !== null}
         onClose={() => setOpening(null)}
-        title={opening === "new" || opening === null ? tr("Open an account") : tr("Open an account · {name}", { name: opening.name })}
+        title={
+          opening === "new" || opening === null
+            ? tr("Open an account")
+            : tr("Open an account · {name}", { name: opening.name })
+        }
       >
         {opening !== null && (
           <OpenAccountForm
@@ -364,7 +586,13 @@ export function PipelineClient({
           />
         )}
       </Modal>
-      <Modal open={reminding !== null} onClose={() => setReminding(null)} title={reminding ? tr("Follow-up · {name}", { name: reminding.name }) : ""}>
+      <Modal
+        open={reminding !== null}
+        onClose={() => setReminding(null)}
+        title={
+          reminding ? tr("Follow-up · {name}", { name: reminding.name }) : ""
+        }
+      >
         {reminding && (
           <FollowUpForm
             c={reminding}
@@ -385,24 +613,55 @@ export function PipelineClient({
   );
 }
 
-/** Each stage's soft colour, for the round initial beside a customer. */
-const AVATAR: Record<SalesStage, string> = {
-  new: "bg-slate-100 text-slate-600",
-  interested: "bg-blue-50 text-blue-700",
-  negotiating: "bg-amber-50 text-amber-800",
-  won: "bg-emerald-50 text-emerald-700",
-  not_now: "bg-rose-50 text-rose-600",
-};
-const initial = (name: string) => (name.replace(/^(the|a)\s+/i, "").match(/[\p{L}\p{N}]/u)?.[0] ?? "?").toUpperCase();
+/**
+ * Rows animate when a filter or a save changes the list: those that stay glide to their new
+ * place, those that go slip aside, new ones rise in. Only the first rows take part, so a long
+ * list stays quick; the rest simply update.
+ */
+const MAX_ANIMATED_ROWS = 40;
+function RowTransition({
+  animate,
+  children,
+}: {
+  animate: boolean;
+  children: React.ReactNode;
+}) {
+  if (!animate) return children;
+  return (
+    <ViewTransition
+      enter="row-in"
+      exit="row-out"
+      update="row-move"
+      default="none"
+    >
+      {children}
+    </ViewTransition>
+  );
+}
 
 /** Under the name: why a "not now" store said no, or how the last visit went (`brief`: without its note). */
-function VisitLine({ c, today, brief }: { c: Lead; today: string; brief?: boolean }) {
+function VisitLine({
+  c,
+  today,
+  brief,
+}: {
+  c: Lead;
+  today: string;
+  brief?: boolean;
+}) {
   const tr = useT();
   if (c.stage === "not_now") {
     return (
       <p className="mt-0.5 truncate text-xs text-rose-700">
-        {c.notNowReason ? tr(NOT_NOW_REASONS[c.notNowReason]) : tr("Said no for now")}
-        {c.followUpOn && <span className="text-slate-500"> · {tr("try again {date}", { date: shortDate(c.followUpOn, tr) })}</span>}
+        {c.notNowReason
+          ? tr(NOT_NOW_REASONS[c.notNowReason])
+          : tr("Said no for now")}
+        {c.followUpOn && (
+          <span className="text-slate-500">
+            {" "}
+            · {tr("try again {date}", { date: shortDate(c.followUpOn, tr) })}
+          </span>
+        )}
       </p>
     );
   }
@@ -410,8 +669,15 @@ function VisitLine({ c, today, brief }: { c: Lead; today: string; brief?: boolea
   if (!v) return null;
   return (
     <p className="mt-0.5 truncate text-xs text-slate-500">
-      {v.channel === "call" ? <Phone className="mr-1 inline size-3 align-[-2px]" /> : <Store className="mr-1 inline size-3 align-[-2px]" />}
-      {ago(v.day, today, tr)} · <span className="font-medium text-slate-700">{tr(OUTCOMES[v.outcome].label)}</span>
+      {v.channel === "call" ? (
+        <Phone className="mr-1 inline size-3 align-[-2px]" />
+      ) : (
+        <Store className="mr-1 inline size-3 align-[-2px]" />
+      )}
+      {ago(v.day, today, tr)} ·{" "}
+      <span className="font-medium text-slate-700">
+        {tr(OUTCOMES[v.outcome].label)}
+      </span>
       {v.note && !brief && <span> · “{v.note}”</span>}
     </p>
   );
@@ -422,7 +688,15 @@ function VisitLine({ c, today, brief }: { c: Lead; today: string; brief?: boolea
  * customers drifting away, and quiet ones; within each, the longer it's been, the higher.
  */
 const weight = (d: DueFollowUp) =>
-  d.kind === "reminder" ? 4000 + d.late : d.kind === "first_order" ? 3000 + d.days : d.kind === "slipping" ? 2000 + d.days : d.kind === "spend_drop" ? 2000 + d.pct : d.days;
+  d.kind === "reminder"
+    ? 4000 + d.late
+    : d.kind === "first_order"
+      ? 3000 + d.days
+      : d.kind === "slipping"
+        ? 2000 + d.days
+        : d.kind === "spend_drop"
+          ? 2000 + d.pct
+          : d.days;
 
 /** Today's follow-ups at the top of the page: who, why, and buttons to finish or put it off. */
 function FollowUpList({
@@ -446,7 +720,11 @@ function FollowUpList({
   const rule = canSetQuiet ? (
     <label className="inline-flex items-center gap-1.5">
       {tr("Remind when a customer hasn't ordered for")}
-      <select value={quietDays} onChange={(e) => onQuietDays(Number(e.target.value))} className="h-7 rounded-md border border-line bg-white px-1.5 text-xs text-slate-800">
+      <select
+        value={quietDays}
+        onChange={(e) => onQuietDays(Number(e.target.value))}
+        className="h-7 rounded-md border border-line bg-white px-1.5 text-xs text-slate-800"
+      >
         {QUIET_CHOICES.map((d) => (
           <option key={d} value={d}>
             {tr("{n} days", { n: d })}
@@ -455,50 +733,116 @@ function FollowUpList({
       </select>
     </label>
   ) : (
-    <span>{tr("Customers who haven't ordered for {n} days show up here too.", { n: quietDays })}</span>
+    <span>
+      {tr("Customers who haven't ordered for {n} days show up here too.", {
+        n: quietDays,
+      })}
+    </span>
   );
 
   return (
     <Card className="mb-4 overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line px-4 py-2.5">
         <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <BellRing className={cx("size-4", items.length ? "text-amber-600" : "text-slate-400")} />
+          <BellRing
+            className={cx(
+              "size-4",
+              items.length ? "text-amber-600" : "text-slate-400",
+            )}
+          />
           {tr("To follow up")}
-          {items.length > 0 && <span className="rounded-full bg-amber-100 px-2 py-px text-xs font-semibold text-amber-800 tabular-nums">{items.length}</span>}
+          {items.length > 0 && (
+            <span className="rounded-full bg-amber-100 px-2 py-px text-xs font-semibold text-amber-800 tabular-nums">
+              {items.length}
+            </span>
+          )}
         </p>
         <p className="text-xs text-slate-500">{rule}</p>
       </div>
       {items.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-slate-500">{tr("Nothing due today. Set a reminder on any customer with the bell.")}</p>
+        <p className="px-4 py-3 text-sm text-slate-500">
+          {tr(
+            "Nothing due today. Set a reminder on any customer with the bell.",
+          )}
+        </p>
       ) : (
         <ul className="max-h-[22rem] divide-y divide-line overflow-y-auto">
           {items.map((c, i) => (
-            <li key={c.id} style={{ "--i": Math.min(i, 10) } as React.CSSProperties} className="stagger relative flex flex-wrap items-center gap-x-4 gap-y-2 py-2.5 pr-4 pl-5">
-              <span aria-hidden className={cx("absolute inset-y-2.5 left-0 w-1 rounded-r-full", c.due!.kind === "reminder" && c.due!.late > 0 ? "bg-red-500" : "bg-amber-400")} />
-              <div className="min-w-0 flex-1 basis-56">
-                <p className="truncate text-sm font-semibold text-slate-900">{c.name}</p>
-                <p className={cx("text-xs", c.due!.kind === "reminder" && c.due!.late > 0 ? "text-red-600" : "text-amber-700")}>
-                  {dueText(c.due!, tr)}
-                  {c.due!.kind === "quiet" && c.lastOrderOn && <span className="text-slate-500"> · {tr("last order {date}", { date: shortDate(c.lastOrderOn, tr) })}</span>}
-                  {c.due!.kind !== "quiet" && c.lastOrderOn && <span className="text-slate-500"> · {tr("last order {date}", { date: ago(c.lastOrderOn, today, tr) })}</span>}
-                </p>
-                {c.followUpNote && <p className="mt-0.5 truncate text-xs text-slate-600">“{tr(c.followUpNote)}”</p>}
-                <VisitLine c={c} today={today} brief />
-              </div>
-              <div className="flex items-center gap-1.5">
-                {c.phone && (
-                  <a href={`tel:${c.phone.replace(/\s/g, "")}`} className={btn("secondary", "sm")}>
-                    <Phone className="size-3.5" /> <span className="max-sm:sr-only">{c.phone}</span>
-                  </a>
-                )}
-                <button className={btn("secondary", "sm")} onClick={() => onLater(c)}>
-                  <Clock className="size-3.5" /> {tr("Later")}
-                </button>
-                <button className={btn("primary", "sm")} onClick={() => onVisit(c)}>
-                  <ClipboardPen className="size-3.5" /> {tr("Log visit")}
-                </button>
-              </div>
-            </li>
+            <RowTransition key={c.id} animate={i < MAX_ANIMATED_ROWS}>
+              <li className="relative flex flex-wrap items-center gap-x-4 gap-y-2 bg-white py-2.5 pr-4 pl-5">
+                <span
+                  aria-hidden
+                  className={cx(
+                    "absolute inset-y-2.5 left-0 w-1 rounded-r-full",
+                    c.due!.kind === "reminder" && c.due!.late > 0
+                      ? "bg-red-500"
+                      : "bg-amber-400",
+                  )}
+                />
+                <div className="min-w-0 flex-1 basis-56">
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {c.name}
+                  </p>
+                  <p
+                    className={cx(
+                      "text-xs",
+                      c.due!.kind === "reminder" && c.due!.late > 0
+                        ? "text-red-600"
+                        : "text-amber-700",
+                    )}
+                  >
+                    {dueText(c.due!, tr)}
+                    {c.due!.kind === "quiet" && c.lastOrderOn && (
+                      <span className="text-slate-500">
+                        {" "}
+                        ·{" "}
+                        {tr("last order {date}", {
+                          date: shortDate(c.lastOrderOn, tr),
+                        })}
+                      </span>
+                    )}
+                    {c.due!.kind !== "quiet" && c.lastOrderOn && (
+                      <span className="text-slate-500">
+                        {" "}
+                        ·{" "}
+                        {tr("last order {date}", {
+                          date: ago(c.lastOrderOn, today, tr),
+                        })}
+                      </span>
+                    )}
+                  </p>
+                  {c.followUpNote && (
+                    <p className="mt-0.5 truncate text-xs text-slate-600">
+                      “{tr(c.followUpNote)}”
+                    </p>
+                  )}
+                  <VisitLine c={c} today={today} brief />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {c.phone && (
+                    <a
+                      href={`tel:${c.phone.replace(/\s/g, "")}`}
+                      className={btn("secondary", "sm")}
+                    >
+                      <Phone className="size-3.5" />{" "}
+                      <span className="max-sm:sr-only">{c.phone}</span>
+                    </a>
+                  )}
+                  <button
+                    className={btn("secondary", "sm")}
+                    onClick={() => onLater(c)}
+                  >
+                    <Clock className="size-3.5" /> {tr("Later")}
+                  </button>
+                  <button
+                    className={btn("primary", "sm")}
+                    onClick={() => onVisit(c)}
+                  >
+                    <ClipboardPen className="size-3.5" /> {tr("Log visit")}
+                  </button>
+                </div>
+              </li>
+            </RowTransition>
           ))}
         </ul>
       )}
@@ -507,26 +851,52 @@ function FollowUpList({
 }
 
 /** The follow-up column: the reminder date, a quiet-customer warning, or when they last ordered. */
-function FollowUpCell({ c, today, onClick }: { c: Lead; today: string; onClick: () => void }) {
+function FollowUpCell({
+  c,
+  today,
+  onClick,
+}: {
+  c: Lead;
+  today: string;
+  onClick: () => void;
+}) {
   const tr = useT();
   const late = c.due?.kind === "reminder" && c.due.late > 0;
   const content = c.followUpOn ? (
     <>
-      <Bell className={cx("size-3.5 shrink-0", c.due ? (late ? "text-red-600" : "text-amber-600") : "text-blue-600")} />
-      <span className={cx("truncate", c.due ? (late ? "font-medium text-red-700" : "font-medium text-amber-800") : "text-slate-700")}>
+      <Bell
+        className={cx(
+          "size-3.5 shrink-0",
+          c.due ? (late ? "text-red-600" : "text-amber-600") : "text-blue-600",
+        )}
+      />
+      <span
+        className={cx(
+          "truncate",
+          c.due
+            ? late
+              ? "font-medium text-red-700"
+              : "font-medium text-amber-800"
+            : "text-slate-700",
+        )}
+      >
         {c.followUpOn === today ? tr("Today") : shortDate(c.followUpOn, tr)}
       </span>
     </>
   ) : c.due && c.due.kind !== "reminder" ? (
     <>
       <BellRing className="size-3.5 shrink-0 text-amber-600" />
-      <span className="truncate font-medium text-amber-800">{dueText(c.due, tr)}</span>
+      <span className="truncate font-medium text-amber-800">
+        {dueText(c.due, tr)}
+      </span>
     </>
   ) : (
     <>
       <Bell className="size-3.5 shrink-0 text-slate-300 group-hover:text-slate-500" />
       <span className="truncate text-slate-400 group-hover:text-slate-600">
-        {c.lastOrderOn ? tr("Ordered {when}", { when: ago(c.lastOrderOn, today, tr) }) : tr("Set reminder")}
+        {c.lastOrderOn
+          ? tr("Ordered {when}", { when: ago(c.lastOrderOn, today, tr) })
+          : tr("Set reminder")}
       </span>
     </>
   );
@@ -551,15 +921,25 @@ function FollowUpForm({
 }: {
   c: Lead;
   today: string;
-  onDone: (r: { ok: true; message?: string } | { ok: false; error: string }, followedUp?: boolean) => void;
+  onDone: (
+    r: { ok: true; message?: string } | { ok: false; error: string },
+    followedUp?: boolean,
+  ) => void;
 }) {
   const tr = useT();
   // A reminder that has already come round starts blank: the next one has to be today or later.
-  const [on, setOn] = useState(c.followUpOn && c.followUpOn >= today ? c.followUpOn : "");
+  const [on, setOn] = useState(
+    c.followUpOn && c.followUpOn >= today ? c.followUpOn : "",
+  );
   const [note, setNote] = useState(c.followUpNote ?? "");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const run = (fn: () => Promise<{ ok: true; message?: string } | { ok: false; error: string }>, followedUp?: boolean) =>
+  const run = (
+    fn: () => Promise<
+      { ok: true; message?: string } | { ok: false; error: string }
+    >,
+    followedUp?: boolean,
+  ) =>
     start(async () => {
       const r = await fn();
       if (r.ok) onDone(r, followedUp);
@@ -571,16 +951,26 @@ function FollowUpForm({
       <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
         {c.lastOrderOn ? (
           <>
-            {tr("Last order")}: <span className="font-medium text-slate-900">{shortDate(c.lastOrderOn, tr)}</span> ({ago(c.lastOrderOn, today, tr)})
+            {tr("Last order")}:{" "}
+            <span className="font-medium text-slate-900">
+              {shortDate(c.lastOrderOn, tr)}
+            </span>{" "}
+            ({ago(c.lastOrderOn, today, tr)})
           </>
         ) : (
           tr("No orders yet")
         )}
-        {c.due && <span className="mt-0.5 block font-medium text-amber-800">{dueText(c.due, tr)}</span>}
+        {c.due && (
+          <span className="mt-0.5 block font-medium text-amber-800">
+            {dueText(c.due, tr)}
+          </span>
+        )}
       </p>
 
       <fieldset>
-        <legend className="mb-1.5 text-xs font-medium text-slate-600">{tr("Remind me")}</legend>
+        <legend className="mb-1.5 text-xs font-medium text-slate-600">
+          {tr("Remind me")}
+        </legend>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {REMIND_IN.map(({ days, label }) => {
             const d = shiftDate(today, days);
@@ -590,34 +980,68 @@ function FollowUpForm({
                 type="button"
                 onClick={() => setOn(d)}
                 aria-pressed={on === d}
-                className={cx("rounded-lg border px-2 py-2 text-center text-sm transition-colors", on === d ? "border-blue-500 bg-blue-50 font-medium text-blue-800" : "border-line hover:border-slate-300")}
+                className={cx(
+                  "rounded-lg border px-2 py-2 text-center text-sm transition-colors",
+                  on === d
+                    ? "border-blue-500 bg-blue-50 font-medium text-blue-800"
+                    : "border-line hover:border-slate-300",
+                )}
               >
                 {tr(label)}
-                <span className="block text-[11px] text-slate-500">{shortDate(d, tr)}</span>
+                <span className="block text-[11px] text-slate-500">
+                  {shortDate(d, tr)}
+                </span>
               </button>
             );
           })}
         </div>
       </fieldset>
       <Field label={tr("Or pick a date")}>
-        <input type="date" min={today} value={on} onChange={(e) => setOn(e.target.value)} className={inputCls} />
+        <input
+          type="date"
+          min={today}
+          value={on}
+          onChange={(e) => setOn(e.target.value)}
+          className={inputCls}
+        />
       </Field>
       <Field label={tr("Note (optional)")}>
-        <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder={tr("e.g. Send samples of the 8 oz cups")} className={inputCls} />
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={300}
+          placeholder={tr("e.g. Send samples of the 8 oz cups")}
+          className={inputCls}
+        />
       </Field>
 
       <FormError message={error} />
-      <button className={btn("primary", "md", "w-full")} disabled={pending || !on} onClick={() => run(() => setFollowUp(c.id, on, note))}>
-        <Bell className="size-4" /> {on ? tr("Remind me on {date}", { date: shortDate(on, tr) }) : tr("Choose when")}
+      <button
+        className={btn("primary", "md", "w-full")}
+        disabled={pending || !on}
+        onClick={() => run(() => setFollowUp(c.id, on, note))}
+      >
+        <Bell className="size-4" />{" "}
+        {on
+          ? tr("Remind me on {date}", { date: shortDate(on, tr) })
+          : tr("Choose when")}
       </button>
       <div className="flex flex-wrap gap-2">
         {(c.due || c.followUpOn) && (
-          <button className={btn("secondary", "md", "flex-1")} disabled={pending} onClick={() => run(() => markFollowedUp(c.id), true)}>
+          <button
+            className={btn("secondary", "md", "flex-1")}
+            disabled={pending}
+            onClick={() => run(() => markFollowedUp(c.id), true)}
+          >
             <Check className="size-4" /> {tr("Followed up")}
           </button>
         )}
         {c.followUpOn && (
-          <button className={btn("ghost", "md", "flex-1 text-red-600")} disabled={pending} onClick={() => run(() => setFollowUp(c.id, null))}>
+          <button
+            className={btn("ghost", "md", "flex-1 text-red-600")}
+            disabled={pending}
+            onClick={() => run(() => setFollowUp(c.id, null))}
+          >
             {tr("Clear reminder")}
           </button>
         )}
@@ -626,7 +1050,21 @@ function FollowUpForm({
   );
 }
 
-function StageTile({ label, hint, dot, n, on, onClick }: { label: string; hint?: string; dot?: string; n: number; on: boolean; onClick: () => void }) {
+function StageTile({
+  label,
+  hint,
+  dot,
+  n,
+  on,
+  onClick,
+}: {
+  label: string;
+  hint?: string;
+  dot?: string;
+  n: number;
+  on: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
@@ -635,18 +1073,35 @@ function StageTile({ label, hint, dot, n, on, onClick }: { label: string; hint?:
       title={hint}
       className={cx(
         "flex h-10 shrink-0 items-center gap-2 rounded-full border pr-1.5 pl-3.5 text-sm font-medium whitespace-nowrap transition-all duration-200 active:scale-[0.97]",
-        on ? "border-navy-900 bg-navy-900 text-white shadow-sm" : "border-line bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900",
+        on
+          ? "border-navy-900 bg-navy-900 text-white shadow-sm"
+          : "border-line bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900",
       )}
     >
       {dot && <span className={cx("size-2 rounded-full", dot)} />}
       {label}
-      <span className={cx("min-w-7 rounded-full px-2 py-0.5 text-center text-xs tabular-nums transition-colors", on ? "bg-white/15 text-white" : "bg-slate-100 text-slate-700")}>{n}</span>
+      <span
+        className={cx(
+          "min-w-7 rounded-full px-2 py-0.5 text-center text-xs tabular-nums transition-colors",
+          on ? "bg-white/15 text-white" : "bg-slate-100 text-slate-700",
+        )}
+      >
+        {n}
+      </span>
     </button>
   );
 }
 
 /** The stage as a dropdown tinted in its colour; changing it saves straight away. */
-function StageSelect({ value, onChange, label }: { value: SalesStage; onChange: (to: SalesStage) => void; label: string }) {
+function StageSelect({
+  value,
+  onChange,
+  label,
+}: {
+  value: SalesStage;
+  onChange: (to: SalesStage) => void;
+  label: string;
+}) {
   const tr = useT();
   const tint = {
     new: "bg-slate-50 text-slate-700 border-slate-200",
@@ -660,7 +1115,10 @@ function StageSelect({ value, onChange, label }: { value: SalesStage; onChange: 
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value as SalesStage)}
-      className={cx("h-8 w-32 min-w-0 cursor-pointer rounded-lg border px-2 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:outline-none md:w-full md:flex-1", tint)}
+      className={cx(
+        "h-8 w-32 min-w-0 cursor-pointer rounded-lg border px-2 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:outline-none md:w-full md:flex-1",
+        tint,
+      )}
     >
       {SALES_STAGES.map((s) => (
         <option key={s} value={s}>
@@ -684,7 +1142,9 @@ function LeadForm({
 }) {
   const tr = useT();
   const [state, form] = useKeptForm(saveLead);
-  const [storeType, setStoreType] = useState<StoreType | null>(lead?.storeType ?? null);
+  const [storeType, setStoreType] = useState<StoreType | null>(
+    lead?.storeType ?? null,
+  );
   useEffect(() => {
     if (state?.ok) onDone(state.message);
   }, [state, onDone]);
@@ -693,15 +1153,37 @@ function LeadForm({
     <KeptForm form={form} className="space-y-4">
       {lead && <input type="hidden" name="id" value={lead.id} />}
       <Field label={tr("Business name")}>
-        <input name="name" required defaultValue={lead?.name} autoFocus={!lead} className={inputCls} />
+        <input
+          name="name"
+          required
+          defaultValue={lead?.name}
+          autoFocus={!lead}
+          className={inputCls}
+        />
       </Field>
       <fieldset>
-        <legend className="mb-1.5 text-xs font-medium text-slate-600">{tr("Stage")}</legend>
+        <legend className="mb-1.5 text-xs font-medium text-slate-600">
+          {tr("Stage")}
+        </legend>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {SALES_STAGES.map((s) => (
-            <label key={s} className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 has-[:checked]:font-medium">
-              <input type="radio" name="stage" value={s} defaultChecked={(lead?.stage ?? defaultStage) === s} className="sr-only" />
-              <span className={cx("size-2 shrink-0 rounded-full", STAGE_INFO[s].dot)} />
+            <label
+              key={s}
+              className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 has-[:checked]:font-medium"
+            >
+              <input
+                type="radio"
+                name="stage"
+                value={s}
+                defaultChecked={(lead?.stage ?? defaultStage) === s}
+                className="sr-only"
+              />
+              <span
+                className={cx(
+                  "size-2 shrink-0 rounded-full",
+                  STAGE_INFO[s].dot,
+                )}
+              />
               {tr(STAGE_INFO[s].label)}
             </label>
           ))}
@@ -710,27 +1192,59 @@ function LeadForm({
       <StoreTypePicker value={storeType} onChange={setStoreType} />
       <input type="hidden" name="storeType" value={storeType ?? ""} />
       <Field label={tr("Talk to")}>
-        <input name="contactName" defaultValue={lead?.contactName ?? ""} maxLength={200} placeholder={tr("e.g. Linda (owner)")} className={inputCls} />
+        <input
+          name="contactName"
+          defaultValue={lead?.contactName ?? ""}
+          maxLength={200}
+          placeholder={tr("e.g. Linda (owner)")}
+          className={inputCls}
+        />
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={tr("Phone")}>
-          <input name="phone" type="tel" defaultValue={lead?.phone ?? ""} className={inputCls} />
+          <input
+            name="phone"
+            type="tel"
+            defaultValue={lead?.phone ?? ""}
+            className={inputCls}
+          />
         </Field>
         <Field label={tr("Contact email")}>
-          <input name="email" type="email" defaultValue={lead?.email ?? ""} className={inputCls} />
+          <input
+            name="email"
+            type="email"
+            defaultValue={lead?.email ?? ""}
+            className={inputCls}
+          />
         </Field>
       </div>
       <Field label={tr("Address")}>
-        <AddressInput name="address" defaultValue={lead?.address ?? ""} inputClassName={inputCls} />
+        <AddressInput
+          name="address"
+          defaultValue={lead?.address ?? ""}
+          inputClassName={inputCls}
+        />
       </Field>
       <FormError message={state && !state.ok ? state.error : null} />
-      <SubmitButton className="w-full">{lead ? tr("Save changes") : tr("Add lead")}</SubmitButton>
+      <SubmitButton className="w-full">
+        {lead ? tr("Save changes") : tr("Add lead")}
+      </SubmitButton>
       {lead && !accountOpen(lead) ? (
-        <button type="button" className={btn("secondary", "md", "w-full")} onClick={() => onOpenAccount(lead)}>
+        <button
+          type="button"
+          className={btn("secondary", "md", "w-full")}
+          onClick={() => onOpenAccount(lead)}
+        >
           <Store className="size-4" /> {tr("Signed? Open their account")}
         </button>
       ) : (
-        !lead && <p className="text-center text-xs text-slate-500">{tr("Already signed? Use Open account to set up their login, payment terms and credit.")}</p>
+        !lead && (
+          <p className="text-center text-xs text-slate-500">
+            {tr(
+              "Already signed? Use Open account to set up their login, payment terms and credit.",
+            )}
+          </p>
+        )
       )}
     </KeptForm>
   );

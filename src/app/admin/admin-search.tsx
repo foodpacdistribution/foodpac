@@ -113,16 +113,16 @@ export function AdminSearch({ role, variant }: { role: Role; variant: "sidebar" 
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="mx-3 mb-1 flex h-9 items-center gap-2 rounded-lg bg-white/[0.06] px-2.5 text-sm text-slate-400 ring-1 ring-white/10 transition-colors hover:bg-white/10 hover:text-white"
+          className="mx-3 mb-2 flex h-9 items-center gap-2 rounded-lg bg-white/60 px-2.5 text-sm text-slate-400 ring-1 ring-slate-900/[0.06] transition-colors duration-150 hover:bg-white/85 hover:text-slate-600"
         >
           <Search className="size-4" />
           <span className="flex-1 text-left">{tr("Search…")}</span>
-          <kbd className="rounded bg-white/10 px-1.5 font-sans text-[10px] text-slate-300" suppressHydrationWarning>
+          <kbd className="rounded bg-slate-900/[0.05] px-1.5 font-sans text-[10px] text-slate-500" suppressHydrationWarning>
             {shortcut}
           </kbd>
         </button>
       ) : (
-        <button type="button" onClick={() => setOpen(true)} aria-label={tr("Search")} className="grid size-10 place-items-center rounded-lg text-slate-300 hover:bg-white/10">
+        <button type="button" onClick={() => setOpen(true)} aria-label={tr("Search")} className="grid size-10 place-items-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 active:bg-slate-200/70">
           <Search className="size-5" />
         </button>
       )}
