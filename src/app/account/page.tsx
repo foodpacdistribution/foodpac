@@ -9,6 +9,9 @@ import { NameForm, PasswordForm, ProfileCard } from "@/components/profile-forms"
 import { requireUser } from "@/lib/auth/dal";
 import { homeFor } from "@/lib/auth/session";
 import { T } from "@/components/i18n";
+import { eq } from "drizzle-orm";
+import { getDb } from "@/lib/db";
+import { users } from "@/lib/db/schema";
 
 export const metadata: Metadata = { title: "My profile" };
 
@@ -17,6 +20,7 @@ export default async function AccountPage() {
   const user = await requireUser();
   if (user.role === "customer") redirect("/portal/profile");
   const home = homeFor(user.role);
+  const [{ phone }] = await (await getDb()).select({ phone: users.phone }).from(users).where(eq(users.id, user.id)).limit(1);
   return (
     <div className="min-h-dvh bg-cream text-leaf-950">
       <header className="border-b border-leaf-950/10">
@@ -37,7 +41,7 @@ export default async function AccountPage() {
           </div>
         </div>
         <ProfileCard title={<T>{"Your details"}</T>}>
-          <NameForm name={user.name} email={user.email} />
+          <NameForm name={user.name} email={user.email} phone={phone ?? ""} />
         </ProfileCard>
         <ProfileCard title={<T>{"Password"}</T>}>
           <PasswordForm />

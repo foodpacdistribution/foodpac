@@ -4,10 +4,10 @@
 export const SALES_HOME = "/admin/pipeline";
 
 /**
- * The back-office pages sales staff may open, in the menu: the pipeline, customers, quotes and
- * the customer map. Each page also checks the customer is theirs (or nobody's yet).
+ * The back-office pages sales staff may open, in the menu: the pipeline, customers, quotes, the
+ * customer map and the leave-behind. Each page also checks the customer is theirs (or nobody's yet).
  */
-export const SALES_PAGES = [SALES_HOME, "/admin/customers", "/admin/quotes", "/admin/customer-map"];
+export const SALES_PAGES = [SALES_HOME, "/admin/customers", "/admin/quotes", "/admin/customer-map", "/admin/leave-behind"];
 
 /** Of those, the ones whose pages below are office-only (import, price lists). */
 const EXACT_ONLY = new Set(["/admin/customers"]);

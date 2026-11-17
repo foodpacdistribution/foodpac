@@ -181,6 +181,8 @@ export const users = pgTable("users", {
   id: id(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
+  /** Staff: a number customers can call, printed on the sales leave-behind. */
+  phone: text("phone"),
   passwordHash: text("password_hash").notNull(),
   role: text("role").$type<Role>().notNull(),
   /**

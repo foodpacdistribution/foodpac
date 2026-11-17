@@ -93,7 +93,9 @@ export async function updateMyName(_prev: unknown, form: FormData) {
     const name = String(form.get("name") ?? "").trim().slice(0, 120);
     if (!name) throw new UserError("Enter your name.");
     const db = await getDb();
-    await db.update(users).set({ name }).where(eq(users.id, me.id));
+    // Staff also keep a phone number (the form sends one only for them).
+    const phone = form.has("phone") && me.role !== "customer" ? { phone: String(form.get("phone")).trim().slice(0, 40) || null } : {};
+    await db.update(users).set({ name, ...phone }).where(eq(users.id, me.id));
     revalidatePath("/", "layout");
     return { message: "Saved" };
   });
