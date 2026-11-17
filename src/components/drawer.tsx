@@ -67,7 +67,7 @@ export function Drawer({ open, onClose, label, className, children }: { open: bo
     }
   };
 
-  // Rendered into <body>, not where it's used: a frosted bar around it would otherwise confine it.
+  // Rendered at the root, not where it's used: a frosted bar around it would otherwise confine it.
   // Only in the browser (nothing to show before then, and the server and first render then match).
   const browser = useSyncExternalStore(
     noSubscribe,
@@ -93,7 +93,8 @@ export function Drawer({ open, onClose, label, className, children }: { open: bo
         {children}
       </div>
     </div>,
-    document.body,
+    // Inside the back office's root, so it takes its theme; <body> elsewhere.
+    document.querySelector("[data-app-theme]") ?? document.body,
   );
 }
 

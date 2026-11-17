@@ -6,6 +6,7 @@ import { cookies, headers } from "next/headers";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { isTheme, THEME_COOKIE } from "@/lib/theme";
 import { attempt } from "@/lib/action";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
@@ -99,6 +100,14 @@ export async function updateMyName(_prev: unknown, form: FormData) {
     revalidatePath("/", "layout");
     return { message: "Saved" };
   });
+}
+
+/** Light, dark or follow the device, for the back office. Remembered on this device. */
+export async function setTheme(theme: string) {
+  if (!isTheme(theme)) return;
+  (await cookies()).set(THEME_COOKIE, theme, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+  // Pages already loaded keep the old theme in their cached layout otherwise.
+  revalidatePath("/admin", "layout");
 }
 
 /** English / 中文. Remembered on this device, and on the account when signed in. */
