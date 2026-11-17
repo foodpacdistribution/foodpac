@@ -2,6 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { Metadata } from "next";
 import { PIPELINE, requireUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
+import { listCounts } from "@/lib/customer-list";
 import { users } from "@/lib/db/schema";
 import { isMineToFollow, loadPipeline } from "@/lib/pipeline";
 import { PipelineClient } from "./pipeline-client";
@@ -16,6 +17,7 @@ export default async function PipelinePage() {
     db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.role, ["sales", "admin", "dispatcher"])),
     db.select({ customerId: users.customerId, email: users.email, name: users.name }).from(users).where(eq(users.role, "customer")),
   ]);
+  const lists = await listCounts(db, customers.map((c) => c.id));
   const repName = new Map(reps.map((r) => [r.id, r.name]));
   const loginOf = new Map(logins.map((l) => [l.customerId, { email: l.email, name: l.name }]));
   return (
@@ -35,6 +37,7 @@ export default async function PipelinePage() {
         paymentTerms: c.paymentTerms,
         creditLimitCents: c.creditLimitCents,
         login: loginOf.get(c.id) ?? null,
+        listCount: lists.get(c.id) ?? 0,
         stage: c.stage,
         stageAt: c.stageAt.toISOString(),
         repId: c.repId,

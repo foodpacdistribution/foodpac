@@ -1,7 +1,7 @@
 import "server-only";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { type DB, getDb } from "./db";
-import { customers, quoteItems, quotes, salesOrderItems, salesOrders, users } from "./db/schema";
+import { customers, favourites, quoteItems, quotes, salesOrderItems, salesOrders, users } from "./db/schema";
 import { prettyDate } from "./dates";
 import { esc, itemTable, layout, mailto, note, officeEmail, rows, sendEmail, sendEmailResult, statementTable } from "./email";
 import { accountStatement } from "./invoices";
@@ -183,17 +183,21 @@ export async function accountApproved(customerId: string) {
   const base = emailSiteUrl();
   // A first-order offer from the salesperson who signed them up.
   const offer = c.off && c.min !== null && !c.used ? `Your first order comes with $${(c.off / 100).toFixed(2)} off when it's $${(c.min / 100).toFixed(2)} or more (before GST).` : "";
+  // Products the salesperson put on their list: the email takes them straight there.
+  const [{ n: listed }] = await db.select({ n: sql<number>`count(*)::int` }).from(favourites).where(eq(favourites.customerId, customerId));
+  const list = listed > 0 ? `We've put ${listed === 1 ? "1 product" : `${listed} products`} on your list at your prices. Sign in, check the quantities and order them in one go.` : "";
+  const url = list ? `${base}/portal/list` : `${base}/products`;
   await sendEmail({
     to,
     subject: "Your Foodpac trade account is ready",
     html: layout({
         site: await business(),
-      preview: "Your prices and online ordering are now open.",
+      preview: list || "Your prices and online ordering are now open.",
       heading: `Welcome aboard, ${c.name}`,
-      body: `<p style="margin:0">Your trade account is approved. Sign in to see your prices, order online and choose your delivery day.</p>${offer ? `<p style="margin:12px 0 0"><strong>${offer}</strong></p>` : ""}`,
-      button: { label: "Start ordering", url: `${base}/products` },
+      body: `<p style="margin:0">Your trade account is approved. Sign in to see your prices, order online and choose your delivery day.</p>${list ? `<p style="margin:12px 0 0">${list}</p>` : ""}${offer ? `<p style="margin:12px 0 0"><strong>${offer}</strong></p>` : ""}`,
+      button: { label: list ? "See your list" : "Start ordering", url },
     }),
-    text: `Welcome aboard, ${c.name}.\n\nYour trade account is approved. Sign in to see your prices and order online: ${base}/products${offer ? `\n\n${offer}` : ""}`,
+    text: `Welcome aboard, ${c.name}.\n\nYour trade account is approved. Sign in to see your prices and order online: ${url}${list ? `\n\n${list}` : ""}${offer ? `\n\n${offer}` : ""}`,
   });
 }
 

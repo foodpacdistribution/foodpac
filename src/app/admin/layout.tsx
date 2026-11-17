@@ -13,6 +13,7 @@ import { enquiries, orders, salesOrders } from "@/lib/db/schema";
 import { missedDelivery } from "@/lib/staff-orders";
 import { getSettings } from "@/lib/planning";
 import { dueFollowUpCount } from "@/lib/pipeline";
+import { pendingMatchCount } from "@/lib/price-match";
 import { todayIn } from "@/lib/time";
 import { AdminLive } from "./admin-live";
 import { AdminSearch } from "./admin-search";
@@ -28,7 +29,8 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   // Sidebar badges. They update with the page's live refresh, so new orders show up without reloading.
   // Only badges: one that can't be counted is left off (and logged) rather than failing every page.
   const n = (rows: { n: number }[]) => rows[0]?.n ?? 0;
-  const [newEnquiries, newSales, toShip, followUps] = await Promise.all(
+  const office = user.role !== "sales";
+  const [newEnquiries, newSales, toShip, followUps, priceMatches] = await Promise.all(
     (
       [
         ["enquiries", () => db.select({ n: count() }).from(enquiries).where(eq(enquiries.status, "new")).then(n)],
@@ -61,6 +63,8 @@ export default async function StaffLayout({ children }: { children: React.ReactN
         ],
         // Customers due a follow-up today (reminders set, or gone quiet).
         ["follow-ups", () => dueFollowUpCount(db, user)],
+        // Price matches waiting for the office to approve.
+        ["price-matches", () => (office ? pendingMatchCount(db) : Promise.resolve(0))],
       ] as const
     ).map(([name, run]) =>
       run().catch((err: unknown) => {
@@ -69,7 +73,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       }),
     ),
   );
-  const badges = { "/admin/enquiries": newEnquiries, "/admin/sales": newSales, "/admin/shipments": toShip, "/admin/pipeline": followUps };
+  const badges = { "/admin/enquiries": newEnquiries, "/admin/sales": newSales, "/admin/shipments": toShip, "/admin/pipeline": followUps, "/admin/price-matches": priceMatches };
 
   return (
     <div className="print-plain min-h-dvh lg:pl-60">

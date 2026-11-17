@@ -11,12 +11,15 @@ import Link from "@/components/link";
 import { cx, Spinner } from "@/components/ui";
 import { useT } from "@/components/i18n";
 import { aud } from "@/lib/money";
-import type { CatalogItem } from "@/lib/shop";
+import type { ListedItem } from "@/lib/shop";
 
-/** The list with a quantity per product (starting at its minimum order) and one "add all" button. */
-export function MyList({ items, priced }: { items: CatalogItem[]; priced: boolean }) {
+/**
+ * The list with a quantity per product (the usual quantity their salesperson set, otherwise its
+ * minimum order) and one "add all" button.
+ */
+export function MyList({ items, priced }: { items: ListedItem[]; priced: boolean }) {
   const tr = useT();
-  const [qty, setQty] = useState<Record<string, number>>(() => Object.fromEntries(items.map((p) => [p.id, p.stock > 0 ? p.minQty : 0])));
+  const [qty, setQty] = useState<Record<string, number>>(() => Object.fromEntries(items.map((p) => [p.id, p.stock > 0 ? Math.max(p.listQty ?? 0, p.minQty) : 0])));
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [pending, start] = useTransition();
   const q = (id: string) => qty[id] ?? 0;
@@ -47,9 +50,13 @@ export function MyList({ items, priced }: { items: CatalogItem[]; priced: boolea
                   {priced && p.priceCents !== null && (
                     <>
                       <span className="font-semibold tabular-nums">{aud(p.priceCents)}</span>
+                      {p.listPriceCents !== null && p.priceCents < p.listPriceCents && (
+                        <span className="ml-1 text-xs text-leaf-900/45 tabular-nums line-through">{aud(p.listPriceCents)}</span>
+                      )}
                       <span className="text-leaf-900/55"> / {tr(p.unit)}</span>
                     </>
                   )}
+                  {p.fromRep && <span className="ml-2 rounded-full bg-leaf-50 px-2 py-0.5 text-[11px] font-medium text-leaf-800">{tr("Picked for you")}</span>}
                   <span className={cx("ml-2 text-xs font-medium", out ? "text-red-600" : "text-leaf-700")}>{tr(out ? "Out of stock" : "In stock")}</span>
                 </p>
               </div>

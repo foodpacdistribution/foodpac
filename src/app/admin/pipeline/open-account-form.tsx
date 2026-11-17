@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CheckCircle2, Copy, Dices, Gift, KeyRound, Store, Wallet } from "lucide-react";
+import { Check, CheckCircle2, Copy, Dices, Gift, Heart, KeyRound, Scale, Store, Wallet } from "lucide-react";
 import { useState } from "react";
 import { type OpenedAccount, openCustomerAccount } from "@/app/actions/pipeline";
 import { AddressInput } from "@/components/address-input";
@@ -22,6 +22,8 @@ export type AccountStart = {
   paymentTerms: PaymentTerms;
   creditLimitCents: number | null;
   login: { email: string; name: string } | null;
+  /** Products already on their list (price matched, or added by hand). */
+  listCount?: number;
 };
 
 const TERMS = Object.keys(PAYMENT_TERMS_LABEL) as PaymentTerms[];
@@ -168,6 +170,17 @@ export function OpenAccountForm({ start, onClose }: { start: AccountStart | null
         <p className="text-xs text-slate-500">{tr("Gets them to place a first order. Taken off automatically, online or when you take the order; before GST, up to $500.")}</p>
       </Section>
 
+      <Section icon={Heart} title={tr("Their list")}>
+        {start?.listCount ? (
+          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+            {tr(start.listCount === 1 ? "1 product is on their list." : "{n} products are on their list.", { n: start.listCount })}{" "}
+            {tr("They'll see them at their prices under My list when they sign in, ready to order.")}
+          </p>
+        ) : (
+          <p className="text-xs text-slate-500">{tr("Nothing on their list yet. Next you can add the products they'll order, so it's ready when they first sign in.")}</p>
+        )}
+      </Section>
+
       <FormError message={state && !state.ok ? state.error : null} />
       <SubmitButton className="w-full" pendingText={tr("Opening account…")}>
         <CheckCircle2 className="size-4" /> {tr("Open account")}
@@ -228,6 +241,12 @@ function Opened({ account, terms, onClose }: { account: OpenedAccount; terms: Pa
         </button>
       )}
       <div className="grid grid-cols-2 gap-2">
+        <Link href={`/admin/customers/${account.customerId}/list`} className={btn("secondary")}>
+          <Heart className="size-4" /> {tr("Set up their list")}
+        </Link>
+        <Link href={`/admin/customers/${account.customerId}/price-match`} className={btn("secondary")}>
+          <Scale className="size-4" /> {tr("Price match")}
+        </Link>
         <Link href={`/admin/customers/${account.customerId}`} className={btn("secondary")}>
           {tr("View customer")}
         </Link>
