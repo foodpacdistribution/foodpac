@@ -3,6 +3,7 @@
 import { Clock, Download, Eye, EyeOff, FileUp, ImageIcon, ImageUp, PackagePlus, Pencil, Percent, Phone, Plus, Search, Star, Tag, Trash2 } from "lucide-react";
 import Link from "@/components/link";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { LoadMore, usePaged } from "@/components/load-more";
 import { adjustStock, bulkProducts, deleteProduct, type ProductBulkOp, saveProduct } from "@/app/actions/products";
 import { FormError, Modal, SubmitButton, Toast, type ToastMessage, KeptForm, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
@@ -78,6 +79,8 @@ export function ProductsClient({
         (!s || p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s) || p.barcode?.includes(s)),
     );
   }, [products, deferredQ, filter, category]);
+  // Hundreds of products: drawn a page at a time (both the phone cards and the table).
+  const paged = usePaged(shown, `${deferredQ}|${filter}|${category}`);
   const low = products.filter((p) => p.active && p.stock <= LOW_STOCK).length;
   const hidden = products.filter((p) => !p.active).length;
   const inStock = products.filter((p) => p.stock > 0).length;
@@ -218,7 +221,7 @@ export function ProductsClient({
               <input type="checkbox" checked={allShown} onChange={(e) => setSelected(e.target.checked ? new Set(shown.map((p) => p.id)) : new Set())} />
               {tr("Select all")} ({shown.length})
             </label>
-            {shown.map((p) => (
+            {paged.visible.map((p) => (
               <Card key={p.id} className={cx("p-3", !p.active && "opacity-60", selected.has(p.id) && "ring-2 ring-blue-400")}>
                 <div className="flex gap-3">
                   <input type="checkbox" aria-label={`Select ${p.name}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} className="mt-1" />
@@ -254,6 +257,7 @@ export function ProductsClient({
                 </div>
               </Card>
             ))}
+            <LoadMore remaining={paged.remaining} onMore={paged.more} />
           </div>
 
           {/* Tablets and up: table. */}
@@ -273,7 +277,7 @@ export function ProductsClient({
                 </tr>
               </thead>
               <tbody>
-                {shown.map((p) => (
+                {paged.visible.map((p) => (
                   <tr key={p.id} className={cx("border-b border-line last:border-0", !p.active && "opacity-55", selected.has(p.id) && "bg-blue-50/50")}>
                     <td className="px-3 py-2.5">
                       <input type="checkbox" aria-label={`Select ${p.name}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} />
@@ -326,6 +330,7 @@ export function ProductsClient({
                 ))}
               </tbody>
             </table>
+            <LoadMore remaining={paged.remaining} onMore={paged.more} />
           </Card>
         </>
       )}

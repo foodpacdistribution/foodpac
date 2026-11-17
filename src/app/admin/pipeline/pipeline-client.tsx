@@ -74,6 +74,7 @@ import type { LastVisit } from "@/lib/visit-log";
 import { NOT_NOW_REASONS, OUTCOMES } from "@/lib/visits";
 import Link from "@/components/link";
 import { OpenAccountForm } from "./open-account-form";
+import { LoadMore, usePaged } from "@/components/load-more";
 
 type Lead = {
   id: string;
@@ -272,6 +273,9 @@ export function PipelineClient({
     );
     // tr: the store type is searched in the language on screen.
   }, [rows, stage, mine, q, me.id, tr]);
+  // Hundreds of stores: drawn a page at a time (more as the list scrolls), starting again when the
+  // search or filter changes. A short list is what keeps opening a form or typing quick on a phone.
+  const paged = usePaged(shown, `${q}|${stage}|${mine}`, PAGE);
   // Overdue reminders first, then the longest-quiet customers.
   const toFollow = useMemo(
     () =>
@@ -429,9 +433,14 @@ export function PipelineClient({
             <span />
           </div>
           <ul className="divide-y divide-line">
-            {shown.map((c, i) => (
+            {paged.visible.map((c, i) => (
               <RowTransition key={c.id} animate={i < MAX_ANIMATED_ROWS}>
                 <li
+                  // Rows off screen aren't laid out or painted until scrolled to.
+                  style={{
+                    contentVisibility: "auto",
+                    containIntrinsicSize: "auto 92px",
+                  }}
                   className={cx(
                     "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 bg-white px-4 py-3 transition-colors hover:bg-slate-50/60 md:grid-cols-[minmax(0,1.5fr)_10.5rem_minmax(0,1fr)_minmax(0,0.9fr)_2.5rem]",
                     flash.has(c.id) && "row-flash",
@@ -544,6 +553,7 @@ export function PipelineClient({
               </RowTransition>
             ))}
           </ul>
+          <LoadMore remaining={paged.remaining} onMore={paged.more} />
         </Card>
       )}
 
@@ -619,6 +629,10 @@ export function PipelineClient({
  * list stays quick; the rest simply update.
  */
 const MAX_ANIMATED_ROWS = 40;
+/** Rows drawn at a time, in the list and in the follow-ups. */
+const PAGE = 60;
+const FOLLOW_PAGE = 30;
+
 function RowTransition({
   animate,
   children,
@@ -717,6 +731,8 @@ function FollowUpList({
   onQuietDays: (days: number) => void;
 }) {
   const tr = useT();
+  const [more, setMore] = useState(0);
+  const limit = FOLLOW_PAGE + more;
   const rule = canSetQuiet ? (
     <label className="inline-flex items-center gap-1.5">
       {tr("Remind when a customer hasn't ordered for")}
@@ -767,7 +783,7 @@ function FollowUpList({
         </p>
       ) : (
         <ul className="max-h-[22rem] divide-y divide-line overflow-y-auto">
-          {items.map((c, i) => (
+          {items.slice(0, limit).map((c, i) => (
             <RowTransition key={c.id} animate={i < MAX_ANIMATED_ROWS}>
               <li className="relative flex flex-wrap items-center gap-x-4 gap-y-2 bg-white py-2.5 pr-4 pl-5">
                 <span
@@ -845,6 +861,18 @@ function FollowUpList({
             </RowTransition>
           ))}
         </ul>
+      )}
+      {items.length > limit && (
+        <div className="border-t border-line p-2.5 text-center">
+          <button
+            type="button"
+            className={btn("ghost", "sm")}
+            onClick={() => setMore((m) => m + FOLLOW_PAGE)}
+          >
+            {tr("Show more")}{" "}
+            <span className="opacity-60">({items.length - limit})</span>
+          </button>
+        </div>
       )}
     </Card>
   );

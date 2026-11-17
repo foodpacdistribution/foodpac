@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Skips re-rendering what hasn't changed (a tap that opens a form no longer redraws a long list
+  // behind it), which phones feel most. The code already follows its rules (react-hooks lint).
+  reactCompiler: true,
   // Embedded Postgres (WASM) for local dev must not be bundled.
   serverExternalPackages: ["@electric-sql/pglite"],
   images: {

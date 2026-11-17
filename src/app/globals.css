@@ -428,6 +428,14 @@ dialog[open]::backdrop {
     0 0 0 1px rgb(15 23 42 / 0.05),
     0 1px 3px rgb(15 23 42 / 0.08);
 }
+/* Phones: a smaller blur, which looks nearly the same and costs far less each frame while the
+   page scrolls under the top bar or the menu slides. */
+@media (pointer: coarse) {
+  .glass {
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    backdrop-filter: blur(14px) saturate(160%);
+  }
+}
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass {
     background: #fbfbfc;

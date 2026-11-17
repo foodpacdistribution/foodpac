@@ -4,6 +4,7 @@ import { ArrowLeft, Check, FileText, ImageOff, Search, ShoppingCart, X } from "l
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/client-ui";
+import { LoadMore, usePaged } from "@/components/load-more";
 import { useT } from "@/components/i18n";
 import Link from "@/components/link";
 import { btn, cx, inputCls } from "@/components/ui";
@@ -50,6 +51,8 @@ export function CatalogClient({ store, products }: { store: Store | null; produc
     return products.filter((p) => (!category || p.category === category) && (!s || p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s)));
   }, [products, q, category]);
 
+  // Big photos: a page at a time (more as it scrolls), so the grid stays quick on a phone.
+  const paged = usePaged(shown, `${q}|${category}`, 48);
   const toggle = (id: string) => setPicked((x) => (x.includes(id) ? x.filter((y) => y !== id) : x.length < MAX_PICKED ? [...x, id] : x));
   const query = new URLSearchParams({ ...(store ? { customer: store.id } : {}), add: picked.join(",") }).toString();
   const canSell = !store || store.active;
@@ -97,7 +100,7 @@ export function CatalogClient({ store, products }: { store: Store | null; produc
         <p className="py-16 text-center text-sm text-slate-500">{tr("No products match.")}</p>
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {shown.map((p) => {
+          {paged.visible.map((p) => {
             const on = picked.includes(p.id);
             return (
               <li key={p.id} className={cx("relative overflow-hidden rounded-xl border bg-white transition-shadow duration-150", on ? "border-blue-600 ring-1 ring-blue-600" : "border-line hover:shadow-card")}>
@@ -139,6 +142,7 @@ export function CatalogClient({ store, products }: { store: Store | null; produc
           })}
         </ul>
       )}
+      <LoadMore remaining={paged.remaining} onMore={paged.more} />
 
       {/* Picked products: start a quote or an order with them. */}
       {picked.length > 0 && (
