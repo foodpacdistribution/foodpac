@@ -39,12 +39,19 @@ export async function logVisit(form: FormData) {
       const p = await readUpload(f, "Photo");
       if (p) photos.push(p);
     }
-    const today = todayIn((await getSettings(db)).timezone);
+    // Logged with no signal and sent later: when it happened (within the last fortnight), and a
+    // reminder counted from that day. Otherwise now.
+    const sent = Date.parse(get("at"));
+    const at = Number.isFinite(sent) && sent <= Date.now() + 5 * 60_000 && sent >= Date.now() - 14 * 86_400_000 ? new Date(sent) : new Date();
+    const today = todayIn((await getSettings(db)).timezone, at);
     const followUpOn = get("followUpOn") || null;
+    const clientId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(get("clientId")) ? get("clientId") : undefined;
     const r = await recordVisit(
       db,
       user,
       {
+        id: clientId,
+        at,
         customerId: get("customerId"),
         channel: get("channel") === "call" ? "call" : "visit",
         outcome,

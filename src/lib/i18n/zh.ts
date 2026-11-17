@@ -3073,6 +3073,26 @@ export const ZH: Record<string, string> = {
   "Auto": "跟随系统",
   "Appearance": "外观",
   "Light or dark for the back office on this device. Auto follows the device's own setting. Invoices and other printable sheets stay light.": "本设备上后台使用浅色还是深色。“跟随系统”会随设备自己的设置切换。发票等打印页面始终是浅色。",
+  // Catalogue and visits saved with no signal
+  "Catalogue": "产品目录",
+  "Prices for {name}, ex GST.": "{name} 的价格（不含 GST）。",
+  "List prices, ex GST. Open it from a store's page to see that store's prices.": "标准价（不含 GST）。从店铺页面打开可看到该店的价格。",
+  "What other {type} stores buy comes first.": "其他{type}常买的排在前面。",
+  "Search products or codes": "搜索产品名称或编号",
+  "No products match.": "没有匹配的产品。",
+  "Pick {name}": "选择 {name}",
+  "1 product picked": "已选 1 个产品",
+  "{n} products picked": "已选 {n} 个产品",
+  "Code": "编号",
+  "Remove from picked": "取消选择",
+  "Pick for a quote or order": "选入报价或订单",
+  "Low stock": "库存少",
+  "No signal: saved on this phone. It sends itself when you're back online.": "没信号：已保存在手机上，有信号后会自动发送。",
+  "1 visit waiting to send": "1 条拜访等待发送",
+  "{n} visits waiting to send": "{n} 条拜访等待发送",
+  "1 couldn't be saved": "1 条保存失败",
+  "{n} couldn't be saved": "{n} 条保存失败",
+  "1 visit sent": "已发送 1 条拜访",
 };
 
 /** Messages with a variable part. */
@@ -3263,4 +3283,5 @@ export const ZH_PATTERNS: [RegExp, string][] = [
   [new RegExp("^Visit saved: (.+) · Won$"), "已记录拜访：$1 · 已成交"],
   [new RegExp("^Visit saved: (.+) · Not now$"), "已记录拜访：$1 · 暂不合作"],
   [new RegExp("^Visit saved: (.+)$"), "已记录拜访：$1"],
+  [new RegExp("^(\\d+) visits sent$"), "已发送 $1 条拜访"],
 ];

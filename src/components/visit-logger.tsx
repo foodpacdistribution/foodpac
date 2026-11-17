@@ -3,6 +3,7 @@
 import { Ban, Camera, Check, DoorClosed, Hourglass, LoaderCircle, MapPin, Package, Phone, ShoppingCart, Store, ThumbsUp, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { logVisit } from "@/app/actions/visits";
+import { isOffline, queueVisit, visitForm } from "@/lib/visit-queue";
 import { FormError, Modal } from "@/components/client-ui";
 import { useT } from "@/components/i18n";
 import { btn, cx, Field, inputCls } from "@/components/ui";
@@ -149,21 +150,15 @@ export function useVisitLogger({
 
   const save = (d: Draft) => {
     if (!d.outcome) return setError("Choose how it went.");
-    if (d.outcome === "not_now" && !d.reason)
-      return setError("Choose why they said no.");
+    if (d.outcome === "not_now" && !d.reason) return setError("Choose why they said no.");
     const outcome = d.outcome;
-    // Close straight away; the form comes back if it doesn't go through.
+    // Its own id (a resend is kept once) and when it happened (it may be sent later).
+    const clientId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    // Close straight away; the form comes back only if the server turns it down.
     setDraft(null);
     setError(null);
-    onSaved?.({
-      customerId: d.target.id,
-      outcome,
-      channel: d.channel,
-      note: d.note,
-      stage: stageAfter(outcome, d.target.stage),
-      followUpOn: d.followUpOn,
-      at: new Date().toISOString(),
-    });
+    onSaved?.({ customerId: d.target.id, outcome, channel: d.channel, note: d.note, stage: stageAfter(outcome, d.target.stage), followUpOn: d.followUpOn, at });
     start(async () => {
       const failed = (message: string) => {
         onFailed?.(d.target.id);
@@ -173,29 +168,35 @@ export function useVisitLogger({
         setError(message);
         setDraft(d);
       };
-      try {
-        const fd = new FormData();
-        fd.set("customerId", d.target.id);
-        fd.set("channel", d.channel);
-        fd.set("outcome", outcome);
-        fd.set("note", d.note);
-        if (d.reason) fd.set("reason", d.reason);
-        if (d.storeType) fd.set("storeType", d.storeType);
-        if (d.followUpOn) fd.set("followUpOn", d.followUpOn);
-        if (d.channel === "visit" && typeof d.where === "object") {
-          fd.set("lat", String(d.where.lat));
-          fd.set("lng", String(d.where.lng));
+      const fields: Record<string, string> = { clientId, at, customerId: d.target.id, channel: d.channel, outcome, note: d.note };
+      if (d.reason) fields.reason = d.reason;
+      if (d.storeType) fields.storeType = d.storeType;
+      if (d.followUpOn) fields.followUpOn = d.followUpOn;
+      if (d.channel === "visit" && typeof d.where === "object") {
+        fields.lat = String(d.where.lat);
+        fields.lng = String(d.where.lng);
+      }
+      const photos = await Promise.all(d.photos.map((p) => p.ready));
+      const done = () => d.photos.forEach((p) => URL.revokeObjectURL(p.url));
+      // No signal: keep it on the phone; it sends itself when the signal is back.
+      const keep = async () => {
+        try {
+          await queueVisit({ id: clientId, name: d.target.name, fields, photos });
+          done();
+          say({ ok: true, message: "No signal: saved on this phone. It sends itself when you're back online." });
+        } catch {
+          failed("Couldn't send it: no connection? Nothing is lost, tap Save again.");
         }
-        for (const f of await Promise.all(d.photos.map((p) => p.ready)))
-          fd.append("photo", f);
-        const r = await logVisit(fd);
+      };
+      if (!navigator.onLine) return keep();
+      try {
+        const r = await logVisit(visitForm(fields, photos));
         if (!r.ok) return failed(r.error);
-        d.photos.forEach((p) => URL.revokeObjectURL(p.url));
+        done();
         say(r);
-      } catch {
-        failed(
-          "Couldn't send it: no connection? Nothing is lost, tap Save again.",
-        );
+      } catch (err) {
+        if (isOffline(err)) return keep();
+        failed("Couldn't send it: no connection? Nothing is lost, tap Save again.");
       }
     });
   };

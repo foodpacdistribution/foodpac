@@ -114,6 +114,38 @@ describe("logging a visit", () => {
   });
 });
 
+describe("visits logged with no signal and sent later", () => {
+  it("are kept once when sent twice", async () => {
+    const clientId = "0b0e5a4e-1c1a-4a52-9e0e-8d1f3c2b7a11";
+    const first = await visit({ customerId: nobodys, outcome: "interested", clientId }, 1);
+    const again = await visit({ customerId: nobodys, outcome: "interested", clientId }, 1);
+    expect(first).toMatchObject({ ok: true });
+    expect(again).toMatchObject({ ok: true });
+    expect(await state.db.select().from(customerVisits).where(eq(customerVisits.id, clientId))).toHaveLength(1);
+    expect(await state.db.select().from(customerVisitPhotos).where(eq(customerVisitPhotos.visitId, clientId))).toHaveLength(1);
+  });
+
+  it("keep when they happened, and their reminder counts from that day", async () => {
+    const clientId = "5c7d9e1f-2a3b-4c5d-8e9f-0a1b2c3d4e5f";
+    const at = new Date(Date.now() - 3 * 86_400_000);
+    const visitDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Brisbane" }).format(at);
+    // Two days after the visit: already past today, but fine for a visit three days ago.
+    const r = await visit({ customerId: nobodys, outcome: "samples", clientId, at: at.toISOString(), followUpOn: shiftDate(visitDay, 2) });
+    expect(r).toMatchObject({ ok: true });
+    const [v] = await state.db.select().from(customerVisits).where(eq(customerVisits.id, clientId));
+    expect(Math.abs(v.createdAt.getTime() - at.getTime())).toBeLessThan(1000);
+    // A later visit already counted as the last contact: a late one doesn't move it back.
+    expect((await customer(nobodys)).contactedAt!.getTime()).toBeGreaterThan(at.getTime());
+  });
+
+  it("can't claim a time far in the past or in the future", async () => {
+    const clientId = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
+    await visit({ customerId: nobodys, outcome: "not_in", clientId, at: new Date(Date.now() - 60 * 86_400_000).toISOString() });
+    const [v] = await state.db.select().from(customerVisits).where(eq(customerVisits.id, clientId));
+    expect(Date.now() - v.createdAt.getTime()).toBeLessThan(60_000);
+  });
+});
+
 describe("the store's kind", () => {
   it("is saved with a visit when the form asked for it, and left alone otherwise", async () => {
     await visit({ customerId: mine, outcome: "interested", storeType: "bubble_tea" });

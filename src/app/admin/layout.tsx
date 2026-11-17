@@ -21,6 +21,7 @@ import { SideNav } from "./side-nav";
 import { T } from "@/components/i18n";
 import { RoleSwitch } from "@/components/role-switch";
 import { ThemeSwitch } from "@/components/theme-switch";
+import { VisitQueueStatus } from "@/components/visit-queue-status";
 import { cookies } from "next/headers";
 import { isTheme, THEME_COOKIE } from "@/lib/theme";
 
@@ -149,6 +150,8 @@ export default async function StaffLayout({ children }: { children: React.ReactN
 
       <main className="print-plain mx-auto w-full max-w-[1600px] p-4 sm:p-6">{children}</main>
       <AdminLive />
+      {/* Visits saved with no signal: sent when it's back, shown while they wait. */}
+      <VisitQueueStatus />
     </div>
   );
 }
