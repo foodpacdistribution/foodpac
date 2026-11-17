@@ -12,6 +12,7 @@ import { Badge, btn, Card, CardHeader, cx, Field, inputCls } from "@/components/
 import type { PaymentMethod, PaymentTerms } from "@/lib/db/schema";
 import { aud, PAYMENT_TERMS_LABEL } from "@/lib/money";
 import { defaultDeliveryFee, orderTotals, waitingFor } from "@/lib/order-totals";
+import { cartonSize, formatCartons } from "@/lib/stock-units";
 import { minutesToInput } from "@/lib/time";
 
 export type FormCustomer = {
@@ -28,7 +29,9 @@ export type FormCustomer = {
 };
 export type FormProduct = { id: string; sku: string; name: string; packSize: string; unit: string; priceCents: number; gst: boolean; stock: number; minQty: number; active: boolean; waiting: number };
 
-type Line = { key: string; productId: string; qty: string; price: string; priceTouched: boolean };
+/** `by: "carton"`: the quantity is whole cartons and the price is per carton. */
+type SellBy = "unit" | "carton";
+type Line = { key: string; productId: string; qty: string; price: string; priceTouched: boolean; by: SellBy };
 
 export type OrderFormProps = {
   mode: "new" | "edit";
@@ -45,7 +48,7 @@ export type OrderFormProps = {
   /** New order: replacement goods for this customer return (its credit is used). */
   exchangeReturnId?: string;
   /** New order: made from this accepted quote (its customer, lines, prices and delivery fee). */
-  quote?: { id: string; number: string; customerId: string; deliveryFeeCents: number; lines: { productId: string; qty: number; unitPriceCents: number }[] };
+  quote?: { id: string; number: string; customerId: string; deliveryFeeCents: number; lines: { productId: string; qty: number; unitPriceCents: number; by?: SellBy }[] };
   fees: { deliveryFeeCents: number; freeDeliveryOverCents: number };
   today: string;
   idempotencyKey?: string;
@@ -63,7 +66,7 @@ export type OrderFormProps = {
     windowEndMin: number | null;
     notes: string | null;
     deliveryFeeCents: number;
-    lines: { productId: string; qty: number; unitPriceCents: number }[];
+    lines: { productId: string; qty: number; unitPriceCents: number; by?: SellBy }[];
     reserved: Record<string, number>;
   };
   defaultDate: string;
@@ -90,16 +93,22 @@ export function OrderForm(p: OrderFormProps) {
   const [customerId, setCustomerId] = useState(o?.customerId ?? start0?.id ?? "");
   const customer = p.customers.find((c) => c.id === customerId) ?? null;
   const priceFor = (cid: string, productId: string) => p.prices[cid]?.[productId] ?? p.products.find((x) => x.id === productId)?.priceCents ?? 0;
+  /** A carton costs the customer's unit price times the units in it (staff can change it on the line). */
+  const linePrice = (cid: string, productId: string, by: SellBy) => {
+    const fp = p.products.find((x) => x.id === productId);
+    const per = by === "carton" && fp ? cartonSize(fp.packSize, fp.unit) : null;
+    return priceFor(cid, productId) * (per ?? 1);
+  };
 
   const [lines, setLines] = useState<Line[]>(
     () =>
       (o ?? fromQuote)?.lines
         .filter((l) => p.products.some((x) => x.id === l.productId))
-        .map((l) => ({ key: nextKey(), productId: l.productId, qty: String(l.qty), price: dollars(l.unitPriceCents), priceTouched: true })) ??
+        .map((l) => ({ key: nextKey(), productId: l.productId, qty: String(l.qty), price: dollars(l.unitPriceCents), priceTouched: true, by: l.by ?? "unit" })) ??
       (p.startProducts ?? [])
         .map((id) => p.products.find((x) => x.id === id))
         .filter((x) => x !== undefined)
-        .map((x) => ({ key: nextKey(), productId: x.id, qty: String(Math.max(1, x.minQty)), price: dollars(priceFor(start0?.id ?? "", x.id)), priceTouched: false })),
+        .map((x) => ({ key: nextKey(), productId: x.id, qty: String(Math.max(1, x.minQty)), price: dollars(priceFor(start0?.id ?? "", x.id)), priceTouched: false, by: "unit" as const })),
   );
   const [delivery, setDelivery] = useState({
     deliveryDate: o?.deliveryDate ?? p.defaultDate,
@@ -121,7 +130,14 @@ export function OrderForm(p: OrderFormProps) {
   const [pending, start] = useTransition();
 
   const product = (id: string) => p.products.find((x) => x.id === id)!;
-  const parsed = lines.map((l) => ({ ...l, p: product(l.productId), q: Math.max(0, Math.round(Number(l.qty) || 0)), cents: toCents(l.price) }));
+  const parsed = lines.map((l) => {
+    const lp = product(l.productId);
+    const q = Math.max(0, Math.round(Number(l.qty) || 0));
+    const per = cartonSize(lp.packSize, lp.unit);
+    const byCarton = l.by === "carton" && per !== null;
+    // Stock is kept in units: a carton line takes `per` units for each carton.
+    return { ...l, p: lp, q, per, byCarton, units: byCarton ? q * per : q, cents: toCents(l.price) };
+  });
   const subtotal = parsed.reduce((t, l) => t + l.q * (l.cents ?? 0), 0);
   const autoFee = defaultDeliveryFee(subtotal, p.fees);
   const feeCents = fee === null ? autoFee : (toCents(fee) ?? 0);
@@ -132,7 +148,7 @@ export function OrderForm(p: OrderFormProps) {
   const creditAvailable = p.mode === "new" && customerId ? (p.credits[customerId] ?? 0) : 0;
   const creditMax = Math.min(creditAvailable, totals.totalCents);
   const creditCents = useCredit && creditMax > 0 ? Math.min(creditMax, creditInput === null ? creditMax : (toCents(creditInput) ?? 0)) : 0;
-  const waitingLines = parsed.filter((l) => waitingFor(l.q, l.p.stock + (o?.reserved[l.productId] ?? 0)) > 0);
+  const waitingLines = parsed.filter((l) => waitingFor(l.units, l.p.stock + (o?.reserved[l.productId] ?? 0)) > 0);
 
   const pickCustomer = (c: FormCustomer) => {
     setCustomerId(c.id);
@@ -141,16 +157,24 @@ export function OrderForm(p: OrderFormProps) {
     setMethod(c.paymentTerms === "prepay" ? "bank_transfer" : "invoice");
     setEmailCustomer(!!c.email);
     // Lines not priced by hand follow the new customer's prices.
-    setLines((ls) => ls.map((l) => (l.priceTouched ? l : { ...l, price: dollars(priceFor(c.id, l.productId)) })));
+    setLines((ls) => ls.map((l) => (l.priceTouched ? l : { ...l, price: dollars(linePrice(c.id, l.productId, l.by)) })));
   };
   const addProduct = (fp: FormProduct) => {
     setLines((ls) => {
       const have = ls.find((l) => l.productId === fp.id);
       if (have) return ls.map((l) => (l === have ? { ...l, qty: String((Number(l.qty) || 0) + Math.max(1, fp.minQty)) } : l));
-      return [...ls, { key: nextKey(), productId: fp.id, qty: String(Math.max(1, fp.minQty)), price: dollars(priceFor(customerId, fp.id)), priceTouched: false }];
+      return [...ls, { key: nextKey(), productId: fp.id, qty: String(Math.max(1, fp.minQty)), price: dollars(priceFor(customerId, fp.id)), priceTouched: false, by: "unit" }];
     });
   };
   const setLine = (key: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  /** Switches a line between units and whole cartons, keeping about the same amount of goods and the same price per unit. */
+  const sellBy = (l: (typeof parsed)[number], by: SellBy) => {
+    if (by === l.by || !l.per) return;
+    const per = l.per;
+    const qty = by === "carton" ? Math.max(1, Math.round(l.q / per)) : l.q * per;
+    const price = !l.priceTouched || l.cents === null ? linePrice(customerId, l.productId, by) : by === "carton" ? l.cents * per : Math.round(l.cents / per);
+    setLine(l.key, { by, qty: String(qty), price: dollars(price) });
+  };
 
   const submit = () => {
     setError(null);
@@ -162,7 +186,7 @@ export function OrderForm(p: OrderFormProps) {
       method,
       ...delivery,
       deliveryFee: dollars(feeCents),
-      lines: parsed.map((l) => ({ productId: l.productId, qty: l.q, unitPrice: l.price })),
+      lines: parsed.map((l) => ({ productId: l.productId, qty: l.q, unitPrice: l.price, by: l.byCarton ? ("carton" as const) : ("unit" as const) })),
       emailCustomer: p.mode === "new" && emailCustomer,
       idempotencyKey: p.idempotencyKey ?? "",
       creditCents,
@@ -233,9 +257,11 @@ export function OrderForm(p: OrderFormProps) {
               <ul className="divide-y divide-line border-t border-line">
                 {parsed.map((l) => {
                   const avail = l.p.stock + (o?.reserved[l.productId] ?? 0);
-                  const wait = waitingFor(l.q, avail);
+                  const wait = waitingFor(l.units, avail);
+                  // Counts in cartons and packs on a carton line, so they read the same way as the quantity.
+                  const n = (units: number) => (l.byCarton ? formatCartons(units, l.per) : units);
                   return (
-                    <li key={l.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_8.5rem_6.5rem_5.5rem_2rem]">
+                    <li key={l.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_8.5rem_7.5rem_5.5rem_2rem]">
                       <div className="col-span-2 min-w-0 sm:col-span-1">
                         <p className="truncate text-sm font-medium text-slate-900">
                           {l.p.name}
@@ -244,13 +270,29 @@ export function OrderForm(p: OrderFormProps) {
                         <p className="text-xs text-slate-500">
                           {l.p.sku} · {l.p.packSize || l.p.unit}
                         </p>
+                        {l.per && (
+                          <div role="radiogroup" aria-label={tr("Order by")} className="mt-1.5 inline-flex rounded-lg border border-line bg-white p-0.5 text-xs">
+                            {(["unit", "carton"] as const).map((by) => (
+                              <button
+                                key={by}
+                                type="button"
+                                role="radio"
+                                aria-checked={l.by === by}
+                                onClick={() => sellBy(l, by)}
+                                className={cx("rounded-md px-2.5 py-1", l.by === by ? "bg-blue-600 font-medium text-white" : "text-slate-600 hover:bg-slate-50")}
+                              >
+                                {by === "unit" ? tr("By the {unit}", { unit: tr(l.p.unit) }) : tr("By the carton ({n})", { n: l.per! })}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <p className={cx("mt-0.5 flex items-center gap-1 text-xs", wait ? (avail <= 0 ? "text-red-600" : "text-amber-700") : "text-slate-500")}>
                           {wait > 0 && <AlertTriangle className="size-3 shrink-0" />}
                           {wait === 0
-                            ? tr("{n} in stock", { n: avail })
+                            ? tr("{n} in stock", { n: n(avail) })
                             : avail <= 0
-                              ? tr("Out of stock: all {n} will wait for stock", { n: wait })
-                              : tr("{a} in stock: {n} will wait for stock", { a: avail, n: wait })}
+                              ? tr("Out of stock: all {n} will wait for stock", { n: n(wait) })
+                              : tr("{a} in stock: {n} will wait for stock", { a: n(avail), n: n(wait) })}
                           {l.p.waiting > 0 && <span className="text-slate-400"> · {tr("{n} already waiting", { n: l.p.waiting })}</span>}
                         </p>
                       </div>
@@ -270,14 +312,15 @@ export function OrderForm(p: OrderFormProps) {
                         </button>
                       </div>
                       <label className="relative">
-                        <span className="sr-only">{tr("Unit price")}</span>
+                        <span className="sr-only">{l.byCarton ? tr("Price per carton") : tr("Unit price")}</span>
                         <span className="pointer-events-none absolute top-2 left-2.5 text-sm text-slate-400">$</span>
                         <input
                           inputMode="decimal"
                           value={l.price}
                           onChange={(e) => setLine(l.key, { price: e.target.value, priceTouched: true })}
-                          className={cx(inputCls, "pl-6 text-right tabular-nums", l.cents === null && "border-red-400")}
+                          className={cx(inputCls, "pl-6 text-right tabular-nums", l.byCarton && "pr-8", l.cents === null && "border-red-400")}
                         />
+                        {l.byCarton && <span className="pointer-events-none absolute top-2 right-2 text-xs text-slate-400">/{tr("ctn")}</span>}
                       </label>
                       <p className="text-right text-sm font-medium tabular-nums text-slate-900 max-sm:col-start-1 max-sm:text-left">{aud(l.q * (l.cents ?? 0))}</p>
                       <button type="button" aria-label={tr("Remove")} className={btn("ghost", "icon", "text-slate-400 hover:text-red-600")} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>

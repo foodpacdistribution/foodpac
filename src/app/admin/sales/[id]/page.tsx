@@ -22,6 +22,7 @@ import { formatMinutesClock, todayIn } from "@/lib/time";
 import { InvoiceActions } from "./invoice-actions";
 import { ApplyCredit, MoveDay, SaleActions } from "./sale-actions";
 import { T, Tx } from "@/components/i18n";
+import { asSold } from "@/lib/stock-units";
 
 export const metadata: Metadata = { title: "Sales Order" };
 
@@ -137,30 +138,38 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
           />
           <table className="w-full text-sm">
             <tbody>
-              {items.map((it) => (
-                <tr key={it.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-2.5">
-                    <p className="font-medium text-slate-900">{it.name}</p>
-                    <p className="text-xs text-slate-500">
-                      {[it.sku, it.packSize].filter(Boolean).join(" · ")}
-                    </p>
-                    {it.backorderQty > 0 && so.status !== "cancelled" && (
-                      <p className="mt-1">
-                        <Badge tone="red">
-                          {it.backorderQty === it.qty ? <T>{"Waiting for stock"}</T> : <T vars={{ n: it.backorderQty }}>{"{n} waiting for stock"}</T>}
-                        </Badge>
+              {items.map((it) => {
+                const sold = asSold(it);
+                return (
+                  <tr key={it.id} className="border-b border-line last:border-0">
+                    <td className="px-4 py-2.5">
+                      <p className="font-medium text-slate-900">{it.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {[it.sku, it.packSize].filter(Boolean).join(" · ")}
                       </p>
-                    )}
-                  </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums">
-                    {it.qty} {it.unit}
-                    <span className="block text-xs text-slate-400 sm:hidden">@ {aud(it.unitPriceCents)}</span>
-                  </td>
-                  {/* Phones: the unit price sits under the quantity, leaving room for the name. */}
-                  <td className="hidden px-2 py-2.5 text-right tabular-nums text-slate-500 sm:table-cell">{aud(it.unitPriceCents)}</td>
-                  <td className="px-4 py-2.5 text-right font-medium tabular-nums">{aud(it.lineCents)}</td>
-                </tr>
-              ))}
+                      {it.backorderQty > 0 && so.status !== "cancelled" && (
+                        <p className="mt-1">
+                          <Badge tone="red">
+                            {it.backorderQty === it.qty ? <T>{"Waiting for stock"}</T> : <T vars={{ n: it.backorderQty }}>{"{n} waiting for stock"}</T>}
+                          </Badge>
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-2 py-2.5 text-right tabular-nums">
+                      {sold.qty} <Tx>{sold.unit}</Tx>
+                      {sold.units !== null && (
+                        <span className="block text-xs text-slate-400">
+                          {sold.units} <Tx>{it.unit}</Tx>
+                        </span>
+                      )}
+                      <span className="block text-xs text-slate-400 sm:hidden">@ {aud(sold.priceCents)}</span>
+                    </td>
+                    {/* Phones: the unit price sits under the quantity, leaving room for the name. */}
+                    <td className="hidden px-2 py-2.5 text-right tabular-nums text-slate-500 sm:table-cell">{aud(sold.priceCents)}</td>
+                    <td className="px-4 py-2.5 text-right font-medium tabular-nums">{aud(it.lineCents)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <dl className="space-y-1 border-t border-line px-4 py-3 text-sm">

@@ -3,6 +3,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { type DB, getDb } from "./db";
 import { customers, favourites, quoteItems, quotes, salesOrderItems, salesOrders, users } from "./db/schema";
 import { prettyDate } from "./dates";
+import { asSold } from "./stock-units";
 import { esc, itemTable, layout, mailto, note, officeEmail, rows, sendEmail, sendEmailResult, statementTable } from "./email";
 import { accountStatement } from "./invoices";
 import { aud, PAYMENT_METHOD_LABEL } from "./money";
@@ -10,6 +11,26 @@ import { getSettings } from "./planning";
 import { SITE, siteInfo } from "@/app/(site)/site-info";
 import { emailSiteUrl } from "./site-url";
 import { formatMinutesClock, todayIn } from "./time";
+
+type SoldItem = Parameters<typeof asSold>[0] & { name: string; sku: string; packSize: string; lineCents: number };
+
+/** "2 carton (16 packet)" for a line ordered by the carton, otherwise just the number. */
+const soldQty = (it: SoldItem) => {
+  const sold = asSold(it);
+  return sold.units === null ? String(sold.qty) : `${sold.qty} carton (${sold.units} ${sold.packUnit})`;
+};
+
+/** An order line for the email table: cartons at the carton price for lines ordered by the carton. */
+const emailLine = (it: SoldItem) => {
+  const sold = asSold(it);
+  return {
+    name: it.name,
+    detail: [it.sku, it.packSize, sold.units !== null && `by the carton, ${sold.units} ${sold.packUnit}`].filter(Boolean).join(" · "),
+    qty: sold.qty,
+    price: sold.units === null ? aud(sold.priceCents) : `${aud(sold.priceCents)} / ctn`,
+    total: aud(it.lineCents),
+  };
+};
 
 // The emails the app sends, each built from the database at the moment it goes out.
 // All are called after the response (next/server `after`), so they never slow a page down,
@@ -59,7 +80,7 @@ export async function orderConfirmed(salesOrderId: string, opts: { office: boole
   const window =
     so.windowStartMin !== null || so.windowEndMin !== null ? ` · ${formatMinutesClock(so.windowStartMin)}–${formatMinutesClock(so.windowEndMin)}` : "";
   const lines =
-    itemTable(items.map((it) => ({ name: it.name, detail: `${it.sku} · ${it.packSize}`, qty: it.qty, price: aud(it.unitPriceCents), total: aud(it.lineCents) }))) +
+    itemTable(items.map(emailLine)) +
     rows([
       ["Subtotal (ex GST)", aud(so.subtotalCents)],
       ["Delivery", so.deliveryFeeCents ? aud(so.deliveryFeeCents) : "Free"],
@@ -78,7 +99,7 @@ export async function orderConfirmed(salesOrderId: string, opts: { office: boole
     `Order ${so.number}`,
     `Delivery: ${prettyDate(so.deliveryDate, { weekday: "long", day: "numeric", month: "long" })}${window}`,
     `Deliver to: ${so.recipient}, ${so.address}`,
-    ...items.map((it) => `${it.qty} × ${it.name} (${it.sku}) ${aud(it.lineCents)}`),
+    ...items.map((it) => `${soldQty(it)} × ${it.name} (${it.sku}) ${aud(it.lineCents)}`),
     `Total ${aud(so.totalCents)} incl. GST`,
   ].join("\n");
 
@@ -285,7 +306,7 @@ export async function sendInvoice(db: DB, salesOrderId: string): Promise<{ sent:
     ["Delivery", `${esc(prettyDate(so.deliveryDate, { weekday: "short", day: "numeric", month: "short" }))} · ${esc(so.address)}`],
   ]);
   const lines =
-    itemTable(items.map((it) => ({ name: it.name, detail: `${it.sku} · ${it.packSize}`, qty: it.qty, price: aud(it.unitPriceCents), total: aud(it.lineCents) }))) +
+    itemTable(items.map(emailLine)) +
     rows([
       ["Subtotal (ex GST)", aud(so.subtotalCents)],
       ["Delivery", so.deliveryFeeCents ? aud(so.deliveryFeeCents) : "Free"],
@@ -319,7 +340,7 @@ ${statementTable(
     `Tax invoice ${so.number} from ${site.name}`,
     `Issued ${day(so.invoicedAt)}${paid ? " · Paid" : ` · Due ${due(so.dueDate)}`}`,
     "",
-    ...items.map((it) => `${it.qty} × ${it.name} (${it.sku}) ${aud(it.lineCents)}`),
+    ...items.map((it) => `${soldQty(it)} × ${it.name} (${it.sku}) ${aud(it.lineCents)}`),
     ...(so.deliveryFeeCents ? [`Delivery ${aud(so.deliveryFeeCents)}`] : []),
     `GST ${aud(so.gstCents)}`,
     `Total ${aud(so.totalCents)} incl. GST`,

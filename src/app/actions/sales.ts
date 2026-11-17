@@ -249,7 +249,8 @@ export type StaffOrderPayload = {
   windowEnd: string;
   notes: string;
   deliveryFee: string;
-  lines: { productId: string; qty: number; unitPrice: string }[];
+  /** `qty` and `unitPrice` are per carton for lines ordered `by: "carton"`. */
+  lines: { productId: string; qty: number; unitPrice: string; by?: "unit" | "carton" }[];
   emailCustomer: boolean;
   idempotencyKey: string;
   /** New orders: store credit to put towards it, in cents. */
@@ -277,7 +278,7 @@ function parsePayload(p: StaffOrderPayload) {
     windowEndMin: inputToMinutes(text(p.windowEnd, 10)),
     notes: text(p.notes, 1000),
     deliveryFeeCents: cents(p.deliveryFee, "Delivery fee"),
-    lines: (Array.isArray(p.lines) ? p.lines : []).slice(0, 300).map((l) => ({ productId: String(l.productId), qty: Math.round(Number(l.qty)), unitPriceCents: cents(l.unitPrice, "Price") })),
+    lines: (Array.isArray(p.lines) ? p.lines : []).slice(0, 300).map((l) => ({ productId: String(l.productId), qty: Math.round(Number(l.qty)), unitPriceCents: cents(l.unitPrice, "Price"), by: l.by === "carton" ? ("carton" as const) : ("unit" as const) })),
   };
 }
 

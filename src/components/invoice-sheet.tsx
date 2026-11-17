@@ -2,6 +2,7 @@ import type { SiteInfo } from "@/app/(site)/site-info";
 import { prettyDate } from "@/lib/dates";
 import type { customers, salesOrderItems, salesOrders } from "@/lib/db/schema";
 import { aud, PAYMENT_METHOD_LABEL, PAYMENT_STATUS } from "@/lib/money";
+import { asSold } from "@/lib/stock-units";
 import { Logo } from "./brand";
 import { PrintButton } from "./print-button";
 
@@ -125,6 +126,7 @@ export function InvoiceSheet({
             <tbody>
               {items.map((it) => {
                 const img = it.productId ? images[it.productId] : undefined;
+                const sold = asSold(it);
                 return (
                   <tr key={it.id} className="border-b border-leaf-950/8 align-middle">
                     {hasPhotos && (
@@ -147,9 +149,18 @@ export function InvoiceSheet({
                       </p>
                     </td>
                     <td className="py-2.5 pl-2 text-right whitespace-nowrap tabular-nums">
-                      {it.qty} <span className="text-leaf-900/55">{it.unit}</span>
+                      {sold.qty} <span className="text-leaf-900/55">{sold.unit}</span>
+                      {/* A carton line also says how many units that is. */}
+                      {sold.units !== null && (
+                        <span className="block text-[11px] text-leaf-900/50">
+                          {sold.units} {sold.packUnit}
+                        </span>
+                      )}
                     </td>
-                    <td className="py-2.5 pl-2 text-right whitespace-nowrap tabular-nums">{aud(it.unitPriceCents)}</td>
+                    <td className="py-2.5 pl-2 text-right whitespace-nowrap tabular-nums">
+                      {aud(sold.priceCents)}
+                      {sold.units !== null && <span className="block text-[11px] text-leaf-900/50">per carton</span>}
+                    </td>
                     <td className="py-2.5 pr-3 pl-2 text-right font-medium whitespace-nowrap tabular-nums">{aud(it.lineCents)}</td>
                   </tr>
                 );

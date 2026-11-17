@@ -810,6 +810,13 @@ export const salesOrderItems = pgTable(
     gst: boolean("gst").notNull(),
     lineCents: integer("line_cents").notNull(),
     /**
+     * Ordered by the whole carton: this many units (packs) to a carton, and the price of one
+     * carton. `qty` stays in units (a multiple of this) and `unitPriceCents` is the carton price
+     * shared out per unit; `lineCents` is cartons × carton price. Null = ordered by the unit.
+     */
+    perCarton: integer("per_carton"),
+    cartonPriceCents: integer("carton_price_cents"),
+    /**
      * Ordered by staff while short: this many of `qty` are still waiting for stock (the rest is
      * reserved). Goods received go to waiting lines first, oldest order first.
      */

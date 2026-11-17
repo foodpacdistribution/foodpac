@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCartons, parseCount, perCarton } from "./stock-units";
+import { asSold, cartonSize, formatCartons, parseCount, perCarton } from "./stock-units";
 
 describe("cartons and packs", () => {
   it("reads the carton size from the pack size", () => {
@@ -34,5 +34,19 @@ describe("cartons and packs", () => {
     expect(parseCount("2ctn", null, "bottle").ok).toBe(false);
     expect(parseCount("lots", 10, "packet").ok).toBe(false);
     expect(parseCount("", 10, "packet").ok).toBe(false);
+  });
+});
+
+describe("ordering by the carton", () => {
+  it("only offers cartons for products sold by the pack with a carton size", () => {
+    expect(cartonSize("8 packets / carton", "packet")).toBe(8);
+    expect(cartonSize("200 pcs / carton", "carton")).toBeNull();
+    expect(cartonSize("", "packet")).toBeNull();
+  });
+
+  it("shows a carton line as cartons at the carton price", () => {
+    const line = { qty: 16, unit: "packet", unitPriceCents: 625, perCarton: 8, cartonPriceCents: 4999 };
+    expect(asSold(line)).toEqual({ qty: 2, unit: "carton", priceCents: 4999, units: 16, packUnit: "packet" });
+    expect(asSold({ ...line, perCarton: null, cartonPriceCents: null })).toEqual({ qty: 16, unit: "packet", priceCents: 625, units: null, packUnit: "packet" });
   });
 });

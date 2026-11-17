@@ -9,6 +9,7 @@ import { requireUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { orders, salesOrders } from "@/lib/db/schema";
 import { editBlocker } from "@/lib/staff-orders";
+import { asSold } from "@/lib/stock-units";
 import { orderFormData, reservedBy } from "../../form-data";
 import { OrderForm } from "../../order-form";
 
@@ -56,7 +57,12 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
         windowEndMin: so.windowEndMin,
         notes: so.notes,
         deliveryFeeCents: so.deliveryFeeCents,
-        lines: items.filter((it) => it.productId).map((it) => ({ productId: it.productId!, qty: it.qty, unitPriceCents: it.unitPriceCents })),
+        lines: items
+          .filter((it) => it.productId)
+          .map((it) => {
+            const sold = asSold(it);
+            return { productId: it.productId!, qty: sold.qty, unitPriceCents: sold.priceCents, by: sold.units === null ? ("unit" as const) : ("carton" as const) };
+          }),
         reserved,
       }}
     />
