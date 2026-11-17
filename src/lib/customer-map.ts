@@ -18,6 +18,8 @@ export type CustomerPin = {
   areaKey: string;
   /** Where clicking the customer goes; null = no page this user can open. */
   href: string | null;
+  /** This user may log a visit for the customer (theirs, or nobody's yet). */
+  canLog?: boolean;
   /** Pin colour, when the map isn't colouring by sales stage (e.g. the follow-up view). */
   color?: string;
   /** A line under the name in the popup, e.g. why they're due a call. */
@@ -30,6 +32,7 @@ export const STAGE_COLOR: Record<SalesStage, string> = {
   interested: "#3b82f6",
   negotiating: "#f59e0b",
   won: "#10b981",
+  not_now: "#fda4af",
 };
 
 const STATES = "QLD|NSW|VIC|SA|WA|TAS|NT|ACT";
@@ -45,8 +48,8 @@ export const UNKNOWN_AREA = "?";
 /** Most stops in one visit plan: Google Maps directions take a destination and nine stops on the way. */
 export const MAX_VISITS = 10;
 
-/** Pin colours in the follow-up view: due a call, in talks, buying normally, a lead not yet buying. */
-export const FOLLOW_COLOR = { due: "#dc2626", talks: "#f59e0b", fine: "#10b981", lead: "#94a3b8" } as const;
+/** Pin colours in the follow-up view: due a call, in talks, buying normally, a lead not yet buying, said not now. */
+export const FOLLOW_COLOR = { due: "#dc2626", talks: "#f59e0b", fine: "#10b981", lead: "#94a3b8", no: "#fda4af" } as const;
 export type FollowState = keyof typeof FOLLOW_COLOR;
 
 /** Weekday colours for the delivery runs (0 = Sunday). */

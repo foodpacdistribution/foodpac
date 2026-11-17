@@ -31,7 +31,8 @@ export async function setSalesStage(customerId: string, stage: string) {
     const db = await getDb();
     const [c] = await db
       .update(customers)
-      .set({ salesStage: stage, salesStageAt: new Date() })
+      // The "not now" reason goes once they move on (the visit form sets it).
+      .set({ salesStage: stage, salesStageAt: new Date(), ...(stage !== "not_now" ? { notNowReason: null } : {}) })
       .where(eq(customers.id, customerId))
       .returning({ name: customers.name });
     if (!c) throw new UserError("Customer not found.");

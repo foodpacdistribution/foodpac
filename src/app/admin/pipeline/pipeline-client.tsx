@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, BellRing, Check, Clock, KeyRound, Mail, Pencil, Phone, Plus, Search, Store, Target, UserRound } from "lucide-react";
+import { Bell, BellRing, Check, ClipboardPen, Clock, KeyRound, Mail, Pencil, Phone, Plus, Search, Store, Target, UserRound } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { markFollowedUp, saveLead, setFollowUp, setQuietDays, setSalesStage } from "@/app/actions/pipeline";
 import { AddressInput } from "@/components/address-input";
@@ -8,10 +8,13 @@ import { FormError, KeptForm, Modal, SubmitButton, Toast, type ToastMessage, use
 import { useT } from "@/components/i18n";
 import { btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
 import { prettyDate, shiftDate } from "@/lib/dates";
-import type { PaymentTerms, Role, SalesStage } from "@/lib/db/schema";
+import { useVisitLogger, type VisitSaved } from "@/components/visit-logger";
+import type { NotNowReason, PaymentTerms, Role, SalesStage } from "@/lib/db/schema";
 import { daysBetween, type DueFollowUp, QUIET_CHOICES, REMIND_IN } from "@/lib/follow-up";
 import { dueText } from "@/lib/follow-up-text";
 import { SALES_STAGES, STAGE_INFO } from "@/lib/sales-stage";
+import type { LastVisit } from "@/lib/visit-log";
+import { NOT_NOW_REASONS, OUTCOMES } from "@/lib/visits";
 import { OpenAccountForm } from "./open-account-form";
 
 type Lead = {
@@ -34,6 +37,8 @@ type Lead = {
   repName: string | null;
   followUpOn: string | null;
   followUpNote: string | null;
+  notNowReason: NotNowReason | null;
+  lastVisit: LastVisit | null;
   lastOrderOn: string | null;
   due: DueFollowUp | null;
   /** Due, and this person's to do (their own or an unassigned customer). */
@@ -68,33 +73,66 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
   // Stage changes and finished follow-ups show straight away; fresh server data replaces them.
   const [moved, setMoved] = useState<Record<string, SalesStage>>({});
   const [done, setDone] = useState<Set<string>>(new Set());
+  // Visits just logged, shown before the server confirms them.
+  const [visited, setVisited] = useState<Record<string, VisitSaved>>({});
   const [seen, setSeen] = useState(customers);
   if (seen !== customers) {
     setSeen(customers);
     setMoved({});
     setDone(new Set());
+    setVisited({});
   }
   const [, start] = useTransition();
   const deferredQ = useDeferredValue(q);
   const say = (r: { ok: true; message?: string } | { ok: false; error: string }) =>
     setToast((t) => ({ id: (t?.id ?? 0) + 1, text: r.ok ? (r.message ?? "Saved") : r.error, tone: r.ok ? "ok" : "warn" }));
+  const visits = useVisitLogger({
+    today,
+    say,
+    onSaved: (v) => setVisited((m) => ({ ...m, [v.customerId]: v })),
+    onFailed: (id) =>
+      setVisited((m) => {
+        const { [id]: _, ...rest } = m;
+        return rest;
+      }),
+  });
 
   const rows = useMemo(
-    () => customers.map((c) => ({ ...c, stage: moved[c.id] ?? c.stage, ...(done.has(c.id) ? { due: null, dueForMe: false, followUpOn: null, followUpNote: null } : {}) })),
-    [customers, moved, done],
+    () =>
+      customers.map((c) => {
+        const v = visited[c.id];
+        const row = { ...c, stage: moved[c.id] ?? c.stage, ...(done.has(c.id) ? { due: null, dueForMe: false, followUpOn: null, followUpNote: null } : {}) };
+        if (!v) return row;
+        // A visit just logged: its stage, reminder and line, as the server will have them.
+        const due: DueFollowUp | null = v.followUpOn && v.followUpOn <= today ? { kind: "reminder", on: v.followUpOn, late: 0 } : null;
+        return {
+          ...row,
+          stage: v.stage,
+          followUpOn: v.followUpOn,
+          followUpNote: v.followUpOn ? v.note || row.followUpNote : null,
+          due,
+          dueForMe: !!due,
+          lastVisit: { day: today, outcome: v.outcome, note: v.note || null, channel: v.channel },
+        };
+      }),
+    [customers, moved, done, visited, today],
   );
   const counts = useMemo(() => {
-    const n = { all: rows.length, new: 0, interested: 0, negotiating: 0, won: 0 };
-    for (const c of rows) n[c.stage]++;
+    const n = { all: 0, new: 0, interested: 0, negotiating: 0, won: 0, not_now: 0 };
+    for (const c of rows) {
+      n[c.stage]++;
+      if (c.stage !== "not_now") n.all++;
+    }
     return n;
   }, [rows]);
   const shown = useMemo(() => {
     const s = deferredQ.trim().toLowerCase();
     return rows.filter(
       (c) =>
-        (stage === "all" || c.stage === stage) &&
+        // "All" leaves out stores that said not now, unless they're being searched for.
+        (stage === "all" ? c.stage !== "not_now" || !!s : c.stage === stage) &&
         (!mine || c.repId === me.id) &&
-        (!s || [c.name, c.phone, c.email, c.address, c.repName, c.followUpNote].some((v) => v?.toLowerCase().includes(s))),
+        (!s || [c.name, c.phone, c.email, c.address, c.repName, c.followUpNote, c.lastVisit?.note].some((v) => v?.toLowerCase().includes(s))),
     );
   }, [rows, stage, mine, deferredQ, me.id]);
   // Overdue reminders first, then the longest-quiet customers.
@@ -108,6 +146,8 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
   const hasMine = rows.some((c) => c.repId === me.id);
 
   const move = (c: Lead, to: SalesStage) => {
+    // Saying no for now goes through the visit form, for why and when to try again.
+    if (to === "not_now") return visits.open(c, "not_now");
     const from = c.stage;
     setMoved((m) => ({ ...m, [c.id]: to }));
     start(async () => {
@@ -116,19 +156,6 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
       if (!r.ok) setMoved((m) => ({ ...m, [c.id]: from }));
       // Just won a store that can't order yet: straight on to opening its account.
       else if (to === "won" && !accountOpen(c)) setOpening({ ...c, stage: to });
-    });
-  };
-  const followedUp = (c: Lead) => {
-    setDone((d) => new Set(d).add(c.id));
-    start(async () => {
-      const r = await markFollowedUp(c.id);
-      say(r);
-      if (!r.ok)
-        setDone((d) => {
-          const n = new Set(d);
-          n.delete(c.id);
-          return n;
-        });
     });
   };
 
@@ -154,14 +181,14 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
         today={today}
         quietDays={quietDays}
         canSetQuiet={me.role === "admin"}
-        onDone={followedUp}
+        onVisit={(c) => visits.open(c)}
         onLater={setReminding}
         onQuietDays={(d) => start(async () => say(await setQuietDays(d)))}
       />
 
       {/* One tile per stage: how many are there, and a click shows just those. */}
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <StageTile label={tr("All")} n={counts.all} on={stage === "all"} onClick={() => setStage("all")} className="col-span-2 sm:col-span-1" />
+      <div className="mb-4 grid grid-cols-3 gap-2 lg:grid-cols-6">
+        <StageTile label={tr("All")} n={counts.all} on={stage === "all"} onClick={() => setStage("all")} />
         {SALES_STAGES.map((s) => (
           <StageTile key={s} label={tr(STAGE_INFO[s].label)} hint={tr(STAGE_INFO[s].hint)} dot={STAGE_INFO[s].dot} n={counts[s]} on={stage === s} onClick={() => setStage(stage === s ? "all" : s)} />
         ))}
@@ -226,6 +253,7 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
                     )}
                     {!c.phone && !c.email && <span>{tr("No contact details")}</span>}
                   </p>
+                  <VisitLine c={c} today={today} />
                   {/* Won, but not set up to order yet. */}
                   {c.stage === "won" && !accountOpen(c) && (
                     <button onClick={() => setOpening(c)} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900 hover:underline">
@@ -233,7 +261,12 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
                     </button>
                   )}
                 </div>
-                <StageSelect value={c.stage} onChange={(to) => move(c, to)} label={tr("Stage for {name}", { name: c.name })} />
+                <div className="flex min-w-0 items-center gap-1">
+                  <StageSelect value={c.stage} onChange={(to) => move(c, to)} label={tr("Stage for {name}", { name: c.name })} />
+                  <button className={btn("ghost", "icon", "shrink-0 text-blue-700")} onClick={() => visits.open(c)} aria-label={tr("Log visit · {name}", { name: c.name })} title={tr("Log visit")}>
+                    <ClipboardPen className="size-4" />
+                  </button>
+                </div>
                 <FollowUpCell c={c} today={today} onClick={() => setReminding(c)} />
                 <p className="flex min-w-0 items-center gap-1.5 text-xs text-slate-500 max-md:justify-end md:text-sm">
                   <UserRound className="size-3.5 shrink-0 text-slate-400 md:hidden" />
@@ -297,8 +330,31 @@ export function PipelineClient({ customers, me, today, quietDays }: { customers:
           />
         )}
       </Modal>
+      {visits.dialog}
       <Toast toast={toast} onDone={() => setToast(null)} />
     </>
+  );
+}
+
+/** Under the name: why a "not now" store said no, or how the last visit went (`brief`: without its note). */
+function VisitLine({ c, today, brief }: { c: Lead; today: string; brief?: boolean }) {
+  const tr = useT();
+  if (c.stage === "not_now") {
+    return (
+      <p className="mt-0.5 truncate text-xs text-rose-700">
+        {c.notNowReason ? tr(NOT_NOW_REASONS[c.notNowReason]) : tr("Said no for now")}
+        {c.followUpOn && <span className="text-slate-500"> · {tr("try again {date}", { date: shortDate(c.followUpOn, tr) })}</span>}
+      </p>
+    );
+  }
+  const v = c.lastVisit;
+  if (!v) return null;
+  return (
+    <p className="mt-0.5 truncate text-xs text-slate-500">
+      {v.channel === "call" ? <Phone className="mr-1 inline size-3 align-[-2px]" /> : <Store className="mr-1 inline size-3 align-[-2px]" />}
+      {ago(v.day, today, tr)} · <span className="font-medium text-slate-700">{tr(OUTCOMES[v.outcome].label)}</span>
+      {v.note && !brief && <span> · “{v.note}”</span>}
+    </p>
   );
 }
 
@@ -315,7 +371,7 @@ function FollowUpList({
   today,
   quietDays,
   canSetQuiet,
-  onDone,
+  onVisit,
   onLater,
   onQuietDays,
 }: {
@@ -323,7 +379,7 @@ function FollowUpList({
   today: string;
   quietDays: number;
   canSetQuiet: boolean;
-  onDone: (c: Lead) => void;
+  onVisit: (c: Lead) => void;
   onLater: (c: Lead) => void;
   onQuietDays: (days: number) => void;
 }) {
@@ -366,7 +422,8 @@ function FollowUpList({
                   {c.due!.kind === "quiet" && c.lastOrderOn && <span className="text-slate-500"> · {tr("last order {date}", { date: shortDate(c.lastOrderOn, tr) })}</span>}
                   {c.due!.kind !== "quiet" && c.lastOrderOn && <span className="text-slate-500"> · {tr("last order {date}", { date: ago(c.lastOrderOn, today, tr) })}</span>}
                 </p>
-                {c.followUpNote && <p className="mt-0.5 truncate text-xs text-slate-600">“{c.followUpNote}”</p>}
+                {c.followUpNote && <p className="mt-0.5 truncate text-xs text-slate-600">“{tr(c.followUpNote)}”</p>}
+                <VisitLine c={c} today={today} brief />
               </div>
               <div className="flex items-center gap-1.5">
                 {c.phone && (
@@ -377,8 +434,8 @@ function FollowUpList({
                 <button className={btn("secondary", "sm")} onClick={() => onLater(c)}>
                   <Clock className="size-3.5" /> {tr("Later")}
                 </button>
-                <button className={btn("success", "sm")} onClick={() => onDone(c)}>
-                  <Check className="size-3.5" /> {tr("Followed up")}
+                <button className={btn("primary", "sm")} onClick={() => onVisit(c)}>
+                  <ClipboardPen className="size-3.5" /> {tr("Log visit")}
                 </button>
               </div>
             </li>
@@ -539,13 +596,14 @@ function StageSelect({ value, onChange, label }: { value: SalesStage; onChange: 
     interested: "bg-blue-50 text-blue-800 border-blue-200",
     negotiating: "bg-amber-50 text-amber-900 border-amber-200",
     won: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    not_now: "bg-rose-50 text-rose-800 border-rose-200",
   }[value];
   return (
     <select
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value as SalesStage)}
-      className={cx("h-8 w-36 cursor-pointer rounded-lg border px-2 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:outline-none md:w-full", tint)}
+      className={cx("h-8 w-32 min-w-0 cursor-pointer rounded-lg border px-2 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:outline-none md:w-full md:flex-1", tint)}
     >
       {SALES_STAGES.map((s) => (
         <option key={s} value={s}>

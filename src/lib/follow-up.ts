@@ -92,6 +92,8 @@ export type FollowUpFacts = {
   openedOn?: string | null;
   /** From their order history (see buyingLess). */
   buyingLess?: BuyingLess | null;
+  /** Said "not now": only the reminder set for trying again counts, no other nudges. */
+  parked?: boolean;
 };
 
 export type DueFollowUp =
@@ -111,9 +113,11 @@ export type DueFollowUp =
  *   within the last `quietDays` (then it waits for another quiet spell).
  * - A customer still ordering but buying less (a regular product stopped, or spend down) is due,
  *   unless someone followed up in the last three weeks.
+ * - A customer who said "not now" is only due on the day set to try again.
  */
 export function dueFollowUp(c: FollowUpFacts, today: string, quietDays: number): DueFollowUp | null {
   if (c.followUpOn) return c.followUpOn <= today ? { kind: "reminder", on: c.followUpOn, late: daysBetween(c.followUpOn, today) } : null;
+  if (c.parked) return null;
   const since = (d: string | null | undefined) => (d ? daysBetween(d, today) : Infinity);
   if (!c.lastOrderOn) {
     const days = since(c.openedOn);

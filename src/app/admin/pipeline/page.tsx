@@ -44,6 +44,8 @@ export default async function PipelinePage() {
         repName: c.repId ? (repName.get(c.repId) ?? null) : null,
         followUpOn: c.followUpOn,
         followUpNote: c.followUpNote,
+        notNowReason: c.notNowReason,
+        lastVisit: c.lastVisit,
         lastOrderOn: c.lastOrderOn,
         due: c.due,
         dueForMe: !!c.due && isMineToFollow(me, c.repId),

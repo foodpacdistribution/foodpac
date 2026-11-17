@@ -61,7 +61,7 @@ export async function saveCustomer(_prev: unknown, form: FormData) {
 
     const [before] = id ? await db.select({ approved: customers.approved, stage: customers.salesStage, rep: customers.salesRepId }).from(customers).where(eq(customers.id, id)).limit(1) : [];
     // The office form can move the sales stage too; the date only changes when the stage does.
-    const stageFields = isSalesStage(stage) && stage !== before?.stage ? { salesStage: stage, salesStageAt: new Date() } : {};
+    const stageFields = isSalesStage(stage) && stage !== before?.stage ? { salesStage: stage, salesStageAt: new Date(), ...(stage !== "not_now" ? { notNowReason: null } : {}) } : {};
     // As on the pipeline: a salesperson who moves an unassigned customer along takes it on.
     const repFields = sales && "salesStage" in stageFields && !before?.rep ? { salesRepId: me.id } : {};
     const customerId = await db.transaction(async (tx) => {
