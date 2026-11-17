@@ -58,7 +58,8 @@ export default async function PortalOverview() {
       <section className="relative overflow-hidden rounded-3xl bg-leaf-900 p-6 text-cream sm:p-8">
         <div className="relative z-10 flex flex-wrap items-center gap-5">
           <span className="grid size-16 shrink-0 place-items-center rounded-2xl bg-cream font-display text-2xl font-semibold text-leaf-800">{initials(c.name)}</span>
-          <div className="min-w-0 flex-1">
+          {/* basis keeps the name a readable width: on phones the buttons wrap under it instead of squeezing it. */}
+          <div className="min-w-0 flex-1 basis-[calc(100%-5.25rem)] sm:basis-0">
             <p className="text-sm text-cream/70">
               <T>{greeting(s.timezone)}</T>, {user.name.split(" ")[0]}
             </p>
@@ -75,10 +76,10 @@ export default async function PortalOverview() {
               )}
             </div>
           </div>
-          <div className="flex gap-2">
-            <Link href="/products" className="inline-flex h-11 items-center gap-2 rounded-full bg-tomato px-5 text-sm font-semibold text-white hover:bg-tomato-dark">
+          <div className="flex w-full gap-2 sm:w-auto">
+            <Link href="/products" className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-tomato px-5 text-sm font-semibold text-white hover:bg-tomato-dark">
               <ShoppingBag className="size-4" /> {" "}<T>{"Shop now"}</T></Link>
-            <Link href="/portal/quick-order" className="inline-flex h-11 items-center gap-2 rounded-full bg-white/10 px-5 text-sm font-semibold hover:bg-white/15">
+            <Link href="/portal/quick-order" className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-white/10 px-5 text-sm font-semibold hover:bg-white/15">
               <Zap className="size-4" /> {" "}<T>{"Quick order"}</T></Link>
           </div>
         </div>

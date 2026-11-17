@@ -88,7 +88,7 @@ export function PoForm(p: {
                     <li key={m.id}>
                       <button type="button" onClick={() => add(m.id)} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50">
                         <span>
-                          <span className="font-medium">{m.name}</span> <span className="text-xs text-slate-500">{m.sku} · {m.packSize}</span>
+                          <span className="font-medium">{m.name}</span> <span className="text-xs text-slate-500">{[m.sku, m.packSize].filter(Boolean).join(" · ")}</span>
                         </span>
                         <span className="flex items-center gap-2 text-xs text-slate-500">
                           {tr("{n} in stock", { n: m.stock })} <Plus className="size-3.5" />

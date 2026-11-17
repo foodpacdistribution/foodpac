@@ -93,7 +93,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
                   <td className="px-4 py-3">
                     <p className="font-medium">{it.name}</p>
                     <p className="text-xs text-leaf-900/50">
-                      {it.sku} · {it.packSize}
+                      {[it.sku, it.packSize].filter(Boolean).join(" · ")}
                     </p>
                   </td>
                   <td className="px-2 py-3 text-right tabular-nums">

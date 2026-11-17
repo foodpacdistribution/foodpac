@@ -16,9 +16,10 @@ function Status({ children, className }: { children: React.ReactNode; className?
   );
 }
 
-export function CardBones({ count = 6, className }: { count?: number; className?: string }) {
+/** `catalog` matches the product grid (two across on phones); otherwise one across on phones. */
+export function CardBones({ count = 6, className, catalog }: { count?: number; className?: string; catalog?: boolean }) {
   return (
-    <div className={cx("grid gap-4 sm:grid-cols-2 xl:grid-cols-3", className)}>
+    <div className={cx("grid", catalog ? "grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3" : "gap-4 sm:grid-cols-2 xl:grid-cols-3", className)}>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="overflow-hidden rounded-2xl border border-leaf-950/10 bg-white">
           <Bone className="aspect-[4/3] rounded-none" />
@@ -43,18 +44,27 @@ export function CatalogSkeleton() {
           <Bone key={i} className="h-9 w-full max-lg:hidden" />
         ))}
       </div>
-      <div>
-        <Bone className="h-7 w-48" />
-        <Bone className="mt-2 h-4 w-32" />
-        <div className="mt-4 flex gap-2">
-          {Array.from({ length: 4 }, (_, i) => (
-            <Bone key={i} className="h-8 w-24 rounded-full" />
-          ))}
-        </div>
-        <CardBones className="mt-5" />
-      </div>
+      <CatalogListSkeleton bare />
     </Status>
   );
+}
+
+/** The product list beside the category menu, for switching category: the menu stays put. */
+export function CatalogListSkeleton({ bare }: { bare?: boolean }) {
+  const body = (
+    <>
+      <Bone className="h-3 w-40" />
+      <Bone className="mt-2.5 h-8 w-56 max-w-full" />
+      <Bone className="mt-5 h-4 w-32" />
+      <div className="mt-4 flex gap-2">
+        {Array.from({ length: 4 }, (_, i) => (
+          <Bone key={i} className="h-8 w-20 rounded-md" />
+        ))}
+      </div>
+      <CardBones catalog className="mt-5" />
+    </>
+  );
+  return bare ? <div>{body}</div> : <Status>{body}</Status>;
 }
 
 export function ProductSkeleton() {

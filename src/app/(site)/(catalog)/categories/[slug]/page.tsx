@@ -4,7 +4,7 @@ import { JsonLd } from "@/components/json-ld";
 import { getDb } from "@/lib/db";
 import { listCategories } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
-import { CATEGORIES, categoryHref, categoryInfo, categorySlug, OG_IMAGE, SITE } from "../../content";
+import { CATEGORIES, categoryHref, categoryInfo, categorySlug, OG_IMAGE, SITE } from "../../../content";
 import ProductsPage from "../../products/page";
 import { getT, languageAlternates } from "@/lib/i18n/server";
 

@@ -40,7 +40,7 @@ export function MyList({ items, priced }: { items: CatalogItem[]; priced: boolea
                   {p.name}
                 </Link>
                 <p className="text-xs text-leaf-900/55">
-                  {p.sku} · {p.packSize}
+                  {[p.sku, p.packSize].filter(Boolean).join(" · ")}
                   {p.minQty > 1 && <> · {tr("min {n}", { n: p.minQty })}</>}
                 </p>
                 <p className="mt-0.5 text-sm">

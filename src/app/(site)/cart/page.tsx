@@ -70,14 +70,15 @@ export default async function CartPage() {
         <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_340px]">
           <section className="overflow-hidden rounded-3xl border border-leaf-950/10 bg-white">
             {lines.map((l) => (
-              <div key={l.id} className="flex flex-wrap items-center gap-4 border-b border-leaf-950/5 p-4 last:border-0">
+              // Phones: photo and name on the first line, quantity and line total under the name.
+              <div key={l.id} className="grid grid-cols-[4rem_1fr] items-center gap-x-4 gap-y-3 border-b border-leaf-950/5 p-4 last:border-0 sm:flex">
                 <ProductImage p={l} sizes="64px" className="size-16 shrink-0 rounded-xl" />
-                <div className="min-w-0 flex-1">
-                  <Link href={`/products/${encodeURIComponent(l.sku)}`} className="font-semibold hover:text-leaf-700">
+                <div className="min-w-0 sm:flex-1">
+                  <Link href={`/products/${encodeURIComponent(l.sku)}`} className="line-clamp-2 font-semibold leading-snug hover:text-leaf-700">
                     {l.name}
                   </Link>
-                  <p className="text-xs text-leaf-900/55">
-                    {l.sku} · {l.packSize} · {aud(l.priceCents)} / {l.unit}
+                  <p className="mt-0.5 text-xs text-leaf-900/55">
+                    {[l.sku, l.packSize, `${aud(l.priceCents)} / ${l.unit}`].filter(Boolean).join(" · ")}
                   </p>
                   {l.issue && (
                     <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-700">
@@ -85,8 +86,10 @@ export default async function CartPage() {
                     </p>
                   )}
                 </div>
-                <CartQty productId={l.id} qty={l.qty} minQty={l.minQty} />
-                <p className="w-24 text-right font-semibold tabular-nums">{aud(l.lineCents)}</p>
+                <div className="col-start-2 flex items-center justify-between gap-4 sm:contents">
+                  <CartQty productId={l.id} qty={l.qty} minQty={l.minQty} />
+                  <p className="text-right font-semibold tabular-nums sm:w-24">{aud(l.lineCents)}</p>
+                </div>
               </div>
             ))}
           </section>

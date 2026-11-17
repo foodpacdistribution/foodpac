@@ -45,7 +45,7 @@ export function WorthOffering({ customerId, items, canAct }: { customerId: strin
               <span className="min-w-0 flex-1">
                 <span className="block font-medium text-slate-900">{i.name}</span>
                 <span className="block text-xs text-slate-500">
-                  {i.sku} · {i.packSize} · {aud(i.priceCents)}
+                  {[i.sku, i.packSize].filter(Boolean).join(" · ")} · {aud(i.priceCents)}
                   {i.stock <= 0 && <span className="text-red-600"> · {tr("Out of stock")}</span>}
                 </span>
                 <span className="block text-xs text-slate-500">

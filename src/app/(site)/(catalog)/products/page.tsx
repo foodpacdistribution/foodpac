@@ -4,10 +4,9 @@ import Link from "@/components/link";
 import { cx } from "@/components/ui";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { canSeePrices, countCatalog, listCatalog, listCategories, type Sort, SORTS } from "@/lib/shop";
-import { categoryHref, categoryInfo, OG_IMAGE, SITE } from "../content";
-import { CategorySidebar } from "../category-nav";
-import { ProductCard } from "../shop-ui";
+import { canSeePrices, countCatalog, listCatalog, type Sort, SORTS } from "@/lib/shop";
+import { categoryHref, categoryInfo, OG_IMAGE, SITE } from "../../content";
+import { ProductCard } from "../../shop-ui";
 import { T } from "@/components/i18n";
 import { getT, languageAlternates } from "@/lib/i18n/server";
 
@@ -43,10 +42,9 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   // A batch at a time: hundreds of product photos at once would make the page slow on a phone.
   const show = Math.min(Math.max(BATCH, Math.ceil((Number(sp.show) || BATCH) / BATCH) * BATCH), 5000);
   const db = await getDb();
-  const [items, found, categories] = await Promise.all([
+  const [items, found] = await Promise.all([
     listCatalog(db, viewer?.customer ?? null, { q, category, sort, inStock, limit: show, inStockFirst: true }),
     countCatalog(db, { q, category, inStock }),
-    listCategories(db),
   ]);
   const qs = (patch: Record<string, string | undefined>) => {
     const u = new URLSearchParams();
@@ -54,22 +52,10 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     for (const [k, v] of Object.entries(merged)) if (v) u.set(k, v);
     return `/products${u.size ? `?${u}` : ""}`;
   };
-  const total = categories.reduce((t, c) => t + c.n, 0);
 
+  // The category menu beside this is in ../layout.tsx, so it stays put while the list changes.
   return (
-    <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[220px_1fr]">
-      <aside className="min-w-0">
-        <p className="text-sm font-semibold"><T>{"Categories"}</T></p>
-        <nav aria-label="Categories">
-          <CategorySidebar
-            items={[
-              { href: "/products", label: "All products", n: total },
-              ...categories.map((c) => ({ href: categoryHref(c.name), label: c.name, n: c.n, icon: true })),
-            ]}
-          />
-        </nav>
-      </aside>
-      <section className="min-w-0">
+    <>
         {category && !q ? (
           <CategoryBanner name={category} />
         ) : (
@@ -162,8 +148,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             </p>
           </div>
         )}
-      </section>
-    </main>
+    </>
   );
 }
 

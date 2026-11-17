@@ -92,7 +92,7 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{p.name}</span>
                       <span className="block text-xs text-leaf-900/55">
-                        {p.sku} · {p.packSize}
+                        {[p.sku, p.packSize].filter(Boolean).join(" · ")}
                       </span>
                     </span>
                     {p.priceCents !== null && <span className="shrink-0 text-sm font-semibold tabular-nums">{aud(p.priceCents)}</span>}
@@ -140,7 +140,7 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
                   <div className="min-w-0 flex-1 basis-[calc(100%-3.75rem)] sm:basis-0">
                     <p className="line-clamp-1 font-semibold">{p.name}</p>
                     <p className="text-xs text-leaf-900/55">
-                      {p.sku} · {p.packSize}
+                      {[p.sku, p.packSize].filter(Boolean).join(" · ")}
                       {p.minQty > 1 && <> · {tr("min {n}", { n: p.minQty })}</>}
                     </p>
                     <p className="mt-0.5 text-sm">

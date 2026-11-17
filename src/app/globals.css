@@ -371,6 +371,23 @@ dialog[open]::backdrop {
 ::view-transition-new(.page-nav) {
   animation: 300ms cubic-bezier(0.2, 0.8, 0.2, 1) 60ms both vt-rise-in;
 }
+/* Switching category: the menu stays, only the product list fades out and the new one rises a
+   little. The box doesn't stretch between the old and new list heights. */
+::view-transition-group(.list-nav) {
+  animation: none;
+}
+::view-transition-old(.list-nav) {
+  animation: 90ms ease-in both vt-fade-out;
+}
+::view-transition-new(.list-nav) {
+  animation: 240ms cubic-bezier(0.2, 0.8, 0.2, 1) 40ms both vt-rise-in-short;
+}
+@keyframes vt-rise-in-short {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
 @keyframes vt-fade-out {
   to {
     opacity: 0;

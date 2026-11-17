@@ -113,7 +113,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
                   <td className="px-4 py-2.5">
                     <p className="font-medium text-slate-900">{it.name}</p>
                     <p className="text-xs text-slate-500">
-                      {it.sku} · {it.packSize}
+                      {[it.sku, it.packSize].filter(Boolean).join(" · ")}
                       {!it.gst && (
                         <>
                           {" "}

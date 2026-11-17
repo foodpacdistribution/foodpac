@@ -142,7 +142,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
                   <td className="px-4 py-2.5">
                     <p className="font-medium text-slate-900">{it.name}</p>
                     <p className="text-xs text-slate-500">
-                      {it.sku} · {it.packSize}
+                      {[it.sku, it.packSize].filter(Boolean).join(" · ")}
                     </p>
                     {it.backorderQty > 0 && so.status !== "cancelled" && (
                       <p className="mt-1">
