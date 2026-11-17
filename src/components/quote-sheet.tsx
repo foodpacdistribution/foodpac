@@ -4,6 +4,7 @@ import type { customers, quoteItems, quotes } from "@/lib/db/schema";
 import { aud } from "@/lib/money";
 import { Logo } from "./brand";
 import { PrintButton } from "./print-button";
+import { SoldCells } from "./invoice-sheet";
 
 /**
  * A printable quotation, laid out like the invoice (see InvoiceSheet and `.invoice-sheet` in
@@ -121,10 +122,7 @@ export function QuoteSheet({
                         {!it.gst && " · GST free"}
                       </p>
                     </td>
-                    <td className="py-2.5 pl-2 text-right whitespace-nowrap tabular-nums">
-                      {it.qty} <span className="text-leaf-900/55">{it.unit}</span>
-                    </td>
-                    <td className="py-2.5 pl-2 text-right whitespace-nowrap tabular-nums">{aud(it.unitPriceCents)}</td>
+                    <SoldCells it={it} />
                     <td className="py-2.5 pr-3 pl-2 text-right font-medium whitespace-nowrap tabular-nums">{aud(it.lineCents)}</td>
                   </tr>
                 );

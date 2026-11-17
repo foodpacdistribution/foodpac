@@ -10,6 +10,7 @@ import { getDb } from "@/lib/db";
 import { quoteEditBlocker, quoteWithItems } from "@/lib/quotes";
 import { mayServeId } from "@/lib/rep-scope";
 import { QuoteForm } from "../../quote-form";
+import { asEntered } from "@/lib/stock-units";
 
 export const metadata: Metadata = { title: "Edit Quote" };
 
@@ -51,7 +52,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
         deliveryFeeCents: q.deliveryFeeCents,
         notes: q.notes,
         internalNote: q.internalNote,
-        lines: items.filter((it) => it.productId).map((it) => ({ productId: it.productId!, qty: it.qty, unitPriceCents: it.unitPriceCents })),
+        lines: items.filter((it) => it.productId).map((it) => ({ productId: it.productId!, ...asEntered(it) })),
       }}
     />
   );

@@ -100,7 +100,7 @@ export function ProductCard({ p, signedIn, morph }: { p: CatalogItem; signedIn: 
         </div>
         {p.priceCents !== null && (
           <div className="mt-3">
-            <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} />
+            <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} packSize={p.packSize} unit={p.unit} />
           </div>
         )}
       </div>

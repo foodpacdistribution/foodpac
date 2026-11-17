@@ -13,6 +13,8 @@ import { useT } from "@/components/i18n";
 import { aud } from "@/lib/money";
 import { matchProducts } from "@/lib/search-match";
 import type { CatalogItem } from "@/lib/shop";
+import { cartonSize } from "@/lib/stock-units";
+import { SellBy } from "@/app/(site)/sell-by";
 
 export type SheetItem = CatalogItem & { lastQty?: number; timesOrdered?: number };
 
@@ -25,6 +27,8 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
   const router = useRouter();
   const [rows, setRows] = useState<SheetItem[]>(usual);
   const [qty, setQty] = useState<Record<string, number>>({});
+  // Products being ordered in whole cartons: their quantity is cartons.
+  const [cartons, setCartons] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -32,8 +36,19 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
 
   const q = (id: string) => qty[id] ?? 0;
   const set = (id: string, n: number) => setQty((s) => ({ ...s, [id]: Math.max(0, Math.min(9999, Math.round(n) || 0)) }));
+  const per = (p: CatalogItem) => cartonSize(p.packSize, p.unit);
+  const byCarton = (p: CatalogItem) => !!cartons[p.id] && per(p) !== null;
+  /** The least a line can be: one carton, or the minimum order in units. */
+  const least = (p: CatalogItem) => (byCarton(p) ? 1 : p.minQty);
+  const units = (p: CatalogItem) => (byCarton(p) ? q(p.id) * per(p)! : Math.max(q(p.id), p.minQty));
   const chosen = rows.filter((p) => q(p.id) > 0 && p.stock > 0);
-  const total = chosen.reduce((t, p) => t + (p.priceCents ?? 0) * Math.max(q(p.id), p.minQty), 0);
+  const total = chosen.reduce((t, p) => t + (p.priceCents ?? 0) * units(p), 0);
+  const sellBy = (p: CatalogItem, c: boolean) => {
+    const n = per(p);
+    if (!n || c === byCarton(p)) return;
+    setCartons((s) => ({ ...s, [p.id]: c }));
+    if (q(p.id) > 0) set(p.id, c ? Math.max(1, Math.round(q(p.id) / n)) : q(p.id) * n);
+  };
   const withLast = rows.filter((p) => p.lastQty && p.stock > 0);
 
   // Search the whole range in the browser; products already on the sheet are left out.
@@ -121,7 +136,11 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
             {withLast.length > 0 && (
               <button
                 type="button"
-                onClick={() => setQty((s) => ({ ...s, ...Object.fromEntries(withLast.map((p) => [p.id, Math.max(p.lastQty!, p.minQty)])) }))}
+                onClick={() => {
+                  // Last time's quantities are in units.
+                  setCartons((s) => ({ ...s, ...Object.fromEntries(withLast.map((p) => [p.id, false])) }));
+                  setQty((s) => ({ ...s, ...Object.fromEntries(withLast.map((p) => [p.id, Math.max(p.lastQty!, p.minQty)])) }));
+                }}
                 className="inline-flex h-9 items-center gap-1.5 rounded-full border border-leaf-950/15 bg-white px-3.5 text-sm font-semibold hover:border-leaf-700/40"
               >
                 <History className="size-4" /> {tr("Same as last time")}
@@ -152,13 +171,17 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
                       )}
                       {out && <span className="ml-2 text-xs font-medium text-red-600">{tr("Out of stock")}</span>}
                     </p>
+                    {per(p) && !out && <SellBy unit={p.unit} per={per(p)!} byCarton={byCarton(p)} onChange={(c) => sellBy(p, c)} className="mt-1.5" />}
                   </div>
                   {/* Phones: last time and quantity wrap under the name. */}
                   <div className="ml-[3.75rem] flex flex-1 items-center justify-end gap-2 sm:ml-0 sm:flex-none">
                     {p.lastQty && !out ? (
                       <button
                         type="button"
-                        onClick={() => set(p.id, Math.max(p.lastQty!, p.minQty))}
+                        onClick={() => {
+                          setCartons((s) => ({ ...s, [p.id]: false }));
+                          set(p.id, Math.max(p.lastQty!, p.minQty));
+                        }}
                         title={tr("Use last time's quantity")}
                         className="mr-auto rounded-full px-2 py-1 text-xs text-leaf-900/60 hover:bg-leaf-100 hover:text-leaf-900 sm:mr-0"
                       >
@@ -166,7 +189,7 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
                       </button>
                     ) : null}
                     <div className={cx("flex h-10 shrink-0 items-center rounded-full border border-leaf-950/15 bg-white", out && "opacity-40")}>
-                      <button type="button" disabled={out || q(p.id) <= 0} aria-label={tr("Less")} onClick={() => set(p.id, q(p.id) - 1 < p.minQty ? 0 : q(p.id) - 1)} className="grid size-10 place-items-center disabled:opacity-30">
+                      <button type="button" disabled={out || q(p.id) <= 0} aria-label={tr("Less")} onClick={() => set(p.id, q(p.id) - 1 < least(p) ? 0 : q(p.id) - 1)} className="grid size-10 place-items-center disabled:opacity-30">
                         <Minus className="size-3.5" />
                       </button>
                       <input
@@ -180,7 +203,7 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
                         onChange={(e) => set(p.id, Number(e.target.value.replace(/\D/g, "")))}
                         className="w-11 bg-transparent text-center text-sm font-semibold tabular-nums outline-none placeholder:text-leaf-900/30"
                       />
-                      <button type="button" disabled={out} aria-label={tr("More")} onClick={() => set(p.id, Math.max(q(p.id) + 1, p.minQty))} className="grid size-10 place-items-center">
+                      <button type="button" disabled={out} aria-label={tr("More")} onClick={() => set(p.id, Math.max(q(p.id) + 1, least(p)))} className="grid size-10 place-items-center">
                         <Plus className="size-3.5" />
                       </button>
                     </div>
@@ -220,7 +243,7 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
           disabled={pending || chosen.length === 0}
           onClick={() =>
             start(async () => {
-              const r = await addManyToCart(chosen.map((p) => ({ productId: p.id, qty: q(p.id) })));
+              const r = await addManyToCart(chosen.map((p) => ({ productId: p.id, qty: q(p.id), byCarton: byCarton(p) })));
               if (r.ok) {
                 bumpCart((r.data as { units: number } | undefined)?.units ?? 0);
                 router.push("/cart");

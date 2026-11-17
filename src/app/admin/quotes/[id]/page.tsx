@@ -19,6 +19,7 @@ import { quoteEditBlocker, quoteWithItems } from "@/lib/quotes";
 import { mayServeId } from "@/lib/rep-scope";
 import { todayIn } from "@/lib/time";
 import { QuoteActions } from "./quote-actions";
+import { asSold } from "@/lib/stock-units";
 
 export const metadata: Metadata = { title: "Quote" };
 
@@ -108,35 +109,43 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
           <CardHeader title={<T>{"Products"}</T>} />
           <table className="w-full text-sm">
             <tbody>
-              {items.map((it) => (
-                <tr key={it.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-2.5">
-                    <p className="font-medium text-slate-900">{it.name}</p>
-                    <p className="text-xs text-slate-500">
-                      {[it.sku, it.packSize].filter(Boolean).join(" · ")}
-                      {!it.gst && (
-                        <>
-                          {" "}
-                          · <T>{"GST free"}</T>
-                        </>
+              {items.map((it) => {
+                const sold = asSold(it);
+                return (
+                  <tr key={it.id} className="border-b border-line last:border-0">
+                    <td className="px-4 py-2.5">
+                      <p className="font-medium text-slate-900">{it.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {[it.sku, it.packSize].filter(Boolean).join(" · ")}
+                        {!it.gst && (
+                          <>
+                            {" "}
+                            · <T>{"GST free"}</T>
+                          </>
+                        )}
+                        {!it.productId && (
+                          <>
+                            {" "}
+                            · <span className="text-red-600"><T>{"product deleted"}</T></span>
+                          </>
+                        )}
+                      </p>
+                    </td>
+                    <td className="px-2 py-2.5 text-right whitespace-nowrap tabular-nums">
+                      {sold.qty} <Tx>{sold.unit}</Tx>
+                      {sold.units !== null && (
+                        <span className="block text-xs text-slate-400">
+                          {sold.units} <Tx>{it.unit}</Tx>
+                        </span>
                       )}
-                      {!it.productId && (
-                        <>
-                          {" "}
-                          · <span className="text-red-600"><T>{"product deleted"}</T></span>
-                        </>
-                      )}
-                    </p>
-                  </td>
-                  <td className="px-2 py-2.5 text-right whitespace-nowrap tabular-nums">
-                    {it.qty} {it.unit}
-                    <span className="block text-xs text-slate-400 sm:hidden">@ {aud(it.unitPriceCents)}</span>
-                  </td>
-                  {/* Phones: the unit price sits under the quantity, leaving room for the name. */}
-                  <td className="hidden px-2 py-2.5 text-right tabular-nums text-slate-500 sm:table-cell">{aud(it.unitPriceCents)}</td>
-                  <td className="px-4 py-2.5 text-right font-medium tabular-nums">{aud(it.lineCents)}</td>
-                </tr>
-              ))}
+                      <span className="block text-xs text-slate-400 sm:hidden">@ {aud(sold.priceCents)}</span>
+                    </td>
+                    {/* Phones: the unit price sits under the quantity, leaving room for the name. */}
+                    <td className="hidden px-2 py-2.5 text-right tabular-nums text-slate-500 sm:table-cell">{aud(sold.priceCents)}</td>
+                    <td className="px-4 py-2.5 text-right font-medium tabular-nums">{aud(it.lineCents)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <dl className="space-y-1 border-t border-line px-4 py-3 text-sm">

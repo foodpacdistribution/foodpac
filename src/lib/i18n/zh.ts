@@ -3101,6 +3101,10 @@ export const ZH: Record<string, string> = {
   "packet": "包",
   "sleeve": "条",
   "A product is on the order twice, once by the carton and once by the unit. Keep one line for it.": "同一商品既按箱又按单件下单了，请只保留一行。",
+  "A product is on the quote twice, once by the carton and once by the unit. Keep one line for it.": "同一商品在报价单里既按箱又按单件，请只保留一行。",
+  "Carton of {n}": "整箱（{n}）",
+  "{n} × carton ({units} {unit}) · {price} a carton": "{n} 箱（{units} {unit}）· 每箱 {price}",
+  "One SKU and quantity per line. Add “ctn” for whole cartons, e.g. FP-1001 2 ctn.": "每行一个 SKU 和数量。整箱请加 “ctn”，例如 FP-1001 2 ctn。",
 };
 
 /** Messages with a variable part. */
@@ -3155,6 +3159,7 @@ export const ZH_PATTERNS: [RegExp, string][] = [
   [new RegExp("^(.+) just sold out\\. Please update your cart\\.$"), "$1 刚刚售罄,请更新购物车。"],
   [new RegExp("^(.+): (Out of stock|No longer available)\\.$"), "$1:缺货或已下架。"],
   [new RegExp("^Not found: (.+)$"), "未找到:$1"],
+  [new RegExp("^Not sold by the carton: (.+)$"), "不能按箱购买：$1"],
   [new RegExp("^Est\\. finish (.+)$"), "预计完成 $1"],
   [new RegExp("^(\\d+) units?$"), "$1 件"],
   [new RegExp("^(\\d+) failed$"), "$1 个失败"],

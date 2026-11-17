@@ -102,7 +102,7 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
           </div>
           {p.priceCents !== null && (
             <div className="mt-5 max-w-sm">
-              <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} size="lg" />
+              <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} packSize={p.packSize} unit={p.unit} size="lg" />
               {p.minQty > 1 && <p className="mt-2 text-xs text-leaf-900/60"><T>{"Minimum order"}</T>{" "}{p.minQty} <T>{p.unit}</T>.</p>}
             </div>
           )}
@@ -153,7 +153,7 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
           </div>
           {p.priceCents !== null ? (
             <div className="w-52 shrink-0">
-              <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} />
+              <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} packSize={p.packSize} unit={p.unit} />
             </div>
           ) : !viewer ? (
             <Link href={`/login?next=${encodeURIComponent(`/products/${p.sku}`)}`} className="inline-flex h-10 shrink-0 items-center rounded-md bg-leaf-800 px-4 text-sm font-semibold text-white">

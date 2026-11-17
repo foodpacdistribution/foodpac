@@ -281,6 +281,13 @@
       "when": 1794956570875,
       "tag": "0039_carton_lines",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794957084953,
+      "tag": "0040_carton_cart_quotes",
+      "breakpoints": true
     }
   ]
 }

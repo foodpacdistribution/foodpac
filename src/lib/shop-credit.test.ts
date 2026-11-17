@@ -5,7 +5,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DB } from "./db";
 import { schema } from "./db";
-import { cartItems, customers, products, settings, users } from "./db/schema";
+import { cartItems, customers, products, salesOrderItems, settings, users } from "./db/schema";
 import { creditBalance, postCredit } from "./credit";
 import { getSettings } from "./planning";
 import { cancelOrder, deliveryDates, placeOrder } from "./shop";
@@ -160,5 +160,36 @@ describe("first-order offers", () => {
       "2000-01-01",
     );
     expect(so.creditAppliedCents).toBe(3000);
+  });
+});
+
+describe("buying by the carton", () => {
+  it("takes whole cartons from stock at the same price per pack, and records the carton", async () => {
+    const [napkins] = await db.insert(products).values({ sku: "NAPS", name: "Napkins", packSize: "8 packets / carton", unit: "packet", priceCents: 625, stock: 30 }).returning();
+    const c = await customer("net30");
+    await db.insert(cartItems).values({ customerId: c.id, productId: napkins.id, qty: 3, byCarton: true });
+    const s = await getSettings(db);
+    const so = await placeOrder(
+      db,
+      c,
+      userId,
+      { idempotencyKey: `k${++key}`, method: "invoice", deliveryDate: deliveryDates(s)[0], recipient: "Mei", phone: null, address: "1 Main St", instructions: null, windowStartMin: null, windowEndMin: null, notes: null, useCredit: false },
+      s,
+      true,
+    );
+    expect(so).toMatchObject({ subtotalCents: 15000, gstCents: 1500 });
+    const [line] = await db.select().from(salesOrderItems).where(eq(salesOrderItems.salesOrderId, so.id));
+    expect(line).toMatchObject({ qty: 24, unitPriceCents: 625, lineCents: 15000, perCarton: 8, cartonPriceCents: 5000 });
+    expect((await db.select({ stock: products.stock }).from(products).where(eq(products.id, napkins.id)))[0].stock).toBe(6);
+  });
+
+  it("won't sell more cartons than there are packs on the shelf", async () => {
+    const [few] = await db.insert(products).values({ sku: "NAPF", name: "Napkins few", packSize: "8 packets / carton", unit: "packet", priceCents: 625, stock: 12 }).returning();
+    const c = await customer("net30");
+    await db.insert(cartItems).values({ customerId: c.id, productId: few.id, qty: 2, byCarton: true });
+    const s = await getSettings(db);
+    await expect(
+      placeOrder(db, c, userId, { idempotencyKey: `k${++key}`, method: "invoice", deliveryDate: deliveryDates(s)[0], recipient: "Mei", phone: null, address: "1 Main St", instructions: null, windowStartMin: null, windowEndMin: null, notes: null, useCredit: false }, s, true),
+    ).rejects.toThrow(/Only 1 ctn \+ 4 pk in stock/);
   });
 });

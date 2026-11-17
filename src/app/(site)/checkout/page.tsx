@@ -36,7 +36,7 @@ export default async function CheckoutPage() {
       <h1 className="font-display text-2xl font-semibold tracking-tight"><T>{"Checkout"}</T></h1>
       <CheckoutForm
         idempotencyKey={crypto.randomUUID()}
-        lines={lines.map((l) => ({ id: l.id, name: l.name, sku: l.sku, qty: l.qty, unit: l.unit, lineCents: l.lineCents }))}
+        lines={lines.map((l) => ({ id: l.id, name: l.name, sku: l.sku, qty: l.qty, unit: l.byCarton ? "carton" : l.unit, units: l.byCarton ? `${l.units} ${l.unit}` : null, lineCents: l.lineCents }))}
         quote={q}
         methods={allowedMethods(c, stripeEnabled())}
         terms={c.paymentTerms}

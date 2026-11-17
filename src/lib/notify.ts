@@ -405,7 +405,7 @@ export async function sendQuote(db: DB, quoteId: string): Promise<{ sent: true; 
     ["Valid until", esc(valid)],
   ]);
   const lines =
-    itemTable(items.map((it) => ({ name: it.name, detail: [it.sku, it.packSize, !it.gst && "GST free"].filter(Boolean).join(" · "), qty: it.qty, price: aud(it.unitPriceCents), total: aud(it.lineCents) }))) +
+    itemTable(items.map((it) => ({ ...emailLine(it), detail: [emailLine(it).detail, !it.gst && "GST free"].filter(Boolean).join(" · ") }))) +
     rows([
       ["Subtotal (ex GST)", aud(q.subtotalCents)],
       ["Delivery", q.deliveryFeeCents ? aud(q.deliveryFeeCents) : "Free"],
@@ -417,7 +417,7 @@ export async function sendQuote(db: DB, quoteId: string): Promise<{ sent: true; 
     `Quote ${q.number} from ${site.name}`,
     `For ${customer} (${code}) · valid until ${valid}`,
     "",
-    ...items.map((it) => `${it.qty} × ${it.name} (${it.sku}) @ ${aud(it.unitPriceCents)} = ${aud(it.lineCents)}`),
+    ...items.map((it) => `${soldQty(it)} × ${it.name} (${it.sku}) @ ${aud(asSold(it).priceCents)} = ${aud(it.lineCents)}`),
     ...(q.deliveryFeeCents ? [`Delivery ${aud(q.deliveryFeeCents)}`] : []),
     `GST ${aud(q.gstCents)}`,
     `Total ${aud(q.totalCents)} incl. GST`,

@@ -18,7 +18,8 @@ const METHOD_ICON = { card: CreditCard, bank_transfer: Landmark, invoice: Receip
 
 export function CheckoutForm(props: {
   idempotencyKey: string;
-  lines: { id: string; name: string; sku: string; qty: number; unit: string; lineCents: number }[];
+  /** `units`: what a carton line comes to in packs ("16 packet"). */
+  lines: { id: string; name: string; sku: string; qty: number; unit: string; units: string | null; lineCents: number }[];
   quote: { subtotalCents: number; deliveryFeeCents: number; gstCents: number; totalCents: number };
   methods: PaymentMethod[];
   terms: PaymentTerms;
@@ -158,7 +159,8 @@ export function CheckoutForm(props: {
               <span className="min-w-0">
                 <span className="block truncate">{l.name}</span>
                 <span className="text-xs text-leaf-900/50">
-                  {l.qty} × {l.unit}
+                  {l.qty} × {tr(l.unit)}
+                  {l.units && ` (${l.units})`}
                 </span>
               </span>
               <span className="tabular-nums">{aud(l.lineCents)}</span>

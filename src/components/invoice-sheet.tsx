@@ -7,6 +7,30 @@ import { Logo } from "./brand";
 import { PrintButton } from "./print-button";
 
 /**
+ * Quantity and unit price cells of a printed line (invoice, quote): a carton line reads "3 carton"
+ * with the units it holds, at the carton price.
+ */
+export function SoldCells({ it }: { it: Parameters<typeof asSold>[0] }) {
+  const sold = asSold(it);
+  return (
+    <>
+      <td className="py-2.5 pl-2 text-right whitespace-nowrap tabular-nums">
+        {sold.qty} <span className="text-leaf-900/55">{sold.unit}</span>
+        {sold.units !== null && (
+          <span className="block text-[11px] text-leaf-900/50">
+            {sold.units} {sold.packUnit}
+          </span>
+        )}
+      </td>
+      <td className="py-2.5 pl-2 text-right whitespace-nowrap tabular-nums">
+        {aud(sold.priceCents)}
+        {sold.units !== null && <span className="block text-[11px] text-leaf-900/50">per carton</span>}
+      </td>
+    </>
+  );
+}
+
+/**
  * Printable invoice for one shop order (customer portal and back office): a proforma until staff
  * make it final. In English, laid out as an A4 page: on screen it's an A4-proportioned sheet, and
  * printing (see `.invoice-sheet` in globals.css) gives A4 margins, repeats the column headings on
@@ -126,7 +150,6 @@ export function InvoiceSheet({
             <tbody>
               {items.map((it) => {
                 const img = it.productId ? images[it.productId] : undefined;
-                const sold = asSold(it);
                 return (
                   <tr key={it.id} className="border-b border-leaf-950/8 align-middle">
                     {hasPhotos && (
@@ -148,19 +171,7 @@ export function InvoiceSheet({
                         {!it.gst && " · GST free"}
                       </p>
                     </td>
-                    <td className="py-2.5 pl-2 text-right whitespace-nowrap tabular-nums">
-                      {sold.qty} <span className="text-leaf-900/55">{sold.unit}</span>
-                      {/* A carton line also says how many units that is. */}
-                      {sold.units !== null && (
-                        <span className="block text-[11px] text-leaf-900/50">
-                          {sold.units} {sold.packUnit}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2.5 pl-2 text-right whitespace-nowrap tabular-nums">
-                      {aud(sold.priceCents)}
-                      {sold.units !== null && <span className="block text-[11px] text-leaf-900/50">per carton</span>}
-                    </td>
+                    <SoldCells it={it} />
                     <td className="py-2.5 pr-3 pl-2 text-right font-medium whitespace-nowrap tabular-nums">{aud(it.lineCents)}</td>
                   </tr>
                 );

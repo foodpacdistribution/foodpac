@@ -33,7 +33,7 @@ export default async function QuickOrderPage() {
         <summary className="cursor-pointer text-sm font-semibold text-leaf-800 hover:text-leaf-950">
           <T>{"Or paste product codes and quantities"}</T>
         </summary>
-        <p className="mt-2 text-sm text-leaf-900/60"><T>{"One SKU and quantity per line."}</T></p>
+        <p className="mt-2 text-sm text-leaf-900/60"><T>{"One SKU and quantity per line. Add “ctn” for whole cartons, e.g. FP-1001 2 ctn."}</T></p>
         <QuickOrderForm />
       </details>
     </>

@@ -30,6 +30,12 @@ export function asSold(it: { qty: number; unit: string; unitPriceCents: number; 
   return { qty: it.qty, unit: it.unit, priceCents: it.unitPriceCents, units: null, packUnit: it.unit };
 }
 
+/** A saved line back as staff type it in: cartons at the carton price, or units at the unit price. */
+export function asEntered(it: Parameters<typeof asSold>[0]) {
+  const sold = asSold(it);
+  return { qty: sold.qty, unitPriceCents: sold.priceCents, by: sold.units === null ? ("unit" as const) : ("carton" as const) };
+}
+
 /** Stock shown as cartons and loose packs ("20 ctn + 7 pk"), or just the number when there's no carton size. */
 export function cartonsAndPacks(stock: number, per: number | null): { ctn: number; pk: number } | null {
   if (!per || stock < 0) return null;
