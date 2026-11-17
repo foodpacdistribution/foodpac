@@ -4,6 +4,7 @@ import { AlertTriangle, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useT } from "./i18n";
 import { btn, Spinner } from "./ui";
+import { isStaleBuild, reloadOnce } from "@/lib/stale-build";
 
 /** Quiet automatic retries before the error is shown: most failures are a dropped connection that the next request fixes. */
 const RETRY_DELAYS_MS = [1_000, 3_000, 6_000];
@@ -34,6 +35,8 @@ export function PageError({ error, retry, tone = "staff" }: { error: unknown; re
   }, [retry]);
   useEffect(() => {
     console.error(error);
+    // Code from before a new version went live: retrying can't help, loading afresh does.
+    if (isStaleBuild(error)) reloadOnce();
   }, [error]);
 
   // Retries until the page renders (this component then unmounts) or the attempts run out.
