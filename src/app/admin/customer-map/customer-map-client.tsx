@@ -66,12 +66,13 @@ type Area = AreaNumbers & {
   score: number;
 };
 
-const emptyStages = (): Record<SalesStage, number> => ({ new: 0, interested: 0, negotiating: 0, won: 0 });
+const emptyStages = (): Record<SalesStage, number> => ({ new: 0, interested: 0, negotiating: 0, won: 0, not_now: 0 });
+const emptyFollow = (): Record<FollowState, number> => ({ due: 0, talks: 0, fine: 0, lead: 0, no: 0 });
 
-/** Due a call; in talks; buying normally; a lead not buying yet. */
+/** Due a call; in talks; buying normally; a lead not buying yet; said not now (and not due to try again). */
 const followOf = (c: Pick<MapCustomer, "due" | "stage">): FollowState =>
-  c.due ? "due" : c.stage === "interested" || c.stage === "negotiating" ? "talks" : c.stage === "won" ? "fine" : "lead";
-const FOLLOW_LABEL: Record<FollowState, string> = { due: "To follow up", talks: "In talks", fine: "Buying normally", lead: "New leads" };
+  c.due ? "due" : c.stage === "interested" || c.stage === "negotiating" ? "talks" : c.stage === "won" ? "fine" : c.stage === "not_now" ? "no" : "lead";
+const FOLLOW_LABEL: Record<FollowState, string> = { due: "To follow up", talks: "In talks", fine: "Buying normally", lead: "New leads", no: "Not now" };
 const FOLLOW_STATES = Object.keys(FOLLOW_LABEL) as FollowState[];
 /** Who's worth a visit, in order: due a call, in talks, then leads. */
 const VISIT_RANK: Partial<Record<FollowState, number>> = { due: 0, talks: 1, lead: 2 };
@@ -160,7 +161,7 @@ export function CustomerMapClient({ customers, me, runs }: { customers: MapCusto
     return n;
   }, [visible]);
   const followCounts = useMemo(() => {
-    const n: Record<FollowState, number> = { due: 0, talks: 0, fine: 0, lead: 0 };
+    const n = emptyFollow();
     for (const c of visible) n[followOf(c)]++;
     return n;
   }, [visible]);
@@ -181,6 +182,7 @@ export function CustomerMapClient({ customers, me, runs }: { customers: MapCusto
     approximate: c.approximate,
     areaKey: c.areaKey,
     href: c.href,
+    canLog: me.role !== "sales" || c.repId === null || c.repId === me.id,
     ...(view === "follow" ? { color: FOLLOW_COLOR[followOf(c)] } : {}),
     note: c.due ? dueText(c.due, tr) : null,
   });
@@ -205,7 +207,7 @@ export function CustomerMapClient({ customers, me, runs }: { customers: MapCusto
             name: c.areaName,
             total: 0,
             byStage: emptyStages(),
-            byFollow: { due: 0, talks: 0, fine: 0, lead: 0 },
+            byFollow: emptyFollow(),
             pins: [],
             vanDays: [],
             due: 0,

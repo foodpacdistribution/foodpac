@@ -21,8 +21,11 @@ import {
 
 export type Role = "admin" | "dispatcher" | "driver" | "customer" | "sales";
 
-/** Where a customer is in the sales process: a fresh lead, keen to work with us, in talks, or won. */
-export type SalesStage = "new" | "interested" | "negotiating" | "won";
+/**
+ * Where a customer is in the sales process: a fresh lead, keen to work with us, in talks, won, or
+ * not now (said no for the time being; kept out of the way until it's time to try again).
+ */
+export type SalesStage = "new" | "interested" | "negotiating" | "won" | "not_now";
 
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -146,6 +149,8 @@ export const customers = pgTable("customers", {
   /** Sales pipeline, set by sales staff. */
   salesStage: text("sales_stage").$type<SalesStage>().notNull().default("new"),
   salesStageAt: timestamp("sales_stage_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Why a "not now" customer said no (a NotNowReason); cleared when they move on from "not now". */
+  notNowReason: text("not_now_reason").$type<NotNowReason>(),
   /** The salesperson looking after this customer (whoever added it, or first moved it along). */
   salesRepId: uuid("sales_rep_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
   /** A reminder to get back in touch on this day (and a note on what about). */
@@ -170,6 +175,7 @@ export const customers = pgTable("customers", {
 }, (t) => [uniqueIndex("customers_code_key").on(sql`lower(${t.code})`)]);
 
 export type PaymentTerms = "prepay" | "net7" | "net14" | "net30";
+export type NotNowReason = "price" | "supplier" | "too_small" | "range" | "other";
 
 export const users = pgTable("users", {
   id: id(),
@@ -1116,6 +1122,48 @@ export const purchaseReturnPhotos = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("purchase_return_photos_return_idx").on(t.purchaseReturnId)],
+);
+
+export type VisitOutcome = "ordered" | "interested" | "thinking" | "samples" | "not_in" | "not_now";
+
+/**
+ * A salesperson's visit to a store (or call): how it went, what was said, where they were. Logging
+ * one also moves the customer along and sets the next reminder (see lib/visits.ts).
+ */
+export const customerVisits = pgTable(
+  "customer_visits",
+  {
+    id: id(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    /** In the store, or on the phone. */
+    channel: text("channel").$type<"visit" | "call">().notNull().default("visit"),
+    outcome: text("outcome").$type<VisitOutcome>().notNull(),
+    note: text("note"),
+    /** Where the phone was when it was logged (visits only, when the phone shared it). */
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("customer_visits_customer_idx").on(t.customerId, t.createdAt), index("customer_visits_user_idx").on(t.userId, t.createdAt)],
+);
+
+/** Photos taken on a visit: the shelf, what they use now, a supplier's price label. */
+export const customerVisitPhotos = pgTable(
+  "customer_visit_photos",
+  {
+    id: id(),
+    visitId: uuid("visit_id")
+      .notNull()
+      .references(() => customerVisits.id, { onDelete: "cascade" }),
+    mime: text("mime").notNull(),
+    bytes: integer("bytes").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("customer_visit_photos_visit_idx").on(t.visitId)],
 );
 
 export type SupplierPayMethod = "bank_transfer" | "card" | "cash" | "other";

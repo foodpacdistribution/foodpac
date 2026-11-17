@@ -6,6 +6,7 @@ import { customers, orders, salesOrderItems, salesOrders } from "./db/schema";
 import { type BuyingLess, buyingLess, dueFollowUp, type ProductHistory, SPEND_WINDOW } from "./follow-up";
 import { getSettings } from "./planning";
 import { todayIn } from "./time";
+import { lastVisits } from "./visit-log";
 
 /**
  * Each customer's latest order day: shop orders (not cancelled) and delivery orders (phone,
@@ -84,7 +85,7 @@ async function buyingLessBy(db: DB, timeZone: string, today: string, lastOrder: 
 export async function loadPipeline(db: DB) {
   const s = await getSettings(db);
   const today = todayIn(s.timezone);
-  const [rows, last] = await Promise.all([
+  const [rows, last, visits] = await Promise.all([
     db
       .select({
         id: customers.id,
@@ -102,12 +103,14 @@ export async function loadPipeline(db: DB) {
         repId: customers.salesRepId,
         followUpOn: customers.followUpOn,
         followUpNote: customers.followUpNote,
+        notNowReason: customers.notNowReason,
         contactedAt: customers.contactedAt,
         createdAt: customers.createdAt,
       })
       .from(customers)
       .orderBy(asc(customers.name)),
     lastOrderDays(db, s.timezone, today),
+    lastVisits(db, s.timezone),
   ]);
   const less = await buyingLessBy(db, s.timezone, today, last);
   const list = rows.map((c) => {
@@ -115,8 +118,8 @@ export async function loadPipeline(db: DB) {
     const contactedOn = c.contactedAt ? todayIn(s.timezone, c.contactedAt) : null;
     // An open account: won and approved, counted from the day it was won.
     const openedOn = c.stage === "won" && c.approved ? todayIn(s.timezone, c.stageAt) : null;
-    const facts = { followUpOn: c.followUpOn, lastOrderOn, contactedOn, openedOn, buyingLess: less.get(c.id) ?? null };
-    return { ...c, lastOrderOn, contactedOn, due: c.active ? dueFollowUp(facts, today, s.quietDays) : null };
+    const facts = { followUpOn: c.followUpOn, lastOrderOn, contactedOn, openedOn, buyingLess: less.get(c.id) ?? null, parked: c.stage === "not_now" };
+    return { ...c, lastOrderOn, contactedOn, lastVisit: visits.get(c.id) ?? null, due: c.active ? dueFollowUp(facts, today, s.quietDays) : null };
   });
   return { today, quietDays: s.quietDays, customers: list };
 }

@@ -69,11 +69,18 @@ export function CustomerPopup({ pins }: { pins: CustomerPin[] }) {
           <p className="text-slate-500">{p.address}</p>
           {p.note && <p className="font-medium text-red-700">{p.note}</p>}
           {p.approximate && <p className="text-xs text-amber-700">{tr("Placed roughly: check the address")}</p>}
-          {p.phone && (
-            <a href={`tel:${p.phone.replace(/[^\d+]/g, "")}`} className="font-medium text-blue-600">
-              {p.phone}
-            </a>
-          )}
+          <p className="flex flex-wrap gap-x-3">
+            {p.phone && (
+              <a href={`tel:${p.phone.replace(/[^\d+]/g, "")}`} className="font-medium text-blue-600">
+                {p.phone}
+              </a>
+            )}
+            {p.href && p.canLog && (
+              <Link href={`${p.href}?visit=1`} className="font-medium text-blue-600">
+                {tr("Log visit")}
+              </Link>
+            )}
+          </p>
         </div>
       ))}
     </div>

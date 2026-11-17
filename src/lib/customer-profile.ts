@@ -16,13 +16,15 @@ import {
   users,
 } from "./db/schema";
 import { goodsKey } from "./goods-photos";
+import { customerVisitList } from "./visit-log";
+import { OUTCOMES } from "./visits";
 
 /** How far back each list goes; older records stay in their own pages. */
 const MAX_ROWS = 300;
 
 export type TimelineEvent = {
   at: string;
-  kind: "joined" | "order" | "paid" | "cancelled" | "delivered" | "failed" | "quote" | "quote_accepted" | "return" | "credit" | "portal";
+  kind: "joined" | "order" | "paid" | "cancelled" | "delivered" | "failed" | "quote" | "quote_accepted" | "return" | "credit" | "portal" | "visit" | "call";
   /** English template, translated on screen with `vars`. */
   title: string;
   vars?: Record<string, string>;
@@ -39,7 +41,7 @@ export async function customerProfile(db: DB, id: string, today: string) {
   const [c] = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
   if (!c) return null;
 
-  const [login, rep, addresses, sales, deliveries, quoteRows, returnRows, account, credit] = await Promise.all([
+  const [login, rep, addresses, sales, deliveries, quoteRows, returnRows, account, credit, visits] = await Promise.all([
     db
       .select({ email: users.email, name: users.name, createdAt: users.createdAt })
       .from(users)
@@ -90,6 +92,7 @@ export async function customerProfile(db: DB, id: string, today: string) {
     db.select().from(customerReturns).where(eq(customerReturns.customerId, id)).orderBy(desc(customerReturns.createdAt)).limit(MAX_ROWS),
     creditAccount(db, id),
     creditHistory(db, id),
+    customerVisitList(db, id),
   ]);
 
   // How each delivery went: the latest outcome, and the first delivery photo.
@@ -184,6 +187,9 @@ export async function customerProfile(db: DB, id: string, today: string) {
   }
   for (const r of returnRows) events.push({ at: iso(r.createdAt), kind: "return", title: "Return {number}", vars: { number: r.returnNumber }, detail: `$${Number(r.total).toFixed(2)}`, href: `/admin/customer-returns/${r.id}` });
   for (const t of credit) events.push({ at: iso(t.createdAt), kind: "credit", title: "Store credit {amount}", vars: { amount: `${Number(t.amount) >= 0 ? "+" : "−"}$${Math.abs(Number(t.amount)).toFixed(2)}` }, detail: t.description ?? t.sourceNumber ?? undefined });
+  for (const v of visits) {
+    events.push({ at: v.at, kind: v.channel, title: `${v.channel === "call" ? "Call" : "Visit"}: ${OUTCOMES[v.outcome].label}`, detail: [v.note, v.by].filter(Boolean).join(" · ") || undefined });
+  }
   events.sort((a, b) => b.at.localeCompare(a.at));
 
   return {
@@ -205,6 +211,7 @@ export async function customerProfile(db: DB, id: string, today: string) {
     quotes: quoteRows,
     returns: returnRows,
     topProducts,
+    visits,
     timeline: events.slice(0, 150),
   };
 }

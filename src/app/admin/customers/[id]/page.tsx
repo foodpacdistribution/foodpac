@@ -6,12 +6,14 @@ import {
   CalendarClock,
   CheckCircle2,
   CircleDollarSign,
+  ClipboardPen,
   FileText,
   KeyRound,
   Mail,
   MapPin,
   Package,
   Phone,
+  PhoneCall,
   RotateCcw,
   ShoppingCart,
   Coins,
@@ -48,6 +50,8 @@ import { STAGE_INFO } from "@/lib/sales-stage";
 import { todayIn } from "@/lib/time";
 import { CreditAdjust } from "./credit-adjust";
 import { EditCustomer, ProfileTabs } from "./profile-client";
+import { VisitButton, VisitList } from "./visits-client";
+import { NOT_NOW_REASONS } from "@/lib/visits";
 import { type Offer, WorthOffering } from "./worth-offering";
 
 export const metadata: Metadata = { title: "Customer" };
@@ -82,8 +86,34 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const st = p.stats;
   const creditLeft = c.creditLimitCents !== null ? c.creditLimitCents - st.unpaidCents : null;
 
+  const target = { id: c.id, name: c.name, stage: c.salesStage };
+  const visitsTab = {
+    key: "visits",
+    label: "Visits",
+    count: p.visits.length,
+    panel: (
+      <VisitList
+        customer={target}
+        today={today}
+        canLog={serve}
+        visits={p.visits.map((v) => ({
+          id: v.id,
+          when: at(v.at),
+          channel: v.channel,
+          outcome: v.outcome,
+          note: v.note,
+          by: v.userId === me.id ? null : v.by,
+          located: v.located,
+          photoIds: v.photoIds,
+          canDelete: me.role === "admin" || v.userId === me.id,
+        }))}
+      />
+    ),
+  };
+  const activityTab = { key: "activity", label: "Activity", panel: <Timeline events={p.timeline} at={at} office={office} serve={serve} /> };
   const tabs = [
-    { key: "activity", label: "Activity", panel: <Timeline events={p.timeline} at={at} office={office} serve={serve} /> },
+    // Sales staff come here to see how their visits went; the office for the whole story.
+    ...(office ? [activityTab, visitsTab] : [visitsTab, activityTab]),
     { key: "orders", label: "Orders", count: p.sales.length, panel: <OrdersTable p={p} day={day} at={at} office={office} serve={serve} /> },
     { key: "deliveries", label: "Deliveries", count: p.deliveries.length, panel: <DeliveriesTable p={p} day={day} at={at} office={office} /> },
     { key: "quotes", label: "Quotes", count: p.quotes.length, panel: <QuotesTable p={p} day={day} today={today} office={office} serve={serve && c.active} customerId={c.id} /> },
@@ -130,6 +160,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {serve && <VisitButton customer={target} today={today} />}
           {c.phone && (
             <a href={`tel:${c.phone.replace(/\s+/g, "")}`} className={btn("secondary")}>
               <Phone className="size-4" /> <T>{"Call"}</T>
@@ -291,6 +322,11 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
             <dl className="divide-y divide-line text-sm">
               <Row icon={Flag} label="Stage">
                 <Badge tone={stage.tone}>{stage.label}</Badge>
+                {c.salesStage === "not_now" && c.notNowReason && (
+                  <span className="mt-0.5 block text-xs text-rose-700">
+                    <T>{NOT_NOW_REASONS[c.notNowReason]}</T>
+                  </span>
+                )}
                 <span className="mt-0.5 block text-xs text-slate-500">
                   <T vars={{ date: at(c.salesStageAt) }}>{"Since {date}"}</T>
                 </span>
@@ -300,7 +336,11 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                 {c.followUpOn ? (
                   <>
                     <span className={cx(c.followUpOn < today && "font-medium text-red-600")}>{day(c.followUpOn)}</span>
-                    {c.followUpNote && <span className="block text-xs text-slate-500">{c.followUpNote}</span>}
+                    {c.followUpNote && (
+                      <span className="block text-xs text-slate-500">
+                        <T>{c.followUpNote}</T>
+                      </span>
+                    )}
                   </>
                 ) : (
                   "—"
@@ -402,6 +442,8 @@ const TIMELINE_ICON: Record<TimelineEvent["kind"], { icon: typeof Wallet; tone: 
   quote_accepted: { icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-600" },
   return: { icon: RotateCcw, tone: "bg-amber-50 text-amber-600" },
   credit: { icon: Coins, tone: "bg-slate-100 text-slate-600" },
+  visit: { icon: ClipboardPen, tone: "bg-blue-50 text-blue-600" },
+  call: { icon: PhoneCall, tone: "bg-violet-50 text-violet-600" },
 };
 
 /** Sales staff can open the orders and quotes of customers they look after; the rest of the history is the office's. */
