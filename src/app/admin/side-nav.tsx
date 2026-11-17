@@ -130,7 +130,8 @@ function Badge({ href, n, className }: { href: string; n: number; className?: st
   );
 }
 
-export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: boolean; badges?: NavBadges }) {
+/** `footer`: shown at the bottom of the phone menu (the theme switch). */
+export function SideNav({ role, mobile, badges = {}, footer }: { role: Role; mobile?: boolean; badges?: NavBadges; footer?: React.ReactNode }) {
   const pathname = usePathname();
   const tr = useT();
   const [collapsed, toggle] = useCollapsed();
@@ -233,6 +234,7 @@ export function SideNav({ role, mobile, badges = {} }: { role: Role; mobile?: bo
           </div>
           {/* Closes on tap, before the next page has loaded, so the menu never seems stuck. */}
           {list({ foldable: false, roomy: true, onNavigate: closeMenu })}
+          {footer && <div className="mt-4 border-t border-slate-900/[0.06] px-1 pt-4">{footer}</div>}
         </Drawer>
       </>
     );

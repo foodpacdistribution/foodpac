@@ -20,11 +20,17 @@ import { AdminSearch } from "./admin-search";
 import { SideNav } from "./side-nav";
 import { T } from "@/components/i18n";
 import { RoleSwitch } from "@/components/role-switch";
+import { ThemeSwitch } from "@/components/theme-switch";
+import { cookies } from "next/headers";
+import { isTheme, THEME_COOKIE } from "@/lib/theme";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   // Pages check their own roles too; sales staff only get the pipeline and the customer map.
   const db = await getDb();
-  const [user, s] = await Promise.all([requireUser(PIPELINE), getSettings(db)]);
+  const [user, s, jar] = await Promise.all([requireUser(PIPELINE), getSettings(db), cookies()]);
+  // Light, dark or the device's choice (Settings, or the switch in the menu); light until chosen.
+  const saved = jar.get(THEME_COOKIE)?.value;
+  const theme = isTheme(saved) ? saved : "light";
   await restoreDeliveries(db, s.timezone);
   // Sidebar badges. They update with the page's live refresh, so new orders show up without reloading.
   // Only badges: one that can't be counted is left off (and logged) rather than failing every page.
@@ -76,7 +82,8 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   const badges = { "/admin/enquiries": newEnquiries, "/admin/sales": newSales, "/admin/shipments": toShip, "/admin/pipeline": followUps, "/admin/price-matches": priceMatches };
 
   return (
-    <div className="print-plain min-h-dvh lg:pl-[16.5rem]">
+    // isolate: its own layer, so the colour wash behind (z -10) sits above the page background, not under it.
+    <div data-app-theme data-theme={theme} className="print-plain relative isolate min-h-dvh text-slate-900 lg:pl-[16.5rem]">
       {/* A faint wash of colour behind everything, for the glass menu to pick up. */}
       <div aria-hidden className="app-ambient no-print pointer-events-none fixed inset-0 -z-10" />
       <aside className="glass no-print fixed top-3 bottom-3 left-3 z-30 hidden w-60 flex-col overflow-hidden rounded-2xl text-slate-600 lg:flex">
@@ -88,8 +95,9 @@ export default async function StaffLayout({ children }: { children: React.ReactN
         <SideNav role={user.role} badges={badges} />
         <Link href="/" target="_blank" className="mx-3 mb-2 flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-slate-500 transition-colors duration-150 hover:bg-white/60 hover:text-slate-800">
           <ExternalLink className="size-3.5" /> {" "}<T>{"View website"}</T></Link>
-        <div className="px-4 pb-3">
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
           <LanguageSwitch tone="neutral" />
+          <ThemeSwitch current={theme} compact />
         </div>
         <div className="mt-auto border-t border-slate-900/[0.06] p-3">
           {/* Someone who also drives (or sells): switch jobs without signing out. */}
@@ -136,7 +144,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
             </form>
           </div>
         </div>
-        <SideNav role={user.role} mobile badges={badges} />
+        <SideNav role={user.role} mobile badges={badges} footer={<ThemeSwitch current={theme} />} />
       </header>
 
       <main className="print-plain mx-auto w-full max-w-[1600px] p-4 sm:p-6">{children}</main>

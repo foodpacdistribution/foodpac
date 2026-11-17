@@ -15,11 +15,17 @@ import { databaseUrl } from "@/lib/db/url";
 import { emailDomainStatus, officeEmail, resendKeyHasExtra, senderAddress } from "@/lib/email";
 import { customersDueRestock } from "@/lib/restock";
 import { EmailCard } from "./email-card";
+import { cookies } from "next/headers";
+import { T } from "@/components/i18n";
+import { ThemeSwitch } from "@/components/theme-switch";
+import { Card, CardHeader } from "@/components/ui";
+import { isTheme, THEME_COOKIE } from "@/lib/theme";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const me = await requireUser(["admin"]);
+  const saved = (await cookies()).get(THEME_COOKIE)?.value;
   const db = await getDb();
   const [s, userRows, depotRows, keyRows, feedRows, emailDomain, restockDue] = await Promise.all([
     getSettings(db),
@@ -47,6 +53,12 @@ export default async function SettingsPage() {
         "scheduled sync": process.env.CRON_SECRET ? "Cron enabled (see vercel.json for the schedule)" : "Set CRON_SECRET to enable scheduled feed sync",
       }}
     >
+      <Card>
+        <CardHeader title={<T>{"Appearance"}</T>} subtitle={<T>{"Light or dark for the back office on this device. Auto follows the device's own setting. Invoices and other printable sheets stay light."}</T>} />
+        <div className="px-4 pb-4">
+          <ThemeSwitch current={isTheme(saved) ? saved : "light"} />
+        </div>
+      </Card>
       <BusinessDetailsCard contactPhone={s.contactPhone} contactEmail={s.contactEmail} contactAddress={s.contactAddress} abn={s.abn} openingHours={s.openingHours} />
       <EmailCard sender={senderAddress()} office={officeEmail()} domain={emailDomain} keyHasExtra={resendKeyHasExtra()} myEmail={me.email} />
       <ShopSettingsCard

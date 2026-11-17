@@ -3066,6 +3066,13 @@ export const ZH: Record<string, string> = {
   "None in these days yet.": "这段时间还没有。",
   "No sales in these days": "这段时间没有销售",
   "No visits in these days": "这段时间没有拜访",
+  // Theme
+  "Theme": "主题",
+  "Light": "浅色",
+  "Dark": "深色",
+  "Auto": "跟随系统",
+  "Appearance": "外观",
+  "Light or dark for the back office on this device. Auto follows the device's own setting. Invoices and other printable sheets stay light.": "本设备上后台使用浅色还是深色。“跟随系统”会随设备自己的设置切换。发票等打印页面始终是浅色。",
 };
 
 /** Messages with a variable part. */
