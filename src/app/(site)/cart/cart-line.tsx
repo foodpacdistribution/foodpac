@@ -11,10 +11,31 @@ import { SellBy } from "../sell-by";
  * Quantity on a cart line: whole cartons when `byCarton`, otherwise units. Products with a carton
  * size can switch between the two, keeping about the same amount of goods.
  */
-export function CartQty({ productId, qty, minQty, unit, per, byCarton }: { productId: string; qty: number; minQty: number; unit: string; per: number | null; byCarton: boolean }) {
+export function CartQty({
+  productId,
+  qty,
+  minQty,
+  unit,
+  per,
+  byCarton,
+  onChanged,
+}: {
+  productId: string;
+  qty: number;
+  minQty: number;
+  unit: string;
+  per: number | null;
+  byCarton: boolean;
+  /** After the change is saved (the cart panel reloads its lines). */
+  onChanged?: () => void;
+}) {
   const tr = useT();
   const [pending, start] = useTransition();
-  const set = (n: number, carton = byCarton) => start(async () => void (await setCartQty(productId, n, carton)));
+  const set = (n: number, carton = byCarton) =>
+    start(async () => {
+      await setCartQty(productId, n, carton);
+      onChanged?.();
+    });
   const least = byCarton ? 1 : minQty;
   return (
     <div className="flex flex-wrap items-center gap-2">

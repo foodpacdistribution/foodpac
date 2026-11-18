@@ -38,10 +38,10 @@ export default async function CartPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <h1 className="font-display text-2xl font-semibold tracking-tight"><T>{"Your cart"}</T></h1>
+      <h1 className="font-display text-[28px] font-semibold tracking-tight sm:text-4xl"><T>{"Your cart"}</T></h1>
       {lines.length === 0 ? (
-        <div className="mt-8 rounded-3xl border border-dashed border-leaf-950/15 bg-white px-6 py-14 text-center">
-          <ShoppingCart className="mx-auto size-10 text-leaf-700/60" />
+        <div className="mt-8 border-y border-leaf-950/10 px-6 py-16 text-center">
+          <ShoppingCart className="mx-auto size-9 text-leaf-900/25" strokeWidth={1.5} />
           <p className="mt-3 font-semibold"><T>{"Your cart is empty"}</T></p>
           <div className="mt-4 flex justify-center gap-2">
             <Link href="/products" className="inline-flex h-10 items-center rounded-md bg-leaf-700 px-5 text-sm font-semibold text-white">
@@ -77,13 +77,15 @@ export default async function CartPage() {
       )}
       {lines.length === 0 ? null : (
         <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_340px]">
-          <section className="overflow-hidden rounded-3xl border border-leaf-950/10 bg-white">
+          <section className="border-y border-leaf-950/10">
             {lines.map((l) => (
               // Phones: photo and name on the first line, quantity and line total under the name.
-              <div key={l.id} className="grid grid-cols-[4rem_1fr] items-center gap-x-4 gap-y-3 border-b border-leaf-950/5 p-4 last:border-0 sm:flex">
-                <ProductImage p={l} sizes="64px" className="size-16 shrink-0 rounded-xl" />
+              <div key={l.id} className="grid grid-cols-[4.5rem_1fr] items-center gap-x-4 gap-y-3 border-b border-leaf-950/8 py-5 last:border-0 sm:flex sm:gap-x-5">
+                <Link href={`/products/${encodeURIComponent(l.sku)}`} className="shrink-0 overflow-hidden rounded-lg">
+                  <ProductImage p={l} sizes="80px" className="size-[4.5rem] sm:size-20" />
+                </Link>
                 <div className="min-w-0 sm:flex-1">
-                  <Link href={`/products/${encodeURIComponent(l.sku)}`} className="line-clamp-2 font-semibold leading-snug hover:text-leaf-700">
+                  <Link href={`/products/${encodeURIComponent(l.sku)}`} className="line-clamp-2 leading-snug font-medium hover:underline">
                     {l.name}
                   </Link>
                   <p className="mt-0.5 text-xs text-leaf-900/55">
@@ -107,7 +109,7 @@ export default async function CartPage() {
               </div>
             ))}
           </section>
-          <aside className="h-fit rounded-3xl border border-leaf-950/10 bg-white p-5 lg:sticky lg:top-36">
+          <aside className="h-fit rounded-2xl bg-white/70 p-6 ring-1 ring-leaf-950/8 lg:sticky lg:top-36">
             {offerOn && (
               <Progress icon={Gift} done={q.subtotalCents >= offerOn.minCents} have={q.subtotalCents} need={offerOn.minCents}>
                 {q.subtotalCents >= offerOn.minCents ? (

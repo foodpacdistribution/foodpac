@@ -3113,6 +3113,10 @@ export const ZH: Record<string, string> = {
   "{price} incl. GST": "含 GST {price}",
   "Minimum order {n} {unit}": "起订 {n} {unit}",
   "your price": "您的专属价",
+  "Your order has free delivery": "这单已免运费",
+  "Review your cart": "查看购物车",
+  "Continue shopping": "继续购物",
+  "The minimum order is {amount} before GST.": "最低订单金额为 {amount}(不含 GST)。",
   // Shop: faster ordering on phones
   "View cart": "查看购物车",
   "Free delivery": "免运费",

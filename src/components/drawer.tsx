@@ -5,11 +5,27 @@ import { createPortal } from "react-dom";
 import { cx } from "./ui";
 
 /**
- * A panel that slides in from the left over a fading backdrop (the phone menu). It stays mounted
- * so opening and closing both animate; only transform and opacity change, which phones animate
- * smoothly. Close by tapping outside, Esc, or swiping it back to the left (it follows the finger).
+ * A panel that slides in from the left (the phone menu) or the right (the shop's cart) over a fading
+ * backdrop. It stays mounted so opening and closing both animate; only transform and opacity
+ * change, which phones animate smoothly. Close by tapping outside, Esc, or swiping it back the way
+ * it came (it follows the finger).
  */
-export function Drawer({ open, onClose, label, className, children }: { open: boolean; onClose: () => void; label: string; className?: string; children: React.ReactNode }) {
+export function Drawer({
+  open,
+  onClose,
+  label,
+  className,
+  side = "left",
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  label: string;
+  className?: string;
+  side?: "left" | "right";
+  children: React.ReactNode;
+}) {
+  const away = side === "left" ? -1 : 1;
   const panel = useRef<HTMLDivElement>(null);
   const backdrop = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; t: number; dx: number; horizontal: boolean | null } | null>(null);
@@ -42,12 +58,12 @@ export function Drawer({ open, onClose, label, className, children }: { open: bo
     // Decide once whether this is a sideways swipe or a scroll of the list.
     if (d.horizontal === null && Math.hypot(dx, dy) > 8) d.horizontal = Math.abs(dx) > Math.abs(dy);
     if (!d.horizontal) return;
-    d.dx = Math.min(0, dx);
+    d.dx = side === "left" ? Math.min(0, dx) : Math.max(0, dx);
     p.style.transition = "none";
     p.style.transform = `translateX(${d.dx}px)`;
     if (backdrop.current) {
       backdrop.current.style.transition = "none";
-      backdrop.current.style.opacity = String(Math.max(0, 1 + d.dx / p.offsetWidth));
+      backdrop.current.style.opacity = String(Math.max(0, 1 - Math.abs(d.dx) / p.offsetWidth));
     }
   };
   const onTouchEnd = () => {
@@ -58,8 +74,8 @@ export function Drawer({ open, onClose, label, className, children }: { open: bo
     // Hand the movement back to the CSS transition, from wherever the finger left it.
     p.style.transition = "";
     if (backdrop.current) backdrop.current.style.transition = "";
-    const speed = d.dx / Math.max(1, performance.now() - d.t); // px per ms
-    if (d.dx < -p.offsetWidth * 0.3 || speed < -0.5) {
+    const speed = (d.dx * away) / Math.max(1, performance.now() - d.t); // px per ms, towards closing
+    if (d.dx * away > p.offsetWidth * 0.3 || speed > 0.5) {
       onClose();
     } else {
       p.style.transform = "translateX(0)";
@@ -87,8 +103,8 @@ export function Drawer({ open, onClose, label, className, children }: { open: bo
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchEnd}
-        className={cx("drawer-panel absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col overflow-y-auto overscroll-contain", className)}
-        style={{ transform: open ? "translateX(0)" : "translateX(-100%)" }}
+        className={cx("drawer-panel absolute inset-y-0 flex w-[min(20rem,85vw)] flex-col overflow-y-auto overscroll-contain", side === "left" ? "left-0" : "right-0", className)}
+        style={{ transform: open ? "translateX(0)" : `translateX(${away * 100}%)` }}
       >
         {children}
       </div>
