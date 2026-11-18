@@ -1,4 +1,4 @@
-import { ArrowRight, Heart, ShoppingCart, Truck, Zap } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { JsonLd } from "@/components/json-ld";
@@ -6,12 +6,7 @@ import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { getDepots, getSettings } from "@/lib/planning";
 import { livePosters } from "@/lib/posters";
-import { canSeePrices, getCart, listCatalog, posterPhotos, quote, recentlyBought } from "@/lib/shop";
-import { lastOrder } from "@/app/portal/orders/data";
-import { RepeatOrder } from "@/app/portal/repeat-order";
-import { prettyDate } from "@/lib/dates";
-import { aud } from "@/lib/money";
-import { todayIn } from "@/lib/time";
+import { listCatalog, posterPhotos, recentlyBought } from "@/lib/shop";
 import { siteUrl } from "@/lib/site-url";
 import { categoryHref, POSTERS, SITE } from "./content";
 import { HeroCarousel } from "./hero-carousel";
@@ -31,8 +26,7 @@ export default async function HomePage() {
   const viewer = await getCurrentCustomer();
   const customer = viewer?.customer ?? null;
   const db = await getDb();
-  const priced = !!customer && canSeePrices(customer);
-  const [featured, others, counts, recent, [depot], photos, settings, uploaded, last, cart] = await Promise.all([
+  const [featured, others, counts, recent, [depot], photos, settings, uploaded] = await Promise.all([
     listCatalog(db, customer, { featured: true, limit: 8 }),
     // To top up the shelf when fewer than 8 are featured (loaded alongside, not after).
     listCatalog(db, customer, { limit: 16, inStockFirst: true }),
@@ -43,9 +37,6 @@ export default async function HomePage() {
     Promise.all(POSTERS.map((p) => (p.art === "products" && !p.image ? posterPhotos(db, p.categories ?? []) : Promise.resolve([])))),
     getSettings(db),
     livePosters(db),
-    // For a signed-in customer: their last order (to order again) and what's in their cart.
-    priced ? lastOrder(db, customer.id) : Promise.resolve(null),
-    priced ? getCart(db, customer) : Promise.resolve([]),
   ]);
   // Posters uploaded in the back office come first; the built-in ones follow unless switched off
   // there (and always show when nothing uploaded is live, so the top of the page is never empty).
@@ -118,8 +109,10 @@ export default async function HomePage() {
     ],
   };
 
-  const posters = (
-    <HeroCarousel
+  return (
+    <main>
+      <JsonLd data={jsonLd} />
+      <HeroCarousel
         slides={[
           ...uploaded.map((poster, i) => ({
             id: poster.id,
@@ -133,25 +126,8 @@ export default async function HomePage() {
           })),
         ]}
       />
-  );
 
-  return (
-    <main>
-      <JsonLd data={jsonLd} />
-      {/* A customer back to order sees their own things first; visitors see the posters and the facts. */}
-      {priced && viewer ? (
-        <WelcomeBack
-          firstName={viewer.user.name.split(" ")[0]}
-          business={customer.name}
-          last={last ? { id: last.id, number: last.number, products: last.products, totalCents: last.totalCents, date: prettyDate(todayIn(settings.timezone, last.createdAt), { weekday: "short", day: "numeric", month: "short" }) } : null}
-          cart={cart.length ? { items: cart.reduce((t, l) => t + l.qty, 0), ...quote(cart, settings) } : null}
-          freeOverCents={settings.deliveryFeeCents > 0 ? settings.freeDeliveryOverCents : 0}
-        />
-      ) : (
-        posters
-      )}
-
-      {!priced && (
+      {/* The plain facts, right under the posters. */}
       <section className="border-b border-leaf-950/10 bg-white">
         <ul className="mx-auto grid max-w-6xl grid-cols-2 px-4 sm:px-6 lg:grid-cols-4">
           {[
@@ -169,7 +145,6 @@ export default async function HomePage() {
           ))}
         </ul>
       </section>
-      )}
 
       {recent.length > 0 && (
         <Shelf title={<T>{"Buy again"}</T>} link={{ href: "/portal/quick-order", label: "Quick order" }}>
@@ -178,8 +153,6 @@ export default async function HomePage() {
           ))}
         </Shelf>
       )}
-
-      {priced && <div className="mt-12">{posters}</div>}
 
       <section className="mx-auto max-w-6xl px-4 pt-12 sm:px-6">
         <SectionHead title={<T>{"Shop by range"}</T>} link={{ href: "/products", label: "All products" }} />
@@ -209,7 +182,7 @@ export default async function HomePage() {
         ))}
       </Shelf>
 
-      {viewer && !priced && (
+      {viewer && (
         <section className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">
           <Link href="/portal/quick-order" className="group flex items-center gap-4 rounded-lg border border-leaf-950/15 bg-white p-5 hover:border-leaf-950/30">
             <span className="flex-1">
@@ -245,79 +218,6 @@ function Shelf({ title, link, children }: { title: React.ReactNode; link: { href
     <section className="mx-auto max-w-6xl px-4 pt-12 sm:px-6">
       <SectionHead title={title} link={link} />
       <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">{children}</div>
-    </section>
-  );
-}
-
-/**
- * The top of the home page for a signed-in customer: hello, their last order again in one tap,
- * quick order and their list, and what's in their cart with how far it is from free delivery.
- */
-function WelcomeBack({
-  firstName,
-  business,
-  last,
-  cart,
-  freeOverCents,
-}: {
-  firstName: string;
-  business: string;
-  last: { id: string; number: string; products: number; totalCents: number; date: string } | null;
-  cart: { items: number; subtotalCents: number; totalCents: number } | null;
-  freeOverCents: number;
-}) {
-  const gap = cart && freeOverCents > 0 ? Math.max(0, freeOverCents - cart.subtotalCents) : 0;
-  return (
-    <section className="border-b border-leaf-950/10 bg-leaf-950 text-white">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <p className="text-sm text-white/60">
-          <T vars={{ name: firstName }}>{"Welcome back, {name}"}</T>
-        </p>
-        <h1 className="mt-0.5 font-display text-2xl font-bold tracking-tight sm:text-3xl">{business}</h1>
-        <div className="mt-5 grid gap-3 lg:grid-cols-[1.4fr_1fr]">
-          {last ? (
-            <RepeatOrder order={last} className="text-leaf-950" />
-          ) : (
-            <Link href="/products" className="press flex items-center gap-4 rounded-3xl bg-white p-4 text-leaf-950 sm:p-5">
-              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-leaf-100 text-leaf-800">
-                <ShoppingCart className="size-5" />
-              </span>
-              <span className="flex-1 font-semibold">
-                <T>{"Start your first order"}</T>
-              </span>
-              <ArrowRight className="size-5 text-leaf-900/50" />
-            </Link>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <Link href="/portal/quick-order" className="press flex items-center gap-2.5 rounded-2xl bg-white/10 px-4 py-3.5 text-sm font-semibold ring-1 ring-white/10 transition-colors hover:bg-white/15">
-              <Zap className="size-4 text-tomato" /> <T>{"Quick order"}</T>
-            </Link>
-            <Link href="/portal/list" className="press flex items-center gap-2.5 rounded-2xl bg-white/10 px-4 py-3.5 text-sm font-semibold ring-1 ring-white/10 transition-colors hover:bg-white/15">
-              <Heart className="size-4 text-tomato" /> <T>{"My list"}</T>
-            </Link>
-          </div>
-        </div>
-        {cart && (
-          <Link href="/cart" className="press mt-3 flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/10 transition-colors hover:bg-white/15">
-            <ShoppingCart className="size-4 shrink-0 text-tomato" />
-            <span className="min-w-0 flex-1 text-sm">
-              <span className="font-semibold">
-                <T vars={{ n: cart.items, total: aud(cart.totalCents) }}>{cart.items === 1 ? "1 item in your cart · {total}" : "{n} items in your cart · {total}"}</T>
-              </span>
-              {freeOverCents > 0 && (
-                <span className="mt-1.5 flex items-center gap-2 text-xs text-white/65">
-                  <Truck className="size-3.5 shrink-0" />
-                  {gap > 0 ? <T vars={{ more: aud(gap) }}>{"Add {more} more for free delivery"}</T> : <T>{"Free delivery"}</T>}
-                  <span className="h-1 flex-1 overflow-hidden rounded-full bg-white/15">
-                    <span className="block h-full rounded-full bg-tomato" style={{ width: `${Math.min(100, Math.round((cart.subtotalCents / freeOverCents) * 100))}%` }} />
-                  </span>
-                </span>
-              )}
-            </span>
-            <ArrowRight className="size-4 shrink-0 text-white/60" />
-          </Link>
-        )}
-      </div>
     </section>
   );
 }

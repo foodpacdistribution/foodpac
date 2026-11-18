@@ -20,7 +20,7 @@ import { NavProgress } from "./nav-progress";
 import { SearchBox } from "./search-box";
 import { T } from "@/components/i18n";
 
-export default async function SiteLayout({ children, modal }: { children: React.ReactNode; modal: React.ReactNode }) {
+export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const db = await getDb();
   const [user, viewer, settings, counts] = await Promise.all([getCurrentUser(), getCurrentCustomer(), getSettings(db), categoryCounts(db)]);
   const ranges = stockedCategories(counts);
@@ -92,9 +92,6 @@ export default async function SiteLayout({ children, modal }: { children: React.
       <ViewTransition update={{ nav: "page-nav", default: "auto" }}>
         <div className="flex-1">{children}</div>
       </ViewTransition>
-
-      {/* A product opened from a list shows over it (see @modal); its own page on a fresh load. */}
-      {modal}
 
       <BackToTop />
 

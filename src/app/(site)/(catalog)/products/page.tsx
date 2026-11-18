@@ -72,7 +72,6 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           {pricesShown && (
             <>
               {" · "}
-              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a file download, not a page */}
               <a href="/portal/price-list" className="inline-flex items-center gap-1 font-semibold text-leaf-700 hover:underline">
                 <Download className="size-3.5" /> <T>{"Download my price list"}</T>
               </a>
