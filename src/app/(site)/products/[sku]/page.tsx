@@ -1,4 +1,3 @@
-import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { notFound } from "next/navigation";
@@ -7,7 +6,7 @@ import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { productImageUrl } from "@/lib/product-image";
 import { getProductBySku, listCatalog } from "@/lib/shop";
-import { aud } from "@/lib/money";
+import { aud, GST_RATE } from "@/lib/money";
 import { siteUrl } from "@/lib/site-url";
 import { categoryHref, OG_IMAGE, SITE } from "../../content";
 import { AddToCart } from "../../add-to-cart";
@@ -81,44 +80,116 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
           ],
         }}
       />
-      <Link href={categoryHref(p.category)} className="inline-flex items-center gap-1.5 text-sm text-leaf-900/60 hover:text-leaf-900">
-        <ArrowLeft className="size-4" /> <T>{p.category}</T>
-      </Link>
-      <div className="mt-4 grid gap-8 lg:grid-cols-2">
-        <ProductImage p={p} morph priority sizes="(min-width: 1024px) 560px, 100vw" className={cx("rounded-lg border border-leaf-950/12", p.hasImage ? "aspect-square" : "aspect-[4/3]")} />
-        <div>
-          <p className="font-mono text-xs text-leaf-900/50"><T>{"SKU"}</T>{" "}{p.sku}</p>
-          <div className="mt-1 flex items-start justify-between gap-3">
-            <h1 className="font-display text-3xl font-bold tracking-tight text-balance">{p.name}</h1>
-            <FavouriteButton productId={p.id} sku={p.sku} favourite={p.favourite} signedIn={!!viewer} className="shrink-0" />
+      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm text-leaf-900/55">
+        <Link href="/products" className="shrink-0 transition-colors hover:text-leaf-950">
+          <T>{"All products"}</T>
+        </Link>
+        <span aria-hidden className="text-leaf-900/25">/</span>
+        <Link href={categoryHref(p.category)} className="truncate transition-colors hover:text-leaf-950">
+          <T>{p.category}</T>
+        </Link>
+      </nav>
+      <div className="mt-4 grid gap-8 lg:mt-6 lg:grid-cols-[1.1fr_1fr] lg:gap-14">
+        {/* The photo: edge to edge on a phone; on a computer it stays in view beside the details. */}
+        <div className="-mx-4 sm:mx-0 lg:sticky lg:top-32 lg:self-start">
+          <ProductImage p={p} morph priority sizes="(min-width: 1024px) 600px, 100vw" className="aspect-[5/4] sm:aspect-square sm:rounded-2xl" />
+        </div>
+        <div className="min-w-0 lg:pt-3">
+          <div className="stagger" style={{ "--i": 0 } as React.CSSProperties}>
+            <p className="text-xs font-medium tracking-[0.16em] text-leaf-900/50 uppercase">
+              <T>{p.category}</T>
+            </p>
+            <h1 className="mt-2.5 font-display text-[28px] leading-[1.15] font-semibold tracking-tight text-balance sm:text-[38px]">{p.name}</h1>
+            <p className="mt-3 text-sm text-leaf-900/55">
+              {p.packSize && (
+                <>
+                  {p.packSize}
+                  <span aria-hidden className="mx-2 text-leaf-900/25">·</span>
+                </>
+              )}
+              <span className="font-mono text-[13px]">{p.sku}</span>
+            </p>
           </div>
-          <div id="buy-box">
-          <div className="mt-4 flex items-end justify-between gap-3 border-y border-leaf-950/10 py-4">
-            <Price p={p} signedIn={!!viewer} />
-            <StockLabel stock={p.stock} className="text-sm" />
+
+          <div id="buy-box" className="stagger mt-8" style={{ "--i": 1 } as React.CSSProperties}>
+            {p.priceCents !== null ? (
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-display text-[34px] leading-none font-semibold tracking-tight tabular-nums">{aud(p.priceCents)}</span>
+                    <span className="text-sm text-leaf-900/55">
+                      / <T>{p.unit}</T>
+                    </span>
+                    {p.listPriceCents !== null && p.priceCents < p.listPriceCents && <span className="text-sm text-leaf-900/40 line-through">{aud(p.listPriceCents)}</span>}
+                  </p>
+                  <p className="mt-2 text-xs text-leaf-900/55">
+                    {p.gst ? <T vars={{ price: aud(Math.round(p.priceCents * (1 + GST_RATE))) }}>{"{price} incl. GST"}</T> : <T>{"GST free"}</T>}
+                    {p.listPriceCents !== null && p.priceCents < p.listPriceCents && (
+                      <>
+                        {" · "}
+                        <T>{"your price"}</T>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <StockDot stock={p.stock} />
+              </div>
+            ) : (
+              <div className="flex items-end justify-between gap-4">
+                <Price p={p} signedIn={!!viewer} />
+                <StockDot stock={p.stock} />
+              </div>
+            )}
+            {p.priceCents !== null && (
+              <div className="mt-6 flex items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} packSize={p.packSize} unit={p.unit} size="lg" />
+                </div>
+                <FavouriteButton productId={p.id} sku={p.sku} favourite={p.favourite} signedIn={!!viewer} className="size-12 shrink-0 rounded-md" />
+              </div>
+            )}
+            {p.priceCents !== null && p.minQty > 1 && (
+              <p className="mt-2.5 text-xs text-leaf-900/55">
+                <T vars={{ n: p.minQty, unit: p.unit }}>{"Minimum order {n} {unit}"}</T>
+              </p>
+            )}
+            {!viewer && (
+              <div className="mt-6 flex flex-wrap gap-2">
+                <Link href={`/login?next=${encodeURIComponent(`/products/${p.sku}`)}`} className="inline-flex h-12 items-center rounded-md bg-leaf-800 px-6 text-sm font-semibold text-white transition-colors hover:bg-leaf-900">
+                  <T>{"Sign in to order"}</T>
+                </Link>
+                <Link href="/register" className="inline-flex h-12 items-center rounded-md px-5 text-sm font-semibold text-leaf-950 ring-1 ring-leaf-950/20 transition-colors ring-inset hover:bg-white">
+                  <T>{"Open an account"}</T>
+                </Link>
+              </div>
+            )}
           </div>
-          {p.priceCents !== null && (
-            <div className="mt-5 max-w-sm">
-              <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} packSize={p.packSize} unit={p.unit} size="lg" />
-              {p.minQty > 1 && <p className="mt-2 text-xs text-leaf-900/60"><T>{"Minimum order"}</T>{" "}{p.minQty} <T>{p.unit}</T>.</p>}
-            </div>
+
+          {p.description.trim() && (
+            <section className="stagger mt-10" style={{ "--i": 2 } as React.CSSProperties}>
+              <h2 className="text-xs font-medium tracking-[0.16em] text-leaf-900/50 uppercase">
+                <T>{"Details"}</T>
+              </h2>
+              <p className="mt-3 leading-relaxed whitespace-pre-line text-leaf-900/80">{<Tx>{p.description}</Tx>}</p>
+            </section>
           )}
-          {!viewer && (
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Link href={`/login?next=${encodeURIComponent(`/products/${p.sku}`)}`} className="inline-flex h-11 items-center rounded-md bg-leaf-800 px-5 text-sm font-semibold text-white hover:bg-leaf-900">
-                <T>{"Sign in to order"}</T></Link>
-              <Link href="/register" className="inline-flex h-11 items-center rounded-md border border-leaf-950/20 bg-white px-5 text-sm font-semibold hover:border-leaf-950/40">
-                <T>{"Open an account"}</T></Link>
-            </div>
-          )}
-          </div>
-          <dl className="mt-6 divide-y divide-leaf-950/10 border-y border-leaf-950/10 text-sm">
-            <Spec label={<T>{"Pack size"}</T>} value={p.packSize || "—"} />
-            <Spec label={<T>{"Sold by"}</T>} value={<><T>{p.unit}</T>{p.minQty > 1 ? <> <Tx>{`· min ${p.minQty}`}</Tx></> : ""}</>} />
-            <Spec label={<T>{"GST"}</T>} value={<T>{p.gst ? "GST applies" : "GST free"}</T>} />
-            <Spec label={<T>{"Category"}</T>} value={<Link href={categoryHref(p.category)} className="hover:text-leaf-700 hover:underline"><T>{p.category}</T></Link>} />
+
+          {/* The facts, label over value, only those that are known. */}
+          <dl className="stagger mt-10 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-leaf-950/10 pt-6 text-sm sm:grid-cols-3" style={{ "--i": 3 } as React.CSSProperties}>
+            {p.packSize && <Spec label={<T>{"Pack size"}</T>} value={p.packSize} />}
+            <Spec label={<T>{"Sold by"}</T>} value={<T>{p.unit}</T>} />
+            {p.minQty > 1 && <Spec label={<T>{"Minimum order"}</T>} value={`${p.minQty}`} />}
+            <Spec label={<T>{"GST"}</T>} value={p.gst ? "10%" : <T>{"GST free"}</T>} />
+            <Spec
+              label={<T>{"Category"}</T>}
+              value={
+                <Link href={categoryHref(p.category)} className="underline decoration-leaf-950/20 underline-offset-[3px] transition-colors hover:decoration-leaf-950">
+                  <T>{p.category}</T>
+                </Link>
+              }
+            />
+            <Spec label={<T>{"SKU"}</T>} value={<span className="font-mono text-[13px]">{p.sku}</span>} />
           </dl>
-          {p.description && <p className="mt-6 leading-relaxed whitespace-pre-line text-leaf-900/80">{<Tx>{p.description}</Tx>}</p>}
         </div>
       </div>
       <BuyBar watch="buy-box">
@@ -145,9 +216,16 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
         </div>
       </BuyBar>
       {related.length > 0 && (
-        <section className="mt-14">
-          <h2 className="border-b border-leaf-950/15 pb-3 font-display text-xl font-semibold tracking-tight"><T>{"More in"}</T>{" "}{p.category}</h2>
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <section className="mt-20">
+          <div className="flex items-baseline justify-between gap-4 border-b border-leaf-950/10 pb-3">
+            <h2 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
+              <T>{"More in"}</T> <T>{p.category}</T>
+            </h2>
+            <Link href={categoryHref(p.category)} className="shrink-0 text-sm font-medium text-leaf-800 hover:underline">
+              <T>{"See all"}</T> →
+            </Link>
+          </div>
+          <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-4">
             {related.map((r) => (
               <ProductCard key={r.id} p={r} signedIn={!!viewer} />
             ))}
@@ -160,9 +238,20 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
 
 function Spec({ label, value }: { label: React.ReactNode; value: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[8rem_1fr] gap-3 py-2.5">
-      <dt className="text-leaf-900/55">{<Tx>{label}</Tx>}</dt>
-      <dd className="font-medium first-letter:uppercase">{value}</dd>
+    <div className="min-w-0">
+      <dt className="text-xs text-leaf-900/50">{<Tx>{label}</Tx>}</dt>
+      <dd className="mt-1 font-medium break-words first-letter:uppercase">{value}</dd>
     </div>
+  );
+}
+
+/** "In stock" / "Only 3 left" / "Out of stock" with a small coloured dot. */
+function StockDot({ stock }: { stock: number }) {
+  const tone = stock <= 0 ? "bg-red-600" : stock < 10 ? "bg-amber-500" : "bg-leaf-600";
+  return (
+    <span className="inline-flex shrink-0 items-center gap-2 pb-0.5">
+      <span aria-hidden className={cx("size-1.5 rounded-full", tone)} />
+      <StockLabel stock={stock} className="text-sm" />
+    </span>
   );
 }
