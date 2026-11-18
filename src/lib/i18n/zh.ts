@@ -3117,6 +3117,11 @@ export const ZH: Record<string, string> = {
   "Review your cart": "查看购物车",
   "Continue shopping": "继续购物",
   "The minimum order is {amount} before GST.": "最低订单金额为 {amount}(不含 GST)。",
+  "Back to cart": "返回购物车",
+  "Delivery time": "送货时间",
+  "Set a time window": "指定时段",
+  "We plan our run around your window.": "我们会按您的时段安排配送路线。",
+  "Add a note for us (optional)": "给我们留言(可选)",
   // Shop: faster ordering on phones
   "View cart": "查看购物车",
   "Free delivery": "免运费",

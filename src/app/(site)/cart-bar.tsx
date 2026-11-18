@@ -43,8 +43,9 @@ export function CartBar({ count, totalCents, freeGapCents, freeOverCents }: { co
         ref={bar}
         inert={!show}
         className={cx(
-          "fixed inset-x-0 bottom-0 z-30 border-t border-leaf-950/15 bg-cream/95 pb-[env(safe-area-inset-bottom)] backdrop-blur transition-transform duration-300 ease-out lg:hidden",
-          show ? "translate-y-0" : "translate-y-full",
+          // Hidden (not just moved off-screen) once it has slid away, so an empty bar never shows.
+          "fixed inset-x-0 bottom-0 z-30 border-t border-leaf-950/15 bg-cream/95 pb-[env(safe-area-inset-bottom)] backdrop-blur transition-[translate,visibility] duration-300 ease-out lg:hidden",
+          show ? "visible translate-y-0" : "invisible translate-y-full",
         )}
       >
         {freeOverCents > 0 && (
