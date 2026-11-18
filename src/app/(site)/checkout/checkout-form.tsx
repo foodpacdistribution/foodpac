@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Clock, Coins, CreditCard, Landmark, Receipt } from "lucide-react";
+import { Building2, ChevronDown, Clock, Coins, CreditCard, Landmark, MapPin, Pencil, Receipt } from "lucide-react";
 import { useState } from "react";
 import { checkout } from "@/app/actions/shop";
 import { FormError, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
@@ -37,6 +37,8 @@ export function CheckoutForm(props: {
   const [addr, setAddr] = useState<Address | null>(props.addresses[0] ?? null);
   const [method, setMethod] = useState<PaymentMethod>(props.methods[0]);
   const fill = addr ?? { recipient: props.defaults.recipient, phone: props.defaults.phone, address: props.defaults.address, instructions: "" };
+  // A repeat customer with everything on file sees one line ("Deliver to …  Change"), not a form.
+  const [editing, setEditing] = useState(!(fill.recipient && fill.address));
 
 
   const [useCredit, setUseCredit] = useState(props.storeCreditCents > 0);
@@ -51,6 +53,22 @@ export function CheckoutForm(props: {
       <input type="hidden" name="idempotencyKey" value={props.idempotencyKey} />
       <div className="space-y-4">
         <Step n={1} title={tr("Delivery address")} icon={Building2}>
+          {!editing && (
+            <div className="flex items-start gap-3 rounded-xl bg-leaf-50/70 px-4 py-3 ring-1 ring-leaf-950/8">
+              <MapPin className="mt-0.5 size-4 shrink-0 text-leaf-700" />
+              <div className="min-w-0 flex-1 text-sm">
+                <p className="font-semibold">{fill.recipient}</p>
+                {fill.phone && <p className="text-leaf-900/60">{fill.phone}</p>}
+                <p className="text-leaf-900/75">{fill.address}</p>
+                {fill.instructions && <p className="mt-0.5 text-xs text-leaf-900/55">{fill.instructions}</p>}
+              </div>
+              <button type="button" onClick={() => setEditing(true)} className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-leaf-800 hover:underline">
+                <Pencil className="size-3.5" /> {tr("Change")}
+              </button>
+            </div>
+          )}
+          {/* The fields are always in the form (sent with it); folded away while not being changed. */}
+          <div hidden={!editing}>
           {props.addresses.length > 0 && (
             <div className="mb-4 flex flex-wrap gap-2">
               {props.addresses.map((a) => (
@@ -84,11 +102,17 @@ export function CheckoutForm(props: {
               </div>
             )}
           </div>
+          </div>
         </Step>
 
         {/* No day to pick: the order goes on our next delivery run (the server picks the day). */}
         <Step n={2} title={tr("Delivery window")} icon={Clock}>
-          <div className="grid max-w-sm grid-cols-2 gap-3">
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm text-leaf-900/70 [&::-webkit-details-marker]:hidden">
+              {tr("Any time suits (optional: set a window)")}
+              <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+          <div className="mt-3 grid max-w-sm grid-cols-2 gap-3">
             <Label text={tr("Receive from (optional)")}>
               <input name="windowStart" type="time" className={input} />
             </Label>
@@ -97,6 +121,7 @@ export function CheckoutForm(props: {
             </Label>
           </div>
           <p className="mt-2 text-xs text-leaf-900/55">{tr("We plan our run around your window. Leave it blank if any time suits.")}</p>
+          </details>
         </Step>
 
         <Step n={3} title={tr("Payment")} icon={CreditCard}>
@@ -147,7 +172,13 @@ export function CheckoutForm(props: {
         </Step>
 
         <Step n={4} title={tr("Order notes")} icon={Receipt}>
-          <textarea name="notes" rows={2} placeholder={tr("Anything we should know (optional)")} className={cx(input, "h-auto py-3")} />
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm text-leaf-900/70 [&::-webkit-details-marker]:hidden">
+              {tr("Add a note (optional)")}
+              <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+            <textarea name="notes" rows={2} placeholder={tr("Anything we should know (optional)")} className={cx(input, "mt-3 h-auto py-3")} />
+          </details>
         </Step>
       </div>
 
@@ -211,6 +242,20 @@ export function CheckoutForm(props: {
         </SubmitButton>
         <p className="mt-2 text-center text-[11px] text-leaf-900/50">{tr("Prices, stock and totals are checked again when you place the order.")}</p>
       </aside>
+
+      {/* Phones: what's to pay and the button to place the order, always in reach. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-leaf-950/10 bg-cream/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-12px_rgb(17_58_39/0.25)] backdrop-blur lg:hidden">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="text-xs text-leaf-900/60">{tr(creditCents + props.offerCents > 0 ? "To pay" : "Total incl. GST")}</p>
+            <p className="font-display text-xl font-semibold tabular-nums">{aud(toPayCents)}</p>
+          </div>
+          <SubmitButton size="lg" disabled={overCredit} pendingText={tr("Placing order…")} className="rounded-md bg-tomato px-6 hover:bg-tomato-dark">
+            {method === "card" && !covered ? tr("Continue to payment") : tr("Place order")}
+          </SubmitButton>
+        </div>
+      </div>
+      <div aria-hidden className="h-16 lg:hidden" />
     </KeptForm>
   );
 }

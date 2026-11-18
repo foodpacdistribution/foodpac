@@ -26,9 +26,12 @@ export default async function MyListPage() {
           </p>
         </div>
         {priced && (
+          <>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a file download, not a page */}
           <a href="/portal/price-list" className="inline-flex h-10 items-center gap-2 rounded-full border border-leaf-950/15 bg-white px-4 text-sm font-semibold hover:border-leaf-700/40">
             <Download className="size-4" /> <T>{"Download my price list"}</T>
           </a>
+          </>
         )}
       </div>
       {items.length === 0 ? (
