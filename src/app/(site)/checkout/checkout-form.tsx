@@ -28,7 +28,7 @@ export function CheckoutForm(props: {
     unit: string;
     units: string | null;
     lineCents: number;
-    photo: { id: string; name: string; category: string; hasImage: boolean; updatedAt: string };
+    photo: { id: string; name: string; category: string; hasImage: boolean; imageAt: string };
   }[];
   quote: { subtotalCents: number; deliveryFeeCents: number; gstCents: number; totalCents: number };
   methods: PaymentMethod[];
@@ -231,7 +231,7 @@ export function CheckoutForm(props: {
             <li key={l.id} className="flex items-center gap-3.5 text-sm">
               <span className="relative shrink-0">
                 <span className="block overflow-hidden rounded-lg">
-                  <ProductImage p={{ ...l.photo, updatedAt: new Date(l.photo.updatedAt) }} sizes="48px" className="size-12" />
+                  <ProductImage p={{ ...l.photo, imageAt: new Date(l.photo.imageAt) }} sizes="48px" className="size-12" />
                 </span>
                 <span className="absolute -top-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-leaf-950 px-1 text-[11px] font-semibold text-white tabular-nums">{l.qty}</span>
               </span>

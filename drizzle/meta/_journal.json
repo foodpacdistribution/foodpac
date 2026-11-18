@@ -302,6 +302,13 @@
       "when": 1794965772499,
       "tag": "0042_docket_read_problem",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794998301938,
+      "tag": "0043_photo_version_and_indexes",
+      "breakpoints": true
     }
   ]
 }

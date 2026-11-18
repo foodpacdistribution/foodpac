@@ -37,7 +37,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
         priceCents: products.priceCents,
         minQty: products.minQty,
         stock: products.stock,
-        updatedAt: products.updatedAt,
+        imageAt: products.imageAt,
         image: products.imageMime,
       })
       .from(products)

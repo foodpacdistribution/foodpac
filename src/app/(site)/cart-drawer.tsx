@@ -108,7 +108,7 @@ export function CartDrawer() {
             {cart.lines.map((l) => (
               <li key={l.id} className="flex gap-4 py-5">
                 <Link href={`/products/${encodeURIComponent(l.sku)}`} className="shrink-0 overflow-hidden rounded-lg">
-                  <ProductImage p={{ ...l, updatedAt: new Date(l.updatedAt) }} sizes="64px" className="size-16" />
+                  <ProductImage p={{ ...l, imageAt: new Date(l.imageAt) }} sizes="64px" className="size-16" />
                 </Link>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">

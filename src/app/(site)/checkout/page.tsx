@@ -51,7 +51,7 @@ export default async function CheckoutPage() {
           unit: l.byCarton ? "carton" : l.unit,
           units: l.byCarton ? `${l.units} ${l.unit}` : null,
           lineCents: l.lineCents,
-          photo: { id: l.id, name: l.name, category: l.category, hasImage: l.hasImage, updatedAt: new Date(l.updatedAt).toISOString() },
+          photo: { id: l.id, name: l.name, category: l.category, hasImage: l.hasImage, imageAt: new Date(l.imageAt).toISOString() },
         }))}
         quote={q}
         methods={allowedMethods(c, stripeEnabled())}

@@ -27,7 +27,7 @@ export function ProductImage({
   eager,
   morph,
 }: {
-  p: Pick<CatalogItem, "id" | "hasImage" | "category" | "name" | "updatedAt">;
+  p: Pick<CatalogItem, "id" | "hasImage" | "category" | "name" | "imageAt">;
   className?: string;
   sizes?: string;
   priority?: boolean;

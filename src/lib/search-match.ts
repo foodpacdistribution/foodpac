@@ -8,7 +8,7 @@ export type SearchEntry = {
   packSize: string;
   barcode: string | null;
   hasImage: boolean;
-  updatedAt: string;
+  imageAt: string;
 };
 
 const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");

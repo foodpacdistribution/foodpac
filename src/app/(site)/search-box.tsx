@@ -9,7 +9,7 @@ import { productImageUrl } from "@/lib/product-image";
 import { matchProducts, type SearchEntry } from "@/lib/search-match";
 import { useT } from "@/components/i18n";
 
-type Hit = { id: string; sku: string; name: string; category: string; packSize: string; hasImage: boolean; updatedAt: string };
+type Hit = { id: string; sku: string; name: string; category: string; packSize: string; hasImage: boolean; imageAt: string };
 type Catalog = { products: SearchEntry[]; complete: boolean };
 
 // The catalogue's searchable fields, fetched once (from the CDN) and shared by every search box,

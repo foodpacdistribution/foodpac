@@ -7,7 +7,7 @@ export async function GET(req: Request) {
   if (q.length < 2) return Response.json({ results: [] });
   const items = await listCatalog(await getDb(), null, { q, limit: 6 });
   return Response.json(
-    { results: items.map((p) => ({ id: p.id, sku: p.sku, name: p.name, category: p.category, packSize: p.packSize, hasImage: p.hasImage, updatedAt: p.updatedAt })) },
+    { results: items.map((p) => ({ id: p.id, sku: p.sku, name: p.name, category: p.category, packSize: p.packSize, hasImage: p.hasImage, imageAt: p.imageAt })) },
     { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } },
   );
 }

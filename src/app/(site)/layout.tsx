@@ -35,7 +35,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
   return (
     // A column the height of the window: on short pages the content grows and the footer sits at the bottom.
     <div className="shop flex min-h-dvh flex-col bg-cream text-leaf-950">
-      <header className="site-header sticky top-0 z-40 border-b border-leaf-950/15 bg-cream">
+      {/* On phones the logo row scrolls away and search and categories stay, leaving more of the screen for products. */}
+      <header className="site-header sticky -top-16 z-40 border-b border-leaf-950/15 bg-cream md:top-0">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Foodpac Distribution home">
             <Logo className="h-9 sm:h-11" priority />

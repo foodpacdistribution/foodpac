@@ -203,7 +203,7 @@ export const users = pgTable("users", {
   /** Interface language ("en" | "zh"); null = whatever the device last chose. */
   locale: text("locale"),
   createdAt: createdAt(),
-});
+}, (t) => [index("users_customer_idx").on(t.customerId), index("users_driver_idx").on(t.driverId)]);
 
 export type OrderStatus = "pending" | "planned" | "dispatched" | "delivered" | "failed";
 export type GeocodeStatus = "pending" | "ok" | "approximate" | "failed";
@@ -252,6 +252,9 @@ export const orders = pgTable(
     uniqueIndex("orders_number_date_uq").on(t.orderNumber, t.deliveryDate),
     index("orders_date_idx").on(t.deliveryDate),
     index("orders_customer_idx").on(t.customerId),
+    index("orders_driver_idx").on(t.driverId),
+    // The live screens ask for the latest change every few seconds (api/live).
+    index("orders_updated_idx").on(t.updatedAt),
   ],
 );
 
@@ -373,7 +376,12 @@ export const routes = pgTable(
      */
     plannedDurationS: integer("planned_duration_s"),
   },
-  (t) => [uniqueIndex("routes_plan_driver_uq").on(t.planId, t.driverId), uniqueIndex("routes_number_uq").on(t.number)],
+  (t) => [
+    uniqueIndex("routes_plan_driver_uq").on(t.planId, t.driverId),
+    uniqueIndex("routes_number_uq").on(t.number),
+    index("routes_driver_idx").on(t.driverId),
+    index("routes_dispatched_idx").on(t.dispatchedAt),
+  ],
 );
 
 export type StopStatus = "pending" | "delivered" | "failed";
@@ -404,7 +412,7 @@ export const routeStops = pgTable(
     headsUpAt: timestamp("heads_up_at", { withTimezone: true }),
   },
   // Not unique per order: a failed delivery rescheduled to another day gets a new stop, the old one stays as history.
-  (t) => [index("route_stops_route_idx").on(t.routeId), index("route_stops_order_idx").on(t.orderId)],
+  (t) => [index("route_stops_route_idx").on(t.routeId), index("route_stops_order_idx").on(t.orderId), index("route_stops_completed_idx").on(t.completedAt)],
 );
 
 export const deliveryEvents = pgTable(
@@ -426,7 +434,7 @@ export const deliveryEvents = pgTable(
     accuracyM: real("accuracy_m"),
     createdAt: createdAt(),
   },
-  (t) => [index("delivery_events_order_idx").on(t.orderId)],
+  (t) => [index("delivery_events_order_idx").on(t.orderId), index("delivery_events_driver_idx").on(t.driverId)],
 );
 
 export type RunSnapshot = { driverId: string; orderIds: string[] }[];
@@ -488,7 +496,7 @@ export const deliveryProofs = pgTable(
     sha256: text("sha256"),
     createdAt: createdAt(),
   },
-  (t) => [index("delivery_proofs_order_idx").on(t.orderId)],
+  (t) => [index("delivery_proofs_order_idx").on(t.orderId), index("delivery_proofs_event_idx").on(t.eventId)],
 );
 
 /**
@@ -550,7 +558,7 @@ export const deliveryDockets = pgTable(
     addedAt: timestamp("added_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (t) => [index("delivery_dockets_date_idx").on(t.deliveryDate), index("delivery_dockets_order_idx").on(t.orderId)],
+  (t) => [index("delivery_dockets_date_idx").on(t.deliveryDate), index("delivery_dockets_order_idx").on(t.orderId), index("delivery_dockets_driver_idx").on(t.driverId)],
 );
 
 /** Keys for the /api/v1 order API. Only a SHA-256 hash of the key is stored. */
@@ -635,7 +643,9 @@ export const products = pgTable(
     featured: boolean("featured").notNull().default(false),
     active: boolean("active").notNull().default(true),
     createdAt: createdAt(),
-    /** Bumped on every edit; part of the image URL so photos can be cached for good. */
+    /** When the photo last changed; part of its URL, so photos can be cached for good and survive price edits. */
+    imageAt: timestamp("image_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Bumped on every edit. */
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("products_category_idx").on(t.category)],
@@ -685,7 +695,7 @@ export const customerPrices = pgTable(
       .references(() => products.id, { onDelete: "cascade" }),
     priceCents: integer("price_cents").notNull(),
   },
-  (t) => [uniqueIndex("customer_prices_uq").on(t.customerId, t.productId)],
+  (t) => [uniqueIndex("customer_prices_uq").on(t.customerId, t.productId), index("customer_prices_product_idx").on(t.productId)],
 );
 
 /** approved = the customer has the price; pending = waiting for the office; rejected = the office said no. */
@@ -738,7 +748,7 @@ export const customerAddresses = pgTable("customer_addresses", {
   address: text("address").notNull(),
   instructions: text("instructions"),
   createdAt: createdAt(),
-});
+}, (t) => [index("customer_addresses_customer_idx").on(t.customerId)]);
 
 export const cartItems = pgTable(
   "cart_items",
@@ -754,7 +764,7 @@ export const cartItems = pgTable(
     /** Ordered by the carton (packs × carton size, at the same price per pack). */
     byCarton: boolean("by_carton").notNull().default(false),
   },
-  (t) => [uniqueIndex("cart_items_uq").on(t.customerId, t.productId)],
+  (t) => [uniqueIndex("cart_items_uq").on(t.customerId, t.productId), index("cart_items_product_idx").on(t.productId)],
 );
 
 /**
@@ -776,7 +786,7 @@ export const favourites = pgTable(
     addedBy: uuid("added_by").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("favourites_uq").on(t.customerId, t.productId)],
+  (t) => [uniqueIndex("favourites_uq").on(t.customerId, t.productId), index("favourites_product_idx").on(t.productId)],
 );
 
 export type SalesStatus = "pending" | "confirmed" | "cancelled";

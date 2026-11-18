@@ -9,7 +9,7 @@ const p = (sku: string, name: string, extra: Partial<SearchEntry> = {}): SearchE
   packSize: "500 / ctn",
   barcode: null,
   hasImage: false,
-  updatedAt: "2026-01-01T00:00:00Z",
+  imageAt: "2026-01-01T00:00:00Z",
   ...extra,
 });
 

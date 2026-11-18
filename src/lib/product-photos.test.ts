@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { type DB, schema } from "./db";
 import { goodsPhotos, products } from "./db/schema";
 import { codeFromFileName, fillProductPhotosFromInvoices, goodsPhotoId } from "./goods-photos";
+import { productImageUrl } from "./product-image";
 
 const state = { db: null as unknown as DB };
 vi.mock("./db", async (orig) => ({ ...(await orig<typeof import("./db")>()), getDb: async () => state.db }));
@@ -62,5 +63,14 @@ describe("uploadProductPhoto", () => {
 
   it("says when nothing matches", async () => {
     expect(await upload("unknown-thing.jpg")).toMatchObject({ ok: false, error: expect.stringContaining("No product") });
+  });
+
+  it("gives a new photo a new address, and keeps the address when only the price changes", async () => {
+    const before = productImageUrl(await photoOf("A1"));
+    await state.db.update(products).set({ priceCents: 250, updatedAt: new Date(Date.now() + 60_000) }).where(eq(products.sku, "A1"));
+    expect(productImageUrl(await photoOf("A1"))).toBe(before);
+    await new Promise((r) => setTimeout(r, 5));
+    await upload("a1.jpg", jpeg(8));
+    expect(productImageUrl(await photoOf("A1"))).not.toBe(before);
   });
 });

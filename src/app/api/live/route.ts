@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { getCurrentUser, STAFF } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { getSettings } from "@/lib/planning";
+import { shortCache } from "@/lib/short-cache";
 import { todayIn } from "@/lib/time";
 
 // "Has anything changed?" for live screens. Returns a short fingerprint of the data a screen
@@ -11,6 +12,9 @@ import { todayIn } from "@/lib/time";
 type Row = Record<string, unknown>;
 const rowsOf = (r: unknown): Row[] => (Array.isArray(r) ? r : ((r as { rows?: Row[] }).rows ?? []));
 
+// All office staff see the same data, so their open tabs share one read every few seconds.
+const staffFingerprint = shortCache<Row | undefined>(5_000);
+
 export async function GET(req: Request) {
   const user = await getCurrentUser();
   if (!user) return Response.json({ error: "signed out" }, { status: 401 });
@@ -19,8 +23,9 @@ export async function GET(req: Request) {
   let row: Row | undefined;
 
   if (STAFF.includes(user.role) && (scope === "admin" || scope === "tracking")) {
-    const today = todayIn((await getSettings(db)).timezone);
-    row = rowsOf(
+    row = await staffFingerprint(scope, async () => {
+      const today = todayIn((await getSettings(db)).timezone);
+      return rowsOf(
       await db.execute(sql`
         select
           (select count(*) from orders)::int as orders,
@@ -37,7 +42,8 @@ export async function GET(req: Request) {
           (select count(*) from customers)::int as customers,
           ${scope === "tracking" ? sql`(select coalesce(max(recorded_at), 'epoch') from vehicle_locations where recorded_at > ${today}::date - 1)::text` : sql`''`} as gps_at
       `),
-    )[0];
+      )[0];
+    });
   } else if (user.role === "driver" && user.driverId) {
     const today = todayIn((await getSettings(db)).timezone);
     row = rowsOf(

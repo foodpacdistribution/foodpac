@@ -45,7 +45,7 @@ export type CatalogItem = {
   stock: number;
   hasImage: boolean;
   /** For the versioned (cacheable) photo URL. */
-  updatedAt: Date;
+  imageAt: Date;
   featured: boolean;
   gst: boolean;
   /** null when the viewer can't see prices (signed out or not approved yet). */
@@ -69,7 +69,7 @@ const catalogColumns = {
   minQty: products.minQty,
   stock: products.stock,
   hasImage: sql<boolean>`${products.image} is not null`,
-  updatedAt: products.updatedAt,
+  imageAt: products.imageAt,
   featured: products.featured,
   gst: products.gst,
   priceCents: products.priceCents,
@@ -179,7 +179,7 @@ export async function searchIndex(db: DB) {
       packSize: products.packSize,
       barcode: products.barcode,
       hasImage: sql<boolean>`${products.image} is not null`,
-      updatedAt: products.updatedAt,
+      imageAt: products.imageAt,
     })
     .from(products)
     .where(eq(products.active, true))
@@ -192,7 +192,7 @@ export async function searchIndex(db: DB) {
 export async function posterPhotos(db: DB, categories: string[], limit = 3) {
   if (!categories.length) return [];
   const rows = await db
-    .select({ id: products.id, sku: products.sku, name: products.name, category: products.category, updatedAt: products.updatedAt })
+    .select({ id: products.id, sku: products.sku, name: products.name, category: products.category, imageAt: products.imageAt })
     .from(products)
     .where(and(eq(products.active, true), isNotNull(products.image), inArray(products.category, categories)))
     .orderBy(desc(products.featured), desc(products.updatedAt))
