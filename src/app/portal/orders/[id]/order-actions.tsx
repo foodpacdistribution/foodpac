@@ -19,7 +19,7 @@ export function OrderActions({ id, canCancel, canPay }: { id: string; canCancel:
       setToast({ id: Date.now(), text: r.ok ? (r.message ?? "Done") : r.error, tone: r.ok ? "ok" : "warn" });
       if (r.ok) then?.();
     });
-  const btn = "inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold disabled:opacity-50";
+  const btn = "inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-semibold transition-colors disabled:opacity-50";
   return (
     <div className="flex flex-wrap gap-2">
       {canPay && (

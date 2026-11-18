@@ -26,7 +26,7 @@ export default async function MyListPage() {
           </p>
         </div>
         {priced && (
-          <a href="/portal/price-list" className="inline-flex h-10 items-center gap-2 rounded-full border border-leaf-950/15 bg-white px-4 text-sm font-semibold hover:border-leaf-700/40">
+          <a href="/portal/price-list" className="inline-flex h-10 items-center gap-2 rounded-md border border-leaf-950/15 bg-white px-4 text-sm font-semibold hover:border-leaf-700/40">
             <Download className="size-4" /> <T>{"Download my price list"}</T>
           </a>
         )}
@@ -40,7 +40,7 @@ export default async function MyListPage() {
           <p className="mt-1 text-sm text-leaf-900/60">
             <T>{"Tap the heart on any product to keep it here."}</T>
           </p>
-          <Link href="/products" className="mt-4 inline-flex h-10 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white hover:bg-leaf-800">
+          <Link href="/products" className="mt-4 inline-flex h-10 items-center rounded-md bg-leaf-800 px-5 text-sm font-semibold text-white hover:bg-leaf-800">
             <T>{"Browse products"}</T>
           </Link>
         </div>

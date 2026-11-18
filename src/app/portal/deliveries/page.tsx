@@ -92,7 +92,7 @@ function OrderCard({
   children?: React.ReactNode;
 }) {
   return (
-    <Link href={`/portal/track/${o.id}`} className="group block rounded-2xl border border-leaf-950/10 bg-white p-4 transition-colors hover:border-leaf-700/30">
+    <Link href={`/portal/track/${o.id}`} className="group block rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 p-4 transition-colors hover:border-leaf-700/30">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold">

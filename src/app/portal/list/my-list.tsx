@@ -29,7 +29,7 @@ export function MyList({ items, priced }: { items: ListedItem[]; priced: boolean
 
   return (
     <>
-      <ul className="mt-6 divide-y divide-leaf-950/10 overflow-hidden rounded-2xl border border-leaf-950/10 bg-white">
+      <ul className="mt-6 divide-y divide-leaf-950/10 overflow-hidden rounded-2xl bg-white/70 ring-1 ring-leaf-950/8">
         {items.map((p) => {
           const out = p.stock <= 0;
           return (
@@ -105,7 +105,7 @@ export function MyList({ items, priced }: { items: ListedItem[]; priced: boolean
                 setToast({ id: Date.now(), text: r.ok ? (r.message ?? "Added") : r.error, tone: r.ok ? "ok" : "warn" });
               })
             }
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-tomato px-5 text-sm font-semibold text-white transition-[background-color,scale] hover:bg-tomato-dark active:scale-[0.97] disabled:opacity-50"
+            className="inline-flex h-11 items-center gap-2 rounded-md bg-tomato px-5 text-sm font-semibold text-white transition-[background-color,scale] hover:bg-tomato-dark active:scale-[0.97] disabled:opacity-50"
           >
             {pending ? <Spinner className="size-4" /> : <ShoppingCart className="size-4" />}
             {tr("Add to cart")}

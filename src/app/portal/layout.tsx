@@ -33,10 +33,10 @@ export default async function PortalLayout({ children }: { children: React.React
             </span>
           </Link>
           <div className="flex items-center gap-1 text-xs font-medium">
-            <Link href="/products" className="flex h-9 items-center gap-1.5 rounded-full px-3 text-leaf-900/80 hover:bg-leaf-950/5">
+            <Link href="/products" className="flex h-9 items-center gap-1.5 rounded-md px-3 text-leaf-900/80 hover:bg-leaf-950/5">
               <Store className="size-3.5" /> <span className="hidden sm:inline"><T>{"Shop"}</T></span>
             </Link>
-            <Link href="/cart" className="relative flex h-9 items-center gap-1.5 rounded-full px-3 text-leaf-900/80 hover:bg-leaf-950/5">
+            <Link href="/cart" className="relative flex h-9 items-center gap-1.5 rounded-md px-3 text-leaf-900/80 hover:bg-leaf-950/5">
               <ShoppingCart className="size-3.5" /> <span className="hidden sm:inline"><T>{"Cart"}</T></span>
               <CartBadge count={cartCount} />
             </Link>
