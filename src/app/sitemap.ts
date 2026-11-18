@@ -34,6 +34,9 @@ async function englishPages(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/about`, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/delivery`, changeFrequency: "weekly", priority: 0.7 },
     { url: `${base}/register`, changeFrequency: "yearly", priority: 0.5 },
+    { url: `${base}/terms`, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${base}/returns`, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${base}/privacy`, changeFrequency: "yearly", priority: 0.3 },
   ];
   const category = (name: string) => ({ url: `${base}${categoryHref(name)}`, changeFrequency: "weekly" as const, priority: 0.8 });
   try {
