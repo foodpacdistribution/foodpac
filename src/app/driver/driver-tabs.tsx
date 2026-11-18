@@ -1,6 +1,6 @@
 "use client";
 
-import { History, Route, UserRound, Zap } from "lucide-react";
+import { FileText, History, Route, UserRound, Zap } from "lucide-react";
 import Link from "@/components/link";
 import { usePathname } from "next/navigation";
 import { useT } from "@/components/i18n";
@@ -8,6 +8,7 @@ import { cx } from "@/components/ui";
 
 const TABS = [
   { href: "/driver", label: "Today", icon: Route },
+  { href: "/driver/dockets", label: "Invoices", icon: FileText },
   { href: "/driver/history", label: "History", icon: History },
   { href: "/quick-route", label: "Quick route", icon: Zap },
   { href: "/account", label: "Profile", icon: UserRound },
@@ -19,7 +20,7 @@ export function DriverTabs() {
   const tr = useT();
   return (
     <nav className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
-      <div className="mx-auto grid max-w-lg grid-cols-4">
+      <div className="mx-auto grid max-w-lg grid-cols-5">
         {TABS.map(({ href, label, icon: Icon }) => {
           const active = href === "/driver" ? pathname === "/driver" : pathname.startsWith(href);
           return (

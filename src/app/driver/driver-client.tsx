@@ -299,8 +299,15 @@ export function DriverClient({ name, linked, date, today, days, unconfirmed, now
                   : tr("Your shipment appears here as soon as the office sends it. This page refreshes automatically.")}
             </p>
             {linked && (
-              <Link href="/driver/history" className={btn("secondary", "md", "mt-5 rounded-xl")}>
-                <History className="size-4" /> {" "}{tr("Past deliveries")}</Link>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {date === today && (
+                  <Link href="/driver/dockets" className={btn("primary", "md", "rounded-xl")}>
+                    <Camera className="size-4" /> {tr("Photograph invoices")}
+                  </Link>
+                )}
+                <Link href="/driver/history" className={btn("secondary", "md", "rounded-xl")}>
+                  <History className="size-4" /> {" "}{tr("Past deliveries")}</Link>
+              </div>
             )}
           </div>
         </main>
