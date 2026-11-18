@@ -1,5 +1,7 @@
 import { asc, eq } from "drizzle-orm";
+import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "@/components/link";
 import { redirect } from "next/navigation";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { creditBalance } from "@/lib/credit";
@@ -32,11 +34,25 @@ export default async function CheckoutPage() {
   const offerCents = Math.min(await firstOrderOfferFor(db, c, q.subtotalCents), q.totalCents);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <h1 className="font-display text-2xl font-semibold tracking-tight"><T>{"Checkout"}</T></h1>
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+      <Link href="/cart" className="inline-flex items-center gap-1.5 text-sm text-leaf-900/55 transition-colors hover:text-leaf-950">
+        <ArrowLeft className="size-4" /> <T>{"Back to cart"}</T>
+      </Link>
+      <h1 className="mt-3 font-display text-[28px] font-semibold tracking-tight sm:text-4xl">
+        <T>{"Checkout"}</T>
+      </h1>
       <CheckoutForm
         idempotencyKey={crypto.randomUUID()}
-        lines={lines.map((l) => ({ id: l.id, name: l.name, sku: l.sku, qty: l.qty, unit: l.byCarton ? "carton" : l.unit, units: l.byCarton ? `${l.units} ${l.unit}` : null, lineCents: l.lineCents }))}
+        lines={lines.map((l) => ({
+          id: l.id,
+          name: l.name,
+          sku: l.sku,
+          qty: l.qty,
+          unit: l.byCarton ? "carton" : l.unit,
+          units: l.byCarton ? `${l.units} ${l.unit}` : null,
+          lineCents: l.lineCents,
+          photo: { id: l.id, name: l.name, category: l.category, hasImage: l.hasImage, updatedAt: new Date(l.updatedAt).toISOString() },
+        }))}
         quote={q}
         methods={allowedMethods(c, stripeEnabled())}
         terms={c.paymentTerms}
