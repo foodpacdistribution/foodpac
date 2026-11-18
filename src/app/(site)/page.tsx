@@ -14,7 +14,7 @@ import { categoryCounts, stockedCategories } from "./live-categories";
 import { PosterSlide, UploadedPosterSlide } from "./posters";
 import { Contact, HowItWorks } from "./sections";
 import { siteInfo } from "./site-info";
-import { ProductCard, ProductCount } from "./shop-ui";
+import { ProductCard, ProductCount, ProductImage } from "./shop-ui";
 import { T, Tx } from "@/components/i18n";
 import { languageAlternates } from "@/lib/i18n/server";
 
@@ -47,6 +47,12 @@ export default async function HomePage() {
   const popular = shelf.length > 4 ? shelf.slice(0, Math.floor(shelf.length / 4) * 4) : shelf;
   const total = counts.reduce((t, c) => t + c.n, 0);
   const ranges = stockedCategories(counts);
+  // One product photo for each range, for its tile.
+  const rangePhotos = await posterPhotos(
+    db,
+    ranges.map((r) => r.title),
+    ranges.length,
+  );
   // A small number ("1 product") reads as an empty shop; the count only shows once it says something.
   const showCount = total >= 20 && ranges.length >= 2;
 
@@ -156,23 +162,35 @@ export default async function HomePage() {
 
       <section className="mx-auto max-w-6xl px-4 pt-12 sm:px-6">
         <SectionHead title={<T>{"Shop by range"}</T>} link={{ href: "/products", label: "All products" }} />
-        {/* A ruled index of the ranges, like the contents page of a printed catalogue. */}
-        <div className="mt-5 grid border-t border-l border-leaf-950/15 bg-white sm:grid-cols-2 lg:grid-cols-3">
-          {ranges.map(({ title, text }) => (
-            <Link key={title} href={categoryHref(title)} className="group flex flex-col border-r border-b border-leaf-950/15 p-5 transition-colors hover:bg-leaf-50">
-              <span className="flex items-baseline justify-between gap-3">
-                <span className="font-display text-lg font-semibold tracking-tight group-hover:underline group-hover:underline-offset-4">
-                  <T>{title}</T>
-                </span>
-                <span className="shrink-0 text-xs text-leaf-900/50 tabular-nums">
-                  <ProductCount n={counts.find((c) => c.name === title)?.n ?? 0} />
-                </span>
-              </span>
-              <span className="mt-1.5 text-sm leading-relaxed text-leaf-900/65">
-                <T>{text}</T>
-              </span>
-            </Link>
-          ))}
+        {/* Each range as a tile with one of its products, like a section opener in a printed catalogue. */}
+        <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-9 lg:grid-cols-3 lg:gap-x-6">
+          {ranges.map(({ title, text, icon: Icon }) => {
+            const photo = rangePhotos.find((p) => p.category === title);
+            return (
+              <Link key={title} href={categoryHref(title)} className="press reveal group block">
+                <div className="overflow-hidden rounded-xl">
+                  {photo ? (
+                    <ProductImage p={photo} sizes="(min-width: 1024px) 360px, 50vw" className="aspect-[4/3] lg:aspect-[3/2]" />
+                  ) : (
+                    <div className="grid aspect-[4/3] place-items-center bg-[#f1ebdf] lg:aspect-[3/2]">
+                      <Icon className="size-10 text-leaf-900/25" strokeWidth={1.25} aria-hidden />
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                  <span className="font-display text-base font-semibold tracking-tight underline-offset-4 group-hover:underline sm:text-lg">
+                    <T>{title}</T>
+                  </span>
+                  <span className="shrink-0 text-xs text-leaf-900/50 tabular-nums">
+                    <ProductCount n={counts.find((c) => c.name === title)?.n ?? 0} />
+                  </span>
+                </div>
+                <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-leaf-900/60 max-sm:hidden">
+                  <T>{text}</T>
+                </p>
+              </Link>
+            );
+          })}
         </div>
       </section>
 
@@ -217,7 +235,7 @@ function Shelf({ title, link, children }: { title: React.ReactNode; link: { href
   return (
     <section className="mx-auto max-w-6xl px-4 pt-12 sm:px-6">
       <SectionHead title={title} link={link} />
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">{children}</div>
+      <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-9 lg:grid-cols-4 lg:gap-x-6">{children}</div>
     </section>
   );
 }

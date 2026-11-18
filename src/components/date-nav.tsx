@@ -4,7 +4,7 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { shiftDate, prettyDate } from "@/lib/dates";
-import { btn, Spinner, TopProgress } from "./ui";
+import { btn, Spinner } from "./ui";
 import { Tx, useT } from "@/components/i18n";
 
 export function DateNav({ date, today, basePath, extra = "" }: { date: string; today: string; basePath: string; extra?: string }) {
@@ -26,7 +26,6 @@ export function DateNav({ date, today, basePath, extra = "" }: { date: string; t
       <button className={btn("ghost", "sm", "px-2")} onClick={() => go(shiftDate(date, 1))} aria-label={tr("Next day")}>
         <ChevronRight className="size-4" />
       </button>
-      {pending && <TopProgress />}
       {date !== today && (
         <button className={btn("ghost", "sm")} onClick={() => go(today)}>
           {tr("Today")}</button>

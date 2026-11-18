@@ -2,7 +2,7 @@ import { Clock, Heart, Mail, Phone, ShoppingCart, UserRound } from "lucide-react
 import { AccountMenu } from "@/components/account-menu";
 import { LanguageSwitch } from "@/components/language-switch";
 import Link from "@/components/link";
-import { Suspense, ViewTransition } from "react";
+import { ViewTransition } from "react";
 import { Logo } from "@/components/brand";
 import { getCurrentCustomer, getCurrentUser } from "@/lib/auth/dal";
 import { accountLinks } from "@/lib/account";
@@ -17,7 +17,6 @@ import { CartBadge } from "./cart-badge";
 import { CartBar } from "./cart-bar";
 import { CartButton, CartDrawer } from "./cart-drawer";
 import { CategoryNav } from "./category-nav";
-import { NavProgress } from "./nav-progress";
 import { SearchBox } from "./search-box";
 import { T } from "@/components/i18n";
 
@@ -86,9 +85,6 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         </nav>
       </header>
 
-      <Suspense>
-        <NavProgress />
-      </Suspense>
 
       {/* On a link click the new page rises in as the old one fades (other updates just crossfade);
           the header and footer stay put. Links carry the "nav" type (components/link.tsx). */}

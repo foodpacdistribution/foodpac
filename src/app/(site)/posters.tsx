@@ -52,7 +52,7 @@ export function PosterSlide({
           <p className={cx("text-sm font-medium", tone.accent)}>
             <T>{poster.eyebrow}</T>
           </p>
-          <Heading className="mt-3 max-w-xl font-display text-[2.4rem] leading-[1.04] font-bold tracking-[-0.02em] text-balance text-white sm:text-[3.2rem]">
+          <Heading className="mt-3 max-w-xl font-display text-[2.15rem] leading-[1.06] font-semibold tracking-[-0.025em] text-balance text-white sm:text-[2.9rem]">
             <T>{poster.title}</T>
           </Heading>
           <p className="mt-5 max-w-md leading-relaxed text-white/75">
@@ -291,7 +291,7 @@ export function UploadedPosterSlide({ poster: p, first }: { poster: PosterRow; f
       <div className="relative mx-auto flex h-full max-w-6xl items-end px-4 pt-12 pb-20 sm:px-6 md:items-center lg:pt-14 lg:pb-24">
         <div className="hero-copy max-w-xl">
           {p.eyebrow && <p className="text-sm font-medium text-white/70">{p.eyebrow}</p>}
-          <Heading className="mt-3 font-display text-3xl leading-[1.04] font-bold tracking-[-0.02em] text-balance text-white sm:text-5xl">{p.headline}</Heading>
+          <Heading className="mt-3 font-display text-3xl leading-[1.06] font-semibold tracking-[-0.025em] text-balance text-white sm:text-[2.9rem]">{p.headline}</Heading>
           {p.text && <p className="mt-4 max-w-lg text-cream/80">{p.text}</p>}
           {p.href && (
             <div className="mt-7">

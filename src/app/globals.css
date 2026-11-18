@@ -56,8 +56,6 @@
   --animate-bump: bump 380ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
   /* Forms on phones: a sheet slides up from the bottom edge. */
   --animate-sheet: sheet-up 340ms cubic-bezier(0.32, 0.72, 0, 1) both;
-  /* Navigation bar: fills quickly, then creeps, and never claims to be done until the page swaps. */
-  --animate-progress: progress 8s cubic-bezier(0.1, 0.7, 0.3, 1) both;
 
   @keyframes bump {
     0% {
@@ -70,24 +68,6 @@
   @keyframes fade-in {
     from {
       opacity: 0;
-    }
-  }
-  @keyframes progress {
-    0% {
-      opacity: 0;
-      transform: scaleX(0);
-    }
-    /* Hidden for the first moment so instant navigations don't flash it. */
-    3% {
-      opacity: 0;
-      transform: scaleX(0.05);
-    }
-    6% {
-      opacity: 1;
-    }
-    100% {
-      opacity: 1;
-      transform: scaleX(0.9);
     }
   }
 
