@@ -1,4 +1,4 @@
-import { ArrowLeft, Truck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "@/components/link";
 import { notFound } from "next/navigation";
@@ -6,13 +6,11 @@ import { JsonLd } from "@/components/json-ld";
 import { getCurrentCustomer } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
 import { productImageUrl } from "@/lib/product-image";
-import { deliveryPromise, getProductBySku, listCatalog } from "@/lib/shop";
-import { getSettings } from "@/lib/planning";
+import { getProductBySku, listCatalog } from "@/lib/shop";
 import { aud } from "@/lib/money";
 import { siteUrl } from "@/lib/site-url";
 import { categoryHref, OG_IMAGE, SITE } from "../../content";
 import { AddToCart } from "../../add-to-cart";
-import { DeliveryPromiseText, FreeDeliveryText } from "../../delivery-promise";
 import { BuyBar } from "./buy-bar";
 import { FavouriteButton } from "../../favourite-button";
 import { Price, ProductCard, ProductImage, StockLabel } from "../../shop-ui";
@@ -48,9 +46,8 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
   const { sku } = await params;
   const viewer = await getCurrentCustomer();
   const db = await getDb();
-  const [p, settings] = await Promise.all([getProductBySku(db, viewer?.customer ?? null, decodeURIComponent(sku)), getSettings(db)]);
+  const p = await getProductBySku(db, viewer?.customer ?? null, decodeURIComponent(sku));
   if (!p) notFound();
-  const promise = deliveryPromise(settings);
   const related = (await listCatalog(db, viewer?.customer ?? null, { category: p.category, limit: 5, inStockFirst: true })).filter((x) => x.id !== p.id).slice(0, 4);
 
   const base = siteUrl();
@@ -115,21 +112,6 @@ export default async function ProductPage({ params }: { params: Promise<{ sku: s
             </div>
           )}
           </div>
-          {promise && (
-            <div className="mt-5 flex items-start gap-3 border-l-2 border-leaf-700 py-1 pl-4">
-              <Truck className="mt-0.5 size-4 shrink-0 text-leaf-700" />
-              <div className="text-sm leading-snug">
-                <p className="font-semibold text-leaf-950">
-                  <DeliveryPromiseText promise={promise} />
-                </p>
-                <p className="mt-0.5 text-leaf-900/65">
-                  <FreeDeliveryText promise={promise} />
-                  {promise.freeDeliveryOverCents > 0 || promise.deliveryFeeCents <= 0 ? " · " : ""}
-                  <T>{"Photo and signature at the door"}</T>
-                </p>
-              </div>
-            </div>
-          )}
           <dl className="mt-6 divide-y divide-leaf-950/10 border-y border-leaf-950/10 text-sm">
             <Spec label={<T>{"Pack size"}</T>} value={p.packSize || "—"} />
             <Spec label={<T>{"Sold by"}</T>} value={<><T>{p.unit}</T>{p.minQty > 1 ? <> <Tx>{`· min ${p.minQty}`}</Tx></> : ""}</>} />
