@@ -3106,6 +3106,10 @@ export const ZH: Record<string, string> = {
   "{n} × carton ({units} {unit}) · {price} a carton": "{n} 箱（{units} {unit}）· 每箱 {price}",
   "One SKU and quantity per line. Add “ctn” for whole cartons, e.g. FP-1001 2 ctn.": "每行一个 SKU 和数量。整箱请加 “ctn”，例如 FP-1001 2 ctn。",
   // Drivers photographing invoices
+  "One photo per invoice, flat and in focus. The invoice number and customer are read for you and the address comes from the customer on file: check them, then add them to your route.": "每张发票拍一张，放平拍清楚。系统会自动识别发票号和客户，地址取自客户资料：核对无误后加入今天的配送路线。",
+  "This doesn't look like an invoice. Retake the photo or search for the customer below.": "这看起来不像发票。请重拍，或在下面搜索客户。",
+  "Couldn't read this photo. Search for the customer or invoice number below, or retake it.": "没能识别这张照片。请在下面搜索客户或发票号，或重拍。",
+  "Couldn't match the customer. Search for them below.": "没能匹配到客户，请在下面搜索。",
   "Search customer, code or invoice no.": "搜索客户名、客户编号或发票号",
   "Or type it in": "或手动填写",
   "Nothing found. Type it in below.": "没有找到，请在下面手动填写。",

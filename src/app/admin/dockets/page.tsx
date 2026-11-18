@@ -6,7 +6,7 @@ import { Badge, btn, Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireUser, STAFF } from "@/lib/auth/dal";
 import { prettyDate, shiftDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
-import { canReadPhotos, type DocketView, listDockets } from "@/lib/dockets";
+import { type DocketView, listDockets } from "@/lib/dockets";
 import { aud } from "@/lib/money";
 import { getSettings } from "@/lib/planning";
 import { todayIn } from "@/lib/time";
@@ -48,11 +48,6 @@ export default async function DocketsPage({ searchParams }: { searchParams: Prom
           </div>
         }
       />
-      {!canReadPhotos() && (
-        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
-          <T>{"Reading photos needs the Vercel AI Gateway. Until it's on, drivers type in the customer and address themselves."}</T>
-        </p>
-      )}
       <p className="mb-3 text-sm text-slate-600">
         <Tx>{prettyDate(date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</Tx> ·{" "}
         <T vars={{ n: dockets.length }}>{"{n} photographed"}</T> · <T vars={{ n: count((d) => d.delivery?.status === "delivered") }}>{"{n} delivered"}</T>

@@ -196,3 +196,31 @@ describe("readProblem", () => {
     expect(readProblem(new Error("The operation was aborted due to timeout"))).toMatch(/too long/);
   });
 });
+
+describe("reading the text the phone recognised (no AI)", () => {
+  const text = (name: string, inv: string) => `FOODPAC DISTRIBUTION PTY LTD\nINVOICE\n${name}\nBILL TO SHIP TO\nToowong, 4066 Toowong, 4066\nSALES ORDER S0002343\nInvoice Amount $300.83\n${inv} . Page1`;
+  const row = async (id: string) => (await db.select().from(deliveryDockets).where(eq(deliveryDockets.id, id)))[0];
+
+  it("matches a misread name to the customer on file and uses their address", async () => {
+    const id = await addDocket(db, kim, photo, "2026-11-20", null, text("Sushl Paradise (Toowong", "INV0O9999"));
+    expect(await row(id)).toMatchObject({
+      readStatus: "read",
+      readError: null,
+      orderNumber: "INV009999",
+      customerName: "Sushi Paradise (Toowong)",
+      address: "K6/9 Sherwood Rd, Toowong QLD 4066",
+      totalCents: 30083,
+    });
+  });
+
+  it("takes everything from the office's delivery for that invoice number", async () => {
+    await db.insert(orders).values({ orderNumber: "INV4242", deliveryDate: "2026-11-20", customerName: "Ramen Ya", address: "2 Ann St, Brisbane QLD 4000", goods: [{ name: "Bowl", qty: 2, unit: "CTN" }] });
+    const id = await addDocket(db, kim, photo, "2026-11-20", null, text("Rarnen Va", "INV4242"));
+    expect(await row(id)).toMatchObject({ orderNumber: "INV4242", customerName: "Ramen Ya", address: "2 Ann St, Brisbane QLD 4000", goods: [{ name: "Bowl", qty: 2, unit: "CTN" }], readError: null });
+  });
+
+  it("asks the driver to search when the customer isn't clear", async () => {
+    const id = await addDocket(db, kim, photo, "2026-11-20", null, text("Somebody Else Cafe", "INV7001"));
+    expect(await row(id)).toMatchObject({ orderNumber: "INV7001", customerName: "Somebody Else Cafe", address: null, readError: expect.stringMatching(/Search for them/) });
+  });
+});
