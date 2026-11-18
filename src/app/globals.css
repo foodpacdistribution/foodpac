@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+/* A grid with no column setting (most layouts on a phone, before their sm:/lg: columns apply)
+   gets one column that can shrink to the screen. Left to itself the column grows to the widest
+   line that can't wrap inside it (a long customer code, a truncated address), which widens the
+   whole page on a phone and makes it zoom out. Any grid-cols-* class still overrides this. */
+@layer base {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* iPhone zooms the page in whenever a field with text under 16px is tapped (and stays zoomed,
+   cut off at the sides). On touch screens every typing field is 16px, so it never does; pinch
+   zoom still works. Outside any layer, so it wins over the text-sm/text-xs on the fields. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="submit"], [type="button"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-navy-950: #08111f;
