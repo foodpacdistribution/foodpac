@@ -50,7 +50,7 @@ export default async function InvoicesPage() {
         />
       </div>
       {(credit.balance > 0 || creditRows.length > 0) && (
-        <section className="mt-5 overflow-hidden rounded-2xl border border-leaf-950/10 bg-white">
+        <section className="mt-5 overflow-hidden rounded-2xl bg-white/70 ring-1 ring-leaf-950/8">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4">
             <h2 className="font-display text-lg font-semibold"><T>{"Store credit"}</T></h2>
             <p className="text-sm text-leaf-900/70">
@@ -60,7 +60,7 @@ export default async function InvoicesPage() {
           <CreditHistory staff={false} rows={creditRows.map((t) => ({ ...t, by: null, when: fmt.format(t.createdAt) }))} />
         </section>
       )}
-      <div className="mt-5 overflow-x-auto rounded-2xl border border-leaf-950/10 bg-white">
+      <div className="mt-5 overflow-x-auto rounded-2xl bg-white/70 ring-1 ring-leaf-950/8">
         <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-leaf-50/60 text-left text-xs text-leaf-900/60">
             <tr>
@@ -106,7 +106,7 @@ export default async function InvoicesPage() {
 
 function Stat({ label, value, hint, warn }: { label: React.ReactNode; value: React.ReactNode; hint: React.ReactNode; warn?: boolean }) {
   return (
-    <div className="rounded-2xl border border-leaf-950/10 bg-white p-4">
+    <div className="rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 p-4">
       <p className="text-xs font-medium text-leaf-900/55">{<Tx>{label}</Tx>}</p>
       <p className={`mt-1 font-display text-xl font-semibold tabular-nums ${warn ? "text-red-700" : ""}`}>{value}</p>
       <p className="mt-0.5 text-xs text-leaf-900/55">{<Tx>{hint}</Tx>}</p>

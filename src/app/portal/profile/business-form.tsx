@@ -27,7 +27,7 @@ export function BusinessForm(c: { name: string; phone: string | null; email: str
         <AddressInput name="address" defaultValue={c.address ?? ""} inputClassName={profileInput} />
       </ProfileLabel>
       <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-        <SubmitButton pendingText={tr("Saving…")} className="rounded-full bg-leaf-700 px-5 hover:bg-leaf-800">
+        <SubmitButton pendingText={tr("Saving…")} className="rounded-md bg-leaf-800 px-5 hover:bg-leaf-800">
           {tr("Save business details")}</SubmitButton>
         <Saved state={state} />
       </div>

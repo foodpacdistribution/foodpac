@@ -93,7 +93,7 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
           className="h-12 w-full rounded-2xl border border-leaf-950/15 bg-white pr-4 pl-11 text-[15px] placeholder:text-leaf-900/40 focus:border-leaf-600 focus:ring-2 focus:ring-leaf-600/20 focus:outline-none"
         />
         {hits.length > 0 && (
-          <ul id="sheet-hits" role="listbox" className="absolute inset-x-0 top-full z-30 mt-1.5 overflow-hidden rounded-2xl border border-leaf-950/10 bg-white shadow-lg">
+          <ul id="sheet-hits" role="listbox" className="absolute inset-x-0 top-full z-30 mt-1.5 overflow-hidden rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 shadow-lg">
             {hits.map((h, i) => {
               const p = catalog.find((c) => c.id === h.id)!;
               return (
@@ -119,7 +119,7 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
           </ul>
         )}
         {query.trim() && hits.length === 0 && (
-          <p className="absolute inset-x-0 top-full z-30 mt-1.5 rounded-2xl border border-leaf-950/10 bg-white px-4 py-3 text-sm text-leaf-900/60 shadow-lg">
+          <p className="absolute inset-x-0 top-full z-30 mt-1.5 rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 px-4 py-3 text-sm text-leaf-900/60 shadow-lg">
             {tr("No other product matches “{q}”.", { q: query.trim() })}
           </p>
         )}
@@ -141,13 +141,13 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
                   setCartons((s) => ({ ...s, ...Object.fromEntries(withLast.map((p) => [p.id, false])) }));
                   setQty((s) => ({ ...s, ...Object.fromEntries(withLast.map((p) => [p.id, Math.max(p.lastQty!, p.minQty)])) }));
                 }}
-                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-leaf-950/15 bg-white px-3.5 text-sm font-semibold hover:border-leaf-700/40"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-leaf-950/15 bg-white px-3.5 text-sm font-semibold hover:border-leaf-700/40"
               >
                 <History className="size-4" /> {tr("Same as last time")}
               </button>
             )}
           </div>
-          <ul className="mt-3 divide-y divide-leaf-950/10 overflow-hidden rounded-2xl border border-leaf-950/10 bg-white">
+          <ul className="mt-3 divide-y divide-leaf-950/10 overflow-hidden rounded-2xl bg-white/70 ring-1 ring-leaf-950/8">
             {rows.map((p) => {
               const out = p.stock <= 0;
               const isUsual = usual.some((u) => u.id === p.id);
@@ -250,7 +250,7 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
               } else setToast({ id: Date.now(), text: r.error, tone: "warn" });
             })
           }
-          className="inline-flex h-11 items-center gap-2 rounded-full bg-tomato px-5 text-sm font-semibold text-white transition-[background-color,scale] hover:bg-tomato-dark active:scale-[0.97] disabled:opacity-50"
+          className="inline-flex h-11 items-center gap-2 rounded-md bg-tomato px-5 text-sm font-semibold text-white transition-[background-color,scale] hover:bg-tomato-dark active:scale-[0.97] disabled:opacity-50"
         >
           {pending ? <Spinner className="size-4" /> : <ShoppingCart className="size-4" />}
           {tr("Add to cart")}

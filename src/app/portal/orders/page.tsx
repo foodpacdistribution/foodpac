@@ -20,7 +20,7 @@ export default async function OrdersPage() {
         <div className="mt-8 rounded-3xl border border-dashed border-leaf-950/15 bg-white px-6 py-14 text-center">
           <Receipt className="mx-auto size-10 text-leaf-700/60" />
           <p className="mt-3 font-semibold"><T>{"No orders yet"}</T></p>
-          <Link href="/products" className="mt-4 inline-flex h-10 items-center rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white">
+          <Link href="/products" className="mt-4 inline-flex h-10 items-center rounded-md bg-leaf-800 px-5 text-sm font-semibold text-white">
             <T>{"Start shopping"}</T></Link>
         </div>
       ) : (

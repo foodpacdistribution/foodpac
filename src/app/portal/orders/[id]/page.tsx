@@ -65,11 +65,11 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
       </div>
 
       {d && so.status !== "cancelled" && (
-        <div className="mt-4 rounded-3xl border border-leaf-950/10 bg-white p-5">
+        <div className="mt-4 rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 p-5">
           <StageSteps stage={d.stage} />
           <Link
             href={`/portal/track/${so.deliveryOrderId}`}
-            className="mt-5 flex items-center justify-center gap-2 rounded-full bg-leaf-50 py-2.5 text-sm font-semibold text-leaf-800 hover:bg-leaf-100"
+            className="mt-5 flex items-center justify-center gap-2 border-t border-leaf-950/8 pt-4 text-sm font-semibold text-leaf-800 transition-colors hover:text-leaf-950"
           >
             <Truck className="size-4" />
             {d.stage === "out_for_delivery" ? <T>{"Track the van live"}</T> : d.stage === "delivered" ? <T>{"See photo, signature and route"}</T> : <T>{"Delivery details"}</T>}
@@ -78,7 +78,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
       )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <section className="overflow-hidden rounded-3xl border border-leaf-950/10 bg-white">
+        <section className="overflow-hidden rounded-2xl bg-white/70 ring-1 ring-leaf-950/8">
           <table className="w-full text-sm">
             <thead className="bg-leaf-50/60 text-left text-xs text-leaf-900/60">
               <tr>
@@ -123,7 +123,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
           </dl>
         </section>
         <section className="space-y-4">
-          <div className="rounded-3xl border border-leaf-950/10 bg-white p-5 text-sm">
+          <div className="rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 p-5 text-sm">
             <h2 className="flex items-center gap-1.5 font-semibold">
               <MapPin className="size-4 text-leaf-700" /> {" "}<T>{"Delivery"}</T></h2>
             <p className="mt-2">{<Tx>{prettyDate(so.deliveryDate)}</Tx>}</p>
@@ -137,7 +137,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
             {so.phone && <p className="text-leaf-900/70">{so.phone}</p>}
             {so.instructions && <p className="mt-2 text-leaf-900/70">“{so.instructions}”</p>}
           </div>
-          <div className="rounded-3xl border border-leaf-950/10 bg-white p-5 text-sm">
+          <div className="rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 p-5 text-sm">
             <h2 className="flex items-center gap-1.5 font-semibold">
               <FileText className="size-4 text-leaf-700" /> {" "}<T>{"Payment"}</T></h2>
             <p className="mt-2"><Tx>{PAYMENT_METHOD_LABEL[so.paymentMethod]}</Tx></p>
@@ -159,7 +159,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
 
 function Status({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-leaf-950/10 bg-white px-4 py-3">
+    <div className="rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 px-4 py-3">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-leaf-900/45">{<Tx>{label}</Tx>}</p>
       <div className="mt-1.5">{children}</div>
     </div>

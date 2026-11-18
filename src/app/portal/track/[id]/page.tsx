@@ -44,13 +44,13 @@ export default async function PortalOrderPage({ params }: { params: Promise<{ id
         <StageBadge stage={o.stage} />
       </div>
 
-      <div className="mt-5 rounded-3xl border border-leaf-950/10 bg-white p-5">
+      <div className="mt-5 rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 p-5">
         <StageSteps stage={o.stage} />
         <Headline o={o} time={time} />
       </div>
 
       {o.stage === "out_for_delivery" && (
-        <section className="mt-4 flex items-center gap-3 rounded-3xl border border-leaf-950/10 bg-white p-5">
+        <section className="mt-4 flex items-center gap-3 rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 p-5">
           <span className="relative grid size-11 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-600">
             <Truck className="size-5" />
             <span className="absolute inset-0 animate-ping rounded-full bg-amber-400/20" />
@@ -71,7 +71,7 @@ export default async function PortalOrderPage({ params }: { params: Promise<{ id
 
       {o.outcome && <Proof o={o} time={time} />}
 
-      <section className="mt-4 rounded-3xl border border-leaf-950/10 bg-white p-5">
+      <section className="mt-4 rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 p-5">
         <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-leaf-900/50"><T>{"Delivery record"}</T></h2>
         <ol className="mt-4 space-y-4">
           <Event done icon={CheckCircle2} title={<T>{"Order received"}</T>} text={`Booked in for ${prettyDate(o.deliveryDate)}.`} />
@@ -159,7 +159,7 @@ function Proof({ o, time }: { o: PortalOrder; time: (iso: string) => string }) {
   const placeText = out.place ? describeDeliveryPlace(out.place.distanceM, out.place.accuracyM) : null;
   const far = (out.place?.distanceM ?? 0) > DELIVERY_PLACE_WARN_M;
   return (
-    <section className="mt-4 rounded-3xl border border-leaf-950/10 bg-white p-5">
+    <section className="mt-4 rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 p-5">
       <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-leaf-900/50">{out.type === "delivered" ? <T>{"Proof of delivery"}</T> : <T>{"Delivery attempt"}</T>}</h2>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {photo ? (
@@ -175,7 +175,7 @@ function Proof({ o, time }: { o: PortalOrder; time: (iso: string) => string }) {
         )}
         {out.type === "delivered" &&
           (signature ? (
-            <a href={`/api/proofs/${signature.id}`} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border border-leaf-950/10 bg-white">
+            <a href={`/api/proofs/${signature.id}`} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl bg-white/70 ring-1 ring-leaf-950/8">
               {/* eslint-disable-next-line @next/next/no-img-element -- private, signed-in image */}
               <img src={`/api/proofs/${signature.id}`} alt="Signature of the person who received the order" className="h-56 w-full object-contain p-3" />
               <span className="flex items-center gap-1.5 border-t border-leaf-950/10 px-3 py-2 text-xs text-leaf-900/70">

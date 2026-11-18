@@ -23,7 +23,7 @@ export function RepeatOrder({
   const [pending, start] = useTransition();
   const [toast, setToast] = useState<ToastMessage | null>(null);
   return (
-    <div className={cx("flex flex-wrap items-center gap-x-4 gap-y-3 rounded-3xl border border-leaf-950/10 bg-white p-4 sm:p-5", className)}>
+    <div className={cx("flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl bg-white/70 ring-1 ring-leaf-950/8 p-4 sm:p-5", className)}>
       <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-leaf-100 text-leaf-800">
         <RotateCcw className="size-5" />
       </span>
@@ -47,7 +47,7 @@ export function RepeatOrder({
             router.refresh();
           })
         }
-        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-leaf-700 px-5 text-sm font-semibold text-white hover:bg-leaf-800 disabled:opacity-50 sm:w-auto"
+        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-leaf-800 px-5 text-sm font-semibold text-white hover:bg-leaf-800 disabled:opacity-50 sm:w-auto"
       >
         {pending ? <Spinner className="size-4" /> : <RotateCcw className="size-4" />}
         {tr("Order the same again")}
