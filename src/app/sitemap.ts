@@ -38,7 +38,7 @@ async function englishPages(): Promise<MetadataRoute.Sitemap> {
   const category = (name: string) => ({ url: `${base}${categoryHref(name)}`, changeFrequency: "weekly" as const, priority: 0.8 });
   try {
     const rows = await (await getDb())
-      .select({ id: products.id, sku: products.sku, category: products.category, at: products.updatedAt, hasImage: sql<boolean>`${products.image} is not null` })
+      .select({ id: products.id, sku: products.sku, category: products.category, at: products.updatedAt, imageAt: products.imageAt, hasImage: sql<boolean>`${products.image} is not null` })
       .from(products)
       .where(eq(products.active, true));
     // Only ranges with something on sale: an empty category page is thin content. The standard six
@@ -55,7 +55,7 @@ async function englishPages(): Promise<MetadataRoute.Sitemap> {
         lastModified: p.at,
         changeFrequency: "weekly" as const,
         priority: 0.6,
-        ...(p.hasImage ? { images: [`${base}${productImageUrl({ id: p.id, updatedAt: p.at })}`] } : {}),
+        ...(p.hasImage ? { images: [`${base}${productImageUrl(p)}`] } : {}),
       })),
     ];
   } catch {

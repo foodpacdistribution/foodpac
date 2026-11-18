@@ -8,7 +8,7 @@ import type { PosterRow } from "@/lib/posters";
 import { categoryHref, categoryInfo, linksToStock, type Poster, stockedCategories } from "./content";
 import { ProductCount, ProductImage } from "./shop-ui";
 
-type Photo = { id: string; sku: string; name: string; category: string; updatedAt: Date; hasImage: boolean };
+type Photo = { id: string; sku: string; name: string; category: string; imageAt: Date; hasImage: boolean };
 
 
 const TONES: Record<Poster["tone"], { bg: string; accent: string; primary: string }> = {

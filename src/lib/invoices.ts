@@ -86,7 +86,7 @@ export async function invoiceImages(db: DB, items: { productId: string | null }[
   const ids = [...new Set(items.map((i) => i.productId).filter((x): x is string => !!x))];
   if (!ids.length) return {};
   const rows = await db
-    .select({ id: products.id, updatedAt: products.updatedAt, hasImage: sql<boolean>`${products.image} is not null` })
+    .select({ id: products.id, imageAt: products.imageAt, hasImage: sql<boolean>`${products.image} is not null` })
     .from(products)
     .where(inArray(products.id, ids));
   return Object.fromEntries(rows.filter((r) => r.hasImage).map((r) => [r.id, productImageUrl(r)])) as Record<string, string>;

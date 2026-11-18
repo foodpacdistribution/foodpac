@@ -69,7 +69,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
   const productIds = [...new Set(lines.map((l) => l.item.productId).filter((id): id is string => !!id))];
   const [productPics, goodsPics] = await Promise.all([
     productIds.length
-      ? db.select({ id: products.id, updatedAt: products.updatedAt }).from(products).where(and(inArray(products.id, productIds), isNotNull(products.image)))
+      ? db.select({ id: products.id, imageAt: products.imageAt }).from(products).where(and(inArray(products.id, productIds), isNotNull(products.image)))
       : [],
     goodsPhotoUrls(db, goodsRows.flatMap((o) => (o.goods ?? []).map((g) => g.name))),
   ]);

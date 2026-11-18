@@ -180,7 +180,7 @@ export type CartSnapshot = {
     unit: string;
     category: string;
     hasImage: boolean;
-    updatedAt: string;
+    imageAt: string;
     qty: number;
     minQty: number;
     byCarton: boolean;
@@ -218,7 +218,7 @@ export async function cartSnapshot(): Promise<CartSnapshot | null> {
       unit: l.unit,
       category: l.category,
       hasImage: l.hasImage,
-      updatedAt: new Date(l.updatedAt).toISOString(),
+      imageAt: new Date(l.imageAt).toISOString(),
       qty: l.qty,
       minQty: l.minQty,
       byCarton: l.byCarton,

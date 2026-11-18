@@ -34,7 +34,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       featured: products.featured,
       active: products.active,
       hasImage: sql<boolean>`${products.image} is not null`,
-      updatedAt: products.updatedAt,
+      imageAt: products.imageAt,
     })
     .from(products)
     .orderBy(asc(products.category), asc(products.name));
@@ -43,9 +43,9 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const categories = [...new Set([...CATEGORIES.map((c) => c.title), ...rows.map((r) => r.category)])];
   return (
     <ProductsClient
-      products={rows.map(({ updatedAt, ...r }) => ({
+      products={rows.map(({ imageAt, ...r }) => ({
         ...r,
-        imageUrl: r.hasImage ? productImageUrl({ id: r.id, updatedAt }) : null,
+        imageUrl: r.hasImage ? productImageUrl({ id: r.id, imageAt }) : null,
         cost: costs.get(r.id) ?? null,
         waiting: waiting
           .filter((w) => w.productId === r.id)

@@ -39,7 +39,7 @@ export async function fillProductPhotosFromInvoices(db: DB): Promise<number> {
       // Only if it still has none: a photo uploaded meanwhile wins.
       const [row] = await db
         .update(products)
-        .set({ image: photo.data, imageMime: photo.mime, updatedAt: new Date() })
+        .set({ image: photo.data, imageMime: photo.mime, imageAt: new Date(), updatedAt: new Date() })
         .where(and(eq(products.id, p.id), isNull(products.image)))
         .returning({ id: products.id });
       if (row) filled++;
@@ -75,6 +75,6 @@ export async function saveProductPhotoByFileName(db: DB, fileName: string, image
       .limit(1),
   );
   if (!p) return null;
-  await db.update(products).set({ image: image.data, imageMime: image.mime, updatedAt: new Date() }).where(eq(products.id, p.id));
+  await db.update(products).set({ image: image.data, imageMime: image.mime, imageAt: new Date(), updatedAt: new Date() }).where(eq(products.id, p.id));
   return { sku: p.sku, name: p.name };
 }

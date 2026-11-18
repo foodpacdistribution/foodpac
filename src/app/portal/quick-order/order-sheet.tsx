@@ -52,7 +52,7 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
   const withLast = rows.filter((p) => p.lastQty && p.stock > 0);
 
   // Search the whole range in the browser; products already on the sheet are left out.
-  const entries = useMemo(() => catalog.map((p) => ({ ...p, barcode: null, updatedAt: String(p.updatedAt) })), [catalog]);
+  const entries = useMemo(() => catalog.map((p) => ({ ...p, barcode: null, imageAt: String(p.imageAt) })), [catalog]);
   const onSheet = new Set(rows.map((r) => r.id));
   const hits = query.trim() ? matchProducts(entries.filter((e) => !onSheet.has(e.id)), query, 8) : [];
 

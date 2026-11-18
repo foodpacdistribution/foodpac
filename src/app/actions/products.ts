@@ -74,8 +74,8 @@ export async function saveProduct(_prev: unknown, form: FormData) {
       featured: form.get("featured") === "on",
       active: form.get("active") === "on",
       updatedAt: new Date(),
-      ...(image ? { image: image.data, imageMime: image.mime } : {}),
-      ...(form.get("removeImage") === "on" && !image ? { image: null, imageMime: null } : {}),
+      ...(image ? { image: image.data, imageMime: image.mime, imageAt: new Date() } : {}),
+      ...(form.get("removeImage") === "on" && !image ? { image: null, imageMime: null, imageAt: new Date() } : {}),
     };
     const [clash] = await db.select({ id: products.id }).from(products).where(eq(products.sku, sku)).limit(1);
     if (clash && clash.id !== id) throw new UserError("Another product already uses that SKU.");
