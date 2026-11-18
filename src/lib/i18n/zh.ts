@@ -3110,6 +3110,9 @@ export const ZH: Record<string, string> = {
   "Price incl. GST ($)": "单价,含 GST($)",
   "The price ex GST plus 10%. Type a price incl. GST here and the price ex GST is worked out.": "不含 GST 单价加 10%。也可以在这里填含 GST 的价格,系统会自动算出不含 GST 单价。",
   "GST free: the same as the price ex GST.": "免 GST:与不含 GST 单价相同。",
+  "{price} incl. GST": "含 GST {price}",
+  "Minimum order {n} {unit}": "起订 {n} {unit}",
+  "your price": "您的专属价",
   // Shop: faster ordering on phones
   "View cart": "查看购物车",
   "Free delivery": "免运费",
