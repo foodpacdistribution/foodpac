@@ -3,6 +3,8 @@
 
 export const SITE = {
   name: "Foodpac Distribution",
+  /** The company's registered name, at the top of invoices. */
+  legalName: "Foodpac Distribution Pty Ltd",
   tagline: "Food & packaging supplies, delivered.",
   serviceArea: "South East Queensland",
   phone: "",
