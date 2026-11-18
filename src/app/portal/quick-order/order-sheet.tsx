@@ -228,13 +228,14 @@ export function OrderSheet({ usual, catalog }: { usual: SheetItem[]; catalog: Ca
         </>
       )}
 
-      <div className="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-leaf-900 px-4 py-3 text-cream shadow-[0_-8px_24px_-16px_rgb(17_58_39/0.6)] sm:px-5">
-        <p className="text-sm">
+      {/* The running total and the button, kept in reach: a plain strip like the shop's other bottom bars. */}
+      <div className="sticky bottom-0 z-20 mt-4 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t border-leaf-950/12 bg-cream/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:mx-0 sm:rounded-xl sm:border sm:pb-3">
+        <p className="text-sm text-leaf-900/70">
           {tr(chosen.length === 1 ? "{n} product" : "{n} products", { n: chosen.length })}
           {total > 0 && (
             <>
               {" · "}
-              <span className="font-semibold text-white tabular-nums">{aud(total)}</span> <span className="text-cream/60">{tr("ex GST")}</span>
+              <span className="font-display text-base font-semibold text-leaf-950 tabular-nums">{aud(total)}</span> <span className="text-leaf-900/50">{tr("ex GST")}</span>
             </>
           )}
         </p>
