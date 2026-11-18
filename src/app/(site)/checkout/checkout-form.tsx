@@ -9,6 +9,7 @@ import { Tx, useT } from "@/components/i18n";
 import { cx } from "@/components/ui";
 import type { PaymentMethod, PaymentTerms } from "@/lib/db/schema";
 import { aud, PAYMENT_METHOD_LABEL, PAYMENT_TERMS_LABEL } from "@/lib/money";
+import { LegalConsent } from "../legal-consent";
 import { ProductImage } from "../shop-ui";
 
 type Address = { id: string; label: string; recipient: string; phone: string | null; address: string; instructions: string | null };
@@ -270,6 +271,7 @@ export function CheckoutForm(props: {
           {placeLabel}
         </SubmitButton>
         <p className="mt-3 text-center text-[11px] text-leaf-900/50">{tr("Prices, stock and totals are checked again when you place the order.")}</p>
+        <LegalConsent lead="By placing this order, you agree to our:" className="mt-2 text-center text-[11px] leading-relaxed text-leaf-900/60" />
       </aside>
 
       {/* Phones: what's to pay and the button to place the order, always in reach. */}

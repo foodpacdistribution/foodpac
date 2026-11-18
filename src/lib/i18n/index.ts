@@ -16,7 +16,7 @@ export const LOCALE_COOKIE = "lang";
 export const URL_LOCALE_HEADER = "x-url-locale";
 
 /** Public pages that also exist in Chinese under /zh (for search engines and shared links). */
-const ZH_PAGES = ["/products", "/categories", "/about", "/delivery", "/register"];
+const ZH_PAGES = ["/products", "/categories", "/about", "/delivery", "/register", "/privacy", "/terms", "/returns"];
 export const hasZhPage = (path: string) => path === "/" || ZH_PAGES.some((p) => path === p || path.startsWith(`${p}/`));
 /** "/products" → "/zh/products", "/" → "/zh". */
 export const zhPath = (path: string) => (path === "/" ? "/zh" : `/zh${path}`);

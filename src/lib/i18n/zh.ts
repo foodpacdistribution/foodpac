@@ -2003,6 +2003,11 @@ export const ZH: Record<string, string> = {
   "Sign in again to send it.": "请重新登录后再上传。",
   "The upload was cut off.": "上传中断了。",
   "This upload is too large to send.": "这次上传的文件太大,无法发送。",
+  "Terms of sale": "销售条款",
+  "Returns and refunds": "退换货政策",
+  "Privacy policy": "隐私政策",
+  "By creating an account, you agree to our:": "创建账户即表示您同意我们的:",
+  "By placing this order, you agree to our:": "提交订单即表示您同意我们的:",
   "The server couldn't save it.": "服务器暂时无法保存。",
   "Unknown result.": "未知的送货结果。",
   // Customer map (Nov 2026).

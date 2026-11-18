@@ -18,6 +18,7 @@ import { CartBar } from "./cart-bar";
 import { CartButton, CartDrawer } from "./cart-drawer";
 import { CategoryNav } from "./category-nav";
 import { SearchBox } from "./search-box";
+import { SiteAnalytics } from "./site-analytics";
 import { T } from "@/components/i18n";
 
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
@@ -160,12 +161,19 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           </div>
         </div>
         <div className="border-t border-white/10">
-          <p className="mx-auto max-w-6xl px-4 py-4 text-xs text-leaf-100/50 sm:px-6">
-            © {new Date().getFullYear()} {SITE.name}<T>{". Prices exclude GST unless shown otherwise."}</T></p>
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-4 text-xs text-leaf-100/60 sm:px-6">
+            <p>© {new Date().getFullYear()} {SITE.name}<T>{". Prices exclude GST unless shown otherwise."}</T></p>
+            <nav aria-label="Legal" className="flex flex-wrap gap-x-4">
+              <Link href="/terms" className="py-2 hover:text-white sm:py-0"><T>{"Terms of sale"}</T></Link>
+              <Link href="/returns" className="py-2 hover:text-white sm:py-0"><T>{"Returns and refunds"}</T></Link>
+              <Link href="/privacy" className="py-2 hover:text-white sm:py-0"><T>{"Privacy policy"}</T></Link>
+            </nav>
+          </div>
         </div>
       </footer>
       {viewer && <CartDrawer />}
       {viewer && <CartBar count={cartCount} totalCents={q?.totalCents ?? 0} freeGapCents={Math.max(0, freeGap)} freeOverCents={q && settings.deliveryFeeCents > 0 && settings.freeDeliveryOverCents > 0 ? settings.freeDeliveryOverCents : 0} />}
+      <SiteAnalytics />
     </div>
   );
 }

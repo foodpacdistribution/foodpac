@@ -7,6 +7,7 @@ import { registerCustomer } from "@/app/actions/shop";
 import { FormError, SubmitButton, KeptForm, useKeptForm } from "@/components/client-ui";
 import { cx } from "@/components/ui";
 import { Tx, useT } from "@/components/i18n";
+import { LegalConsent } from "../legal-consent";
 
 const input =
   "h-11 w-full rounded-xl border border-leaf-950/15 bg-white px-3.5 text-sm placeholder:text-leaf-900/40 focus:border-leaf-600 focus:ring-2 focus:ring-leaf-600/20 focus:outline-none";
@@ -63,6 +64,7 @@ export function RegisterForm({ invite = null }: { invite?: { ref: string; rep: s
       </div>
       <SubmitButton size="lg" pendingText={tr("Creating account…")} className="rounded-md bg-leaf-700 hover:bg-leaf-800 sm:col-span-2">
         {tr("Create account")}</SubmitButton>
+      <LegalConsent lead="By creating an account, you agree to our:" className="text-center text-xs leading-relaxed text-leaf-900/60 sm:col-span-2" />
       <p className="text-center text-sm text-leaf-900/60 sm:col-span-2">
         {tr("Already have an account?")}{" "}
         <Link href="/login" className="font-semibold text-leaf-700 hover:underline">
