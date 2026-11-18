@@ -435,6 +435,12 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
       <Field label={tr("List price per unit, ex GST ($)")} hint={tr("Customers with their own price see that instead.")}>
         <input name="price" required inputMode="decimal" defaultValue={p ? (p.priceCents / 100).toFixed(2) : ""} className={inputCls} />
       </Field>
+      <Field label={tr("GST")} hint={tr("10% for most goods. 0% for GST-free goods, such as basic food.")}>
+        <select name="gst" defaultValue={p?.gst === false ? "off" : "on"} className={inputCls}>
+          <option value="on">10%</option>
+          <option value="off">{tr("0% (GST free)")}</option>
+        </select>
+      </Field>
       <Field
         label={tr("Cost per unit, ex GST ($, optional)")}
         hint={
@@ -470,8 +476,6 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
         </div>
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm sm:col-span-2">
-        <label className="flex items-center gap-2">
-          <input type="checkbox" name="gst" defaultChecked={p?.gst ?? true} /> {" "}{tr("GST applies")}</label>
         <label className="flex items-center gap-2">
           <input type="checkbox" name="featured" defaultChecked={p?.featured ?? false} /> {" "}{tr("Featured on homepage")}</label>
         <label className="flex items-center gap-2">
