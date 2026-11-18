@@ -15,6 +15,7 @@ import { lastOrder } from "@/app/portal/orders/data";
 import { RepeatOrder } from "@/app/portal/repeat-order";
 import { ProductCard, ProductImage } from "../shop-ui";
 import { CartQty } from "./cart-line";
+import { RollingAmount } from "../cart-badge";
 import { T, Tx } from "@/components/i18n";
 
 export const metadata: Metadata = { title: "Cart" };
@@ -66,6 +67,14 @@ export default async function CartPage() {
           </div>
         </section>
       )}
+      {lines.length > 0 && freeGap > 0 && (
+        // Phones: how far from free delivery, before the items (the summary is further down).
+        <div className="mt-4 lg:hidden">
+          <Progress icon={Truck} done={false} have={q.subtotalCents} need={s.freeDeliveryOverCents}>
+            <T vars={{ more: aud(freeGap) }}>{"Add {more} more for free delivery"}</T>
+          </Progress>
+        </div>
+      )}
       {lines.length === 0 ? null : (
         <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_340px]">
           <section className="overflow-hidden rounded-3xl border border-leaf-950/10 bg-white">
@@ -109,7 +118,7 @@ export default async function CartPage() {
               </Progress>
             )}
             {freeGap > 0 && (
-              <Progress icon={Truck} done={false} have={q.subtotalCents} need={s.freeDeliveryOverCents}>
+              <Progress icon={Truck} done={false} have={q.subtotalCents} need={s.freeDeliveryOverCents} className="max-lg:hidden">
                 <T vars={{ more: aud(freeGap) }}>{"Add {more} more for free delivery"}</T>
               </Progress>
             )}
@@ -123,7 +132,9 @@ export default async function CartPage() {
               <Row label={<T>{"GST"}</T>} value={aud(q.gstCents)} />
               <div className="flex justify-between border-t border-leaf-950/10 pt-3 font-display text-lg font-semibold">
                 <dt><T>{"Total"}</T></dt>
-                <dd className="tabular-nums">{aud(q.totalCents)}</dd>
+                <dd>
+                  <RollingAmount cents={q.totalCents} />
+                </dd>
               </div>
             </dl>
             {q.belowMinimum && <p className="mt-3 text-xs text-red-700"><T>{"The minimum order is"}</T>{" "}{aud(s.minOrderCents)} {" "}<T>{"before GST."}</T></p>}
@@ -137,6 +148,27 @@ export default async function CartPage() {
             )}
             <p className="mt-3 text-center text-xs text-leaf-900/50"><T>{"Stock is reserved when you place the order."}</T></p>
           </aside>
+          {/* Phones: the total and Checkout stay at the bottom of the screen while scrolling the items. */}
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-leaf-950/10 bg-cream/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-12px_rgb(17_58_39/0.25)] backdrop-blur lg:hidden">
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1 leading-tight">
+                <p className="text-xs text-leaf-900/60">
+                  <T>{"Total incl. GST"}</T>
+                </p>
+                <RollingAmount cents={q.totalCents} className="font-display text-xl font-semibold" />
+              </div>
+              {blocked ? (
+                <span className="flex h-12 items-center rounded-md bg-leaf-950/10 px-4 text-sm font-semibold text-leaf-900/50">
+                  {canSeePrices(viewer.customer) ? <T>{"Fix the items above"}</T> : <T>{"Waiting for approval"}</T>}
+                </span>
+              ) : (
+                <Link href="/checkout" className="flex h-12 items-center rounded-md bg-tomato px-7 text-base font-semibold text-white transition-transform active:scale-95">
+                  <T>{"Checkout"}</T>
+                </Link>
+              )}
+            </div>
+          </div>
+          <div aria-hidden className="h-16 lg:hidden" />
           {topUp.length > 0 && (
             <section className="lg:col-start-1">
               <h2 className="text-xs font-semibold tracking-[0.14em] text-leaf-900/50 uppercase">
@@ -168,15 +200,15 @@ function Row({ label, value, hint }: { label: React.ReactNode; value: string; hi
 }
 
 /** A bar towards a spend target (free delivery, a first-order offer), with what's left to add. */
-function Progress({ icon: Icon, done, have, need, children }: { icon: typeof Truck; done: boolean; have: number; need: number; children: React.ReactNode }) {
+function Progress({ icon: Icon, done, have, need, children, className = "" }: { icon: typeof Truck; done: boolean; have: number; need: number; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`mb-4 rounded-xl px-3 py-2.5 text-sm ${done ? "bg-leaf-50 text-leaf-900" : "bg-[#f5f1e8] text-leaf-950"}`}>
+    <div className={`mb-4 rounded-xl px-3 py-2.5 text-sm ${done ? "bg-leaf-50 text-leaf-900" : "bg-[#f5f1e8] text-leaf-950"} ${className}`}>
       <p className="flex items-center gap-2 font-medium">
         <Icon className="size-4 shrink-0 text-leaf-700" /> {children}
       </p>
       {!done && (
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-leaf-950/10">
-          <div className="h-full rounded-full bg-leaf-600" style={{ width: `${Math.min(100, Math.round((have / need) * 100))}%` }} />
+          <div className="h-full origin-left animate-[grow-x_700ms_cubic-bezier(0.2,0.8,0.2,1)_both] rounded-full bg-leaf-600 transition-[width] duration-700 ease-out" style={{ width: `${Math.min(100, Math.round((have / need) * 100))}%` }} />
         </div>
       )}
     </div>

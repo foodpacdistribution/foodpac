@@ -71,38 +71,62 @@ export function Price({ p, signedIn }: { p: Pick<CatalogItem, "priceCents" | "li
   return (
     <p className="leading-tight">
       <span className="text-base font-bold tabular-nums sm:text-lg">{aud(p.priceCents)}</span>
-      <span className="text-xs text-leaf-900/60"> / <T>{p.unit}</T></span>
+      <span className="text-xs whitespace-nowrap text-leaf-900/60"> / <T>{p.unit}</T></span>
       {special && <span className="ml-1.5 text-xs text-leaf-900/45 line-through">{aud(p.listPriceCents)}</span>}
       <span className="block text-[11px] text-leaf-900/50">{p.gst ? <T>{"+ GST"}</T> : <T>{"GST free"}</T>}{special && <T>{" · your price"}</T>}</span>
     </p>
   );
 }
 
+/**
+ * A product in a list. In the grid (default) it's a card with the photo on top; inside a
+ * ProductGrid switched to "list" it becomes a compact row (small photo on the left), so a
+ * customer who knows what they want sees far more at once. A product without a photo gets a
+ * shorter tile than one with a photo, so cards aren't mostly empty space.
+ */
 export function ProductCard({ p, signedIn, morph }: { p: CatalogItem; signedIn: boolean; morph?: boolean; index?: number }) {
+  const href = `/products/${encodeURIComponent(p.sku)}`;
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-lg border border-leaf-950/12 bg-white transition-colors hover:border-leaf-950/30">
-      <Link href={`/products/${encodeURIComponent(p.sku)}`} className="block border-b border-leaf-950/8">
-        <ProductImage p={p} morph={morph} className="aspect-[4/3]" />
+    <div className="press group relative flex flex-col overflow-hidden rounded-lg border border-leaf-950/12 bg-white transition-colors hover:border-leaf-950/30 group-data-[view=list]/view:flex-row">
+      <Link href={href} className="block shrink-0 border-b border-leaf-950/8 group-data-[view=list]/view:w-20 group-data-[view=list]/view:border-r group-data-[view=list]/view:border-b-0 sm:group-data-[view=list]/view:w-24">
+        <ProductImage
+          p={p}
+          morph={morph}
+          sizes="(min-width: 1024px) 25vw, 50vw"
+          className={cx(p.hasImage ? "aspect-[4/3]" : "aspect-[2/1]", "group-data-[view=list]/view:aspect-auto group-data-[view=list]/view:h-full group-data-[view=list]/view:min-h-20")}
+        />
       </Link>
-      <FavouriteButton productId={p.id} sku={p.sku} favourite={p.favourite} signedIn={signedIn} className="absolute top-2 right-2 z-10" />
-      <div className="flex flex-1 flex-col p-3 sm:p-4">
-        <Link href={`/products/${encodeURIComponent(p.sku)}`} className="line-clamp-2 text-sm font-semibold leading-snug underline-offset-2 hover:underline sm:text-[15px]">
+      <FavouriteButton productId={p.id} sku={p.sku} favourite={p.favourite} signedIn={signedIn} className="absolute top-2 right-2 z-10 group-data-[view=list]/view:hidden" />
+      <div className="flex min-w-0 flex-1 flex-col p-3 sm:p-4 group-data-[view=list]/view:py-2.5 sm:group-data-[view=list]/view:py-3">
+        <Link href={href} className="line-clamp-2 text-sm leading-snug font-semibold underline-offset-2 hover:underline sm:text-[15px]">
           {p.name}
         </Link>
         <p className="mt-1 line-clamp-1 text-xs text-leaf-900/60">
           {p.packSize}
-          {p.minQty > 1 && <> <Tx>{`· min ${p.minQty}`}</Tx></>}
+          {p.minQty > 1 && (
+            <>
+              {" "}
+              <Tx>{`· min ${p.minQty}`}</Tx>
+            </>
+          )}
+          <span className="hidden font-mono text-[11px] text-leaf-900/40 group-data-[view=list]/view:inline">
+            {p.packSize ? " · " : ""}
+            {p.sku}
+          </span>
         </p>
-        <p className="mt-0.5 font-mono text-[11px] text-leaf-900/40">{p.sku}</p>
-        <div className="mt-auto flex flex-wrap items-end justify-between gap-x-2 gap-y-1 pt-3">
-          <Price p={p} signedIn={signedIn} />
-          <StockLabel stock={p.stock} />
-        </div>
-        {p.priceCents !== null && (
-          <div className="mt-3">
-            <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} packSize={p.packSize} unit={p.unit} />
+        <p className="mt-0.5 font-mono text-[11px] text-leaf-900/40 group-data-[view=list]/view:hidden">{p.sku}</p>
+        {/* In a list row: the price (with stock under it) on the left, ordering on the right, on one line. */}
+        <div className="mt-auto group-data-[view=list]/view:flex group-data-[view=list]/view:items-end group-data-[view=list]/view:gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-1 pt-3 group-data-[view=list]/view:min-w-0 group-data-[view=list]/view:flex-1 group-data-[view=list]/view:flex-col group-data-[view=list]/view:items-start group-data-[view=list]/view:gap-0.5 group-data-[view=list]/view:pt-1.5">
+            <Price p={p} signedIn={signedIn} />
+            <StockLabel stock={p.stock} />
           </div>
-        )}
+          {p.priceCents !== null && (
+            <div className="mt-3 group-data-[view=list]/view:mt-0 group-data-[view=list]/view:w-[8.75rem] group-data-[view=list]/view:shrink-0 sm:group-data-[view=list]/view:w-48">
+              <AddToCart productId={p.id} minQty={p.minQty} stock={p.stock} packSize={p.packSize} unit={p.unit} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

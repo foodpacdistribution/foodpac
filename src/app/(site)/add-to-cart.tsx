@@ -6,7 +6,7 @@ import { addToCart } from "@/app/actions/shop";
 import { Toast, type ToastMessage } from "@/components/client-ui";
 import { cx } from "@/components/ui";
 import { cartonSize } from "@/lib/stock-units";
-import { bumpCart } from "./cart-badge";
+import { bumpCart, flyToCart } from "./cart-badge";
 import { SellBy } from "./sell-by";
 import { useT } from "@/components/i18n";
 
@@ -81,9 +81,10 @@ export function AddToCart({
         <button
           type="button"
           disabled={out}
-          onClick={() => {
+          onClick={(e) => {
             // Show it in the cart straight away; undo if the server says no.
             const n = Math.max(minQty, qty);
+            flyToCart(e.currentTarget);
             bumpCart(n);
             setAdded((k) => k + 1);
             start(async () => {
@@ -96,7 +97,7 @@ export function AddToCart({
             });
           }}
           className={cx(
-            "inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md font-semibold text-white transition-colors duration-150 disabled:opacity-50",
+            "inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md font-semibold text-white transition-[background-color,scale] duration-150 active:scale-95 disabled:opacity-50",
             added > 0 ? "bg-leaf-700" : "bg-leaf-800 hover:bg-leaf-900",
             lg ? "h-12 px-3 text-base sm:px-6" : "h-9 px-2 text-sm sm:px-3",
           )}

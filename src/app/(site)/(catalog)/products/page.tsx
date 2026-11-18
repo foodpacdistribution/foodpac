@@ -7,6 +7,9 @@ import { getDb } from "@/lib/db";
 import { canSeePrices, countCatalog, listCatalog, type Sort, SORTS } from "@/lib/shop";
 import { categoryHref, categoryInfo, OG_IMAGE, SITE } from "../../content";
 import { ProductCard } from "../../shop-ui";
+import { CatalogView, ProductGrid, SortSelect, ViewToggle } from "../../catalog-view";
+import { type CatalogLayout, VIEW_COOKIE } from "../../catalog-layout";
+import { cookies } from "next/headers";
 import { T } from "@/components/i18n";
 import { getT, languageAlternates } from "@/lib/i18n/server";
 
@@ -46,6 +49,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     listCatalog(db, viewer?.customer ?? null, { q, category, sort, inStock, limit: show, inStockFirst: true }),
     countCatalog(db, { q, category, inStock }),
   ]);
+  const sorts = (Object.keys(SORTS) as Sort[]).filter((k) => pricesShown || !k.startsWith("price"));
+  const layout: CatalogLayout = (await cookies()).get(VIEW_COOKIE)?.value === "list" ? "list" : "grid";
   const qs = (patch: Record<string, string | undefined>) => {
     const u = new URLSearchParams();
     const merged = { q, category, sort, stock: inStock ? "1" : undefined, ...patch };
@@ -55,11 +60,11 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
 
   // The category menu beside this is in ../layout.tsx, so it stays put while the list changes.
   return (
-    <>
+    <CatalogView initial={layout}>
         {category && !q ? (
           <CategoryBanner name={category} />
         ) : (
-          <h1 className="font-display text-3xl font-bold tracking-tight">{q ? `Results for “${q}”` : <T>{"All products"}</T>}</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">{q ? `Results for “${q}”` : <T>{"All products"}</T>}</h1>
         )}
         <p className={cx("text-sm text-leaf-900/60", category && !q ? "mt-4" : "mt-1")}>
           <T vars={{ n: found }}>{found === 1 ? "{n} product" : "{n} products"}</T>
@@ -67,6 +72,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           {pricesShown && (
             <>
               {" · "}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a file download, not a page */}
               <a href="/portal/price-list" className="inline-flex items-center gap-1 font-semibold text-leaf-700 hover:underline">
                 <Download className="size-3.5" /> <T>{"Download my price list"}</T>
               </a>
@@ -80,10 +86,13 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
               <T>{"to see your prices"}</T></>
           )}
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-          {(Object.keys(SORTS) as Sort[])
-            .filter((k) => pricesShown || !k.startsWith("price"))
-            .map((k) => (
+        <div className="mt-4 flex items-center gap-2 text-sm">
+          {/* Phones: the sort order in one compact menu; wider screens: the choices side by side. */}
+          <div className="min-w-0 sm:hidden">
+            <SortSelect value={sort ?? "name"} options={sorts.map((k) => ({ value: k, label: SORTS[k], href: qs({ sort: k === "name" ? undefined : k }) }))} />
+          </div>
+          <div className="hidden flex-wrap items-center gap-2 sm:flex">
+            {sorts.map((k) => (
               <Link
                 key={k}
                 href={qs({ sort: k === "name" && !sort ? undefined : k })}
@@ -96,18 +105,21 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 <T>{SORTS[k]}</T>
               </Link>
             ))}
+          </div>
           <Link
             href={qs({ stock: inStock ? undefined : "1" })}
             scroll={false}
             className={cx(
-              "ml-auto flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors",
+              "ml-auto flex h-9 shrink-0 items-center gap-2 rounded-md px-3 whitespace-nowrap transition-colors",
               inStock ? "bg-leaf-950 font-medium text-white" : "bg-white text-leaf-900/75 ring-1 ring-leaf-950/15 hover:ring-leaf-950/35",
             )}
           >
             <span className={cx("grid size-4 place-items-center rounded-sm border", inStock ? "border-white bg-white text-leaf-950" : "border-leaf-900/35")}>
               {inStock && <Check className="size-3" strokeWidth={3} />}
             </span>
-            <T>{"In stock only"}</T></Link>
+            <T>{"In stock only"}</T>
+          </Link>
+          <ViewToggle />
         </div>
         {items.length === 0 ? (
           <div className="mt-8 rounded-lg border border-leaf-950/15 bg-white px-6 py-14 text-center">
@@ -128,11 +140,11 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             )}
           </div>
         ) : (
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
+          <ProductGrid>
             {items.map((p) => (
               <ProductCard key={p.id} p={p} signedIn={!!viewer} morph />
             ))}
-          </div>
+          </ProductGrid>
         )}
         {found > items.length && (
           <div className="mt-8 flex flex-col items-center gap-2">
@@ -148,7 +160,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             </p>
           </div>
         )}
-    </>
+    </CatalogView>
   );
 }
 
@@ -163,7 +175,7 @@ function CategoryBanner({ name }: { name: string }) {
         </Link>{" "}
         / <T>{name}</T>
       </p>
-      <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
+      <h1 className="mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">
         <T>{name}</T>
       </h1>
       {text && (

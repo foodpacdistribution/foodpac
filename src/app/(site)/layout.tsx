@@ -1,5 +1,4 @@
-import { eq, sql } from "drizzle-orm";
-import { Clock, Heart, Mail, Phone, ShoppingCart, Truck, UserRound } from "lucide-react";
+import { Clock, Heart, Mail, Phone, ShoppingCart, UserRound } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { LanguageSwitch } from "@/components/language-switch";
 import Link from "@/components/link";
@@ -9,55 +8,33 @@ import { getCurrentCustomer, getCurrentUser } from "@/lib/auth/dal";
 import { accountLinks } from "@/lib/account";
 import { getDb } from "@/lib/db";
 import { getSettings } from "@/lib/planning";
-import { deliveryPromise } from "@/lib/shop";
-import { cartItems } from "@/lib/db/schema";
+import { canSeePrices, getCart, quote } from "@/lib/shop";
 import { categoryHref, SITE } from "./content";
 import { categoryCounts, stockedCategories } from "./live-categories";
 import { siteInfo } from "./site-info";
 import { BackToTop } from "./back-to-top";
 import { CartBadge } from "./cart-badge";
-import { DeliveryPromiseText, FreeDeliveryText } from "./delivery-promise";
+import { CartBar } from "./cart-bar";
 import { CategoryNav } from "./category-nav";
 import { NavProgress } from "./nav-progress";
 import { SearchBox } from "./search-box";
 import { T } from "@/components/i18n";
 
-export default async function SiteLayout({ children }: { children: React.ReactNode }) {
+export default async function SiteLayout({ children, modal }: { children: React.ReactNode; modal: React.ReactNode }) {
   const db = await getDb();
   const [user, viewer, settings, counts] = await Promise.all([getCurrentUser(), getCurrentCustomer(), getSettings(db), categoryCounts(db)]);
   const ranges = stockedCategories(counts);
-  const promise = deliveryPromise(settings);
   const site = siteInfo(settings);
-  const [{ n: cartCount }] = viewer
-    ? await db
-        .select({ n: sql<number>`coalesce(sum(${cartItems.qty}), 0)::int` })
-        .from(cartItems)
-        .where(eq(cartItems.customerId, viewer.customer.id))
-    : [{ n: 0 }];
+  // What's in the cart, for the badge and the phone's cart bar (count, total, how far from free delivery).
+  const lines = viewer ? await getCart(db, viewer.customer) : [];
+  const cartCount = lines.reduce((t, l) => t + l.qty, 0);
+  const priced = !!viewer && canSeePrices(viewer.customer);
+  const q = lines.length && priced ? quote(lines, settings) : null;
+  const freeGap = q && q.deliveryFeeCents > 0 && settings.freeDeliveryOverCents > 0 ? settings.freeDeliveryOverCents - q.subtotalCents : 0;
 
   return (
     // A column the height of the window: on short pages the content grows and the footer sits at the bottom.
     <div className="shop flex min-h-dvh flex-col bg-cream text-leaf-950">
-      {/* The delivery promise, on every shop page (scrolls away with the page). */}
-      {promise && (
-        <div className="bg-leaf-950 text-[12px] text-cream/85 sm:text-xs">
-          <div className="mx-auto flex h-8 max-w-6xl items-center justify-center gap-2 px-4 sm:justify-between sm:px-6">
-            <p className="flex min-w-0 items-center gap-2">
-              <Truck className="size-3.5 shrink-0 text-tomato" />
-              <span className="truncate font-medium text-white">
-                <DeliveryPromiseText promise={promise} />
-              </span>
-              <span className="hidden truncate text-cream/60 md:inline">
-                · <FreeDeliveryText promise={promise} />
-              </span>
-            </p>
-            <p className="hidden shrink-0 items-center gap-1.5 text-cream/60 sm:flex">
-              <Clock className="size-3.5" />
-              <T>{site.hours}</T>
-            </p>
-          </div>
-        </div>
-      )}
       <header className="site-header sticky top-0 z-40 border-b border-leaf-950/15 bg-cream">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Foodpac Distribution home">
@@ -82,7 +59,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
               </Link>
             )}
             {viewer && (
-              <Link href="/cart" className="relative flex h-10 items-center gap-1.5 rounded-md px-3 hover:bg-leaf-950/5" aria-label={`Cart, ${cartCount} items`}>
+              <Link href="/cart" data-cart-target="header" className="relative flex h-10 items-center gap-1.5 rounded-md px-3 hover:bg-leaf-950/5" aria-label={`Cart, ${cartCount} items`}>
                 <ShoppingCart className="size-4" />
                 <span className="hidden sm:inline"><T>{"Cart"}</T></span>
                 <CartBadge count={cartCount} />
@@ -115,6 +92,9 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <ViewTransition update={{ nav: "page-nav", default: "auto" }}>
         <div className="flex-1">{children}</div>
       </ViewTransition>
+
+      {/* A product opened from a list shows over it (see @modal); its own page on a fresh load. */}
+      {modal}
 
       <BackToTop />
 
@@ -187,6 +167,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             © {new Date().getFullYear()} {SITE.name}<T>{". Prices exclude GST unless shown otherwise."}</T></p>
         </div>
       </footer>
+      {viewer && <CartBar count={cartCount} totalCents={q?.totalCents ?? 0} freeGapCents={Math.max(0, freeGap)} freeOverCents={q && settings.deliveryFeeCents > 0 && settings.freeDeliveryOverCents > 0 ? settings.freeDeliveryOverCents : 0} />}
     </div>
   );
 }
