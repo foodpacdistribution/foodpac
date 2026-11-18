@@ -24,3 +24,32 @@ export function reloadOnce() {
   window.location.reload();
   return true;
 }
+
+/**
+ * Whether a newer version of the site has gone live since this page was loaded: errors that the
+ * server sends back without a readable message (its requests no longer fit the new version) can't
+ * be told apart by their text, so ask. False when it can't tell (offline, local).
+ */
+export async function newerBuildLive() {
+  const mine = process.env.NEXT_PUBLIC_BUILD;
+  if (!mine || mine === "dev") return false;
+  try {
+    const r = await fetch("/api/version", { cache: "no-store" });
+    if (!r.ok) return false;
+    const { build } = (await r.json()) as { build?: string };
+    return !!build && build !== "dev" && build !== mine;
+  } catch {
+    return false;
+  }
+}
+
+/** On a page error: load afresh, once, if the page's code is out of date. */
+export function reloadIfOutdated(error: unknown) {
+  if (isStaleBuild(error)) {
+    reloadOnce();
+    return;
+  }
+  void newerBuildLive().then((newer) => {
+    if (newer) reloadOnce();
+  });
+}

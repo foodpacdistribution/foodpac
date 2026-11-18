@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { attempt } from "@/lib/action";
 import { assertCustomer, getCurrentCustomer } from "@/lib/auth/dal";
-import { hashPassword } from "@/lib/auth/password";
+import { hashPassword, passwordStamp } from "@/lib/auth/password";
 import { SESSION_COOKIE, sessionCookieOptions, signSession } from "@/lib/auth/session";
 import { countAttempt } from "@/lib/auth/throttle";
 import { getDb } from "@/lib/db";
@@ -424,7 +424,7 @@ export async function registerCustomer(_prev: unknown, form: FormData) {
     // An account that's already approved (a store staff set up) needs nothing from the office.
     if (!customer.approved) after(() => accountRequested({ id: customer.id, name: customer.name, contact: name, email, phone: customer.phone, address: customer.address }));
     locateCustomersLater();
-    const token = await signSession({ sub: user.id, role: "customer", name: user.name, driverId: null });
+    const token = await signSession({ sub: user.id, role: "customer", name: user.name, driverId: null, stamp: passwordStamp(user.passwordHash) });
     (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
     revalidatePath("/admin/customers");
     revalidatePath("/admin/pipeline");

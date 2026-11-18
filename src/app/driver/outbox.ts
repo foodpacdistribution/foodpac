@@ -95,6 +95,24 @@ async function remove(id: string) {
 
 const newId = () => (typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
+/** Vercel turns away a request over 4.5 MB before it reaches the app, so photos go up in parcels well under that. */
+const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024;
+
+/** Splits photos into uploads that each fit, keeping their order. A photo too big on its own goes alone. */
+export function photoBatches<T extends { size: number }>(files: T[], max = MAX_UPLOAD_BYTES) {
+  const batches: T[][] = [];
+  let room = 0;
+  for (const f of files) {
+    if (!batches.length || f.size > room) {
+      batches.push([]);
+      room = max;
+    }
+    batches[batches.length - 1].push(f);
+    room -= f.size;
+  }
+  return batches;
+}
+
 /** Keeps a finished stop on the phone, then starts uploading it. */
 export async function addToOutbox(form: FormData, meta: { stopId: string; kind: "delivered" | "failed"; name: string }) {
   const at = Date.now();
@@ -113,11 +131,14 @@ export async function addToOutbox(form: FormData, meta: { stopId: string; kind: 
 /** Keeps photos for a stop that's already finished on the phone, then starts uploading them (after the stop itself, if that's still waiting). */
 export async function addPhotosToOutbox(files: File[], meta: { stopId: string; name: string }) {
   const at = Date.now();
-  const stored: OutboxItem["files"] = [];
-  for (const f of files) if (f.size) stored.push({ field: "photo", name: f.name, type: f.type, data: await f.arrayBuffer() });
-  if (!stored.length) return;
+  const batches = photoBatches(files.filter((f) => f.size));
+  if (!batches.length) return;
   await load();
-  await put({ id: newId(), ...meta, kind: "photos", doneAt: at, fields: [["stopId", meta.stopId]], files: stored, error: null, rejected: false });
+  for (const [i, batch] of batches.entries()) {
+    const stored: OutboxItem["files"] = [];
+    for (const f of batch) stored.push({ field: "photo", name: f.name, type: f.type, data: await f.arrayBuffer() });
+    await put({ id: newId(), ...meta, kind: "photos", doneAt: at + i, fields: [["stopId", meta.stopId]], files: stored, error: null, rejected: false });
+  }
   void sendOutbox();
 }
 
@@ -149,6 +170,18 @@ export async function sendOutbox() {
       if (res.ok && body?.ok) {
         await remove(item.id);
         sent++;
+        continue;
+      }
+      // Too big to ever get through as it is, and it mustn't hold up the deliveries behind it.
+      if (res.status === 413) {
+        if (item.kind === "photos" && item.files.length > 1) {
+          const half = Math.ceil(item.files.length / 2);
+          await put({ ...item, id: newId(), doneAt: item.doneAt + 1, files: item.files.slice(half), error: null });
+          await put({ ...item, files: item.files.slice(0, half), error: null });
+          again = true;
+        } else {
+          await put({ ...item, error: "This upload is too large to send.", rejected: true });
+        }
         continue;
       }
       const retry = body ? body.retry !== false : true;

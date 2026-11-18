@@ -5,7 +5,14 @@ import { SALES_HOME, salesMayOpen } from "./sales-pages";
 export const SESSION_COOKIE = "dp_session";
 const MAX_AGE_S = 60 * 60 * 24 * 7;
 
-export type SessionPayload = { sub: string; role: Role; name: string; driverId: string | null };
+export type SessionPayload = {
+  sub: string;
+  role: Role;
+  name: string;
+  driverId: string | null;
+  /** From the password at sign-in (auth/password.ts); null on sessions signed before stamps existed. */
+  stamp: string | null;
+};
 
 function secret() {
   const s = process.env.AUTH_SECRET;
@@ -46,8 +53,8 @@ export function afterLogin(role: Role, next: string | null | undefined) {
   return ok ? next : home;
 }
 
-export async function signSession(payload: SessionPayload) {
-  return new SignJWT({ role: payload.role, name: payload.name, driverId: payload.driverId })
+export async function signSession(payload: SessionPayload & { stamp: string }) {
+  return new SignJWT({ role: payload.role, name: payload.name, driverId: payload.driverId, stamp: payload.stamp })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(payload.sub)
     .setIssuedAt()
@@ -65,6 +72,7 @@ export async function verifySession(token: string | undefined): Promise<SessionP
       role: payload.role as Role,
       name: String(payload.name ?? ""),
       driverId: (payload.driverId as string | null) ?? null,
+      stamp: typeof payload.stamp === "string" ? payload.stamp : null,
     };
   } catch {
     return null;

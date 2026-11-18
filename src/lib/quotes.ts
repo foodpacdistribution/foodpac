@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import type { DB } from "./db";
+import { productColumns } from "./db/product-columns";
 import { customers, products, quoteItems, quoteNo, quotes, salesOrders } from "./db/schema";
 import { orderTotals } from "./order-totals";
 import { UserError } from "./planning";
@@ -39,7 +40,7 @@ function check(input: QuoteInput, today: string, keepDate?: string) {
 }
 
 async function itemsFor(db: DB, lines: ReturnType<typeof check>) {
-  const rows = await db.select().from(products).where(inArray(products.id, lines.map((l) => l.productId)));
+  const rows = await db.select(productColumns).from(products).where(inArray(products.id, lines.map((l) => l.productId)));
   const byId = new Map(rows.map((p) => [p.id, p]));
   return lines.map((l, position) => {
     const p = byId.get(l.productId);
