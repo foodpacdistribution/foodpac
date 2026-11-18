@@ -72,7 +72,6 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           {pricesShown && (
             <>
               {" · "}
-              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a file download, not a page */}
               <a href="/portal/price-list" className="inline-flex items-center gap-1 font-semibold text-leaf-700 hover:underline">
                 <Download className="size-3.5" /> <T>{"Download my price list"}</T>
               </a>
@@ -88,7 +87,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         </p>
         <div className="mt-4 flex items-center gap-2 text-sm">
           {/* Phones: the sort order in one compact menu; wider screens: the choices side by side. */}
-          <div className="min-w-0 sm:hidden">
+          <div className="flex min-w-0 flex-1 sm:hidden">
             <SortSelect value={sort ?? "name"} options={sorts.map((k) => ({ value: k, label: SORTS[k], href: qs({ sort: k === "name" ? undefined : k }) }))} />
           </div>
           <div className="hidden flex-wrap items-center gap-2 sm:flex">

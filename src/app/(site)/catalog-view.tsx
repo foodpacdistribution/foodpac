@@ -64,7 +64,7 @@ export function SortSelect({ value, options }: { value: string; options: { value
   const tr = useT();
   const router = useRouter();
   return (
-    <label className="relative inline-flex h-9 min-w-0 items-center rounded-md bg-white ring-1 ring-leaf-950/15">
+    <label className="relative inline-flex h-9 w-full min-w-0 items-center rounded-md bg-white ring-1 ring-leaf-950/15">
       <span className="sr-only">{tr("Sort")}</span>
       <select
         value={value}
@@ -72,7 +72,7 @@ export function SortSelect({ value, options }: { value: string; options: { value
           const o = options.find((x) => x.value === e.target.value);
           if (o) router.push(o.href, { scroll: false });
         }}
-        className="h-full min-w-0 appearance-none truncate bg-transparent pr-8 pl-3 text-sm font-medium text-leaf-950 outline-none"
+        className="h-full w-full min-w-0 appearance-none truncate bg-transparent pr-8 pl-3 text-sm font-medium text-leaf-950 outline-none"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

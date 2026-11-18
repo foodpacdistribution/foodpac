@@ -24,7 +24,8 @@ export function FavouriteButton({
   sku: string;
   favourite: boolean;
   signedIn: boolean;
-  variant?: "icon" | "pill";
+  /** "float": a quiet round button over a product photo, shown on hover (always once saved, and on touch screens). */
+  variant?: "icon" | "pill" | "float";
   className?: string;
 }) {
   const tr = useT();
@@ -41,9 +42,14 @@ export function FavouriteButton({
   const label = tr(on ? "Remove from My list" : "Save to My list");
 
   const look =
-    variant === "icon"
-      ? "grid size-10 place-items-center rounded-md bg-white/90 ring-1 ring-leaf-950/10 hover:bg-white"
-      : "inline-flex h-11 items-center gap-2 rounded-md border border-leaf-950/20 bg-white px-4 text-sm font-semibold hover:border-leaf-950/40";
+    variant === "float"
+      ? cx(
+          "grid size-9 place-items-center rounded-full bg-white/85 shadow-[0_1px_3px_rgb(11_42_28/0.12)] backdrop-blur-sm transition-[opacity,scale,background-color] duration-200 hover:bg-white",
+          !on && "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100",
+        )
+      : variant === "icon"
+        ? "grid size-10 place-items-center rounded-md bg-white/90 ring-1 ring-leaf-950/10 transition-[scale] hover:bg-white"
+        : "inline-flex h-11 items-center gap-2 rounded-md border border-leaf-950/20 bg-white px-4 text-sm font-semibold transition-[scale] hover:border-leaf-950/40";
   const heart = (
     <Heart
       key={pop}
@@ -54,7 +60,7 @@ export function FavouriteButton({
 
   if (!signedIn) {
     return (
-      <Link href={`/login?next=${encodeURIComponent(`/products/${sku}`)}`} aria-label={tr("Sign in to save products")} title={tr("Sign in to save products")} className={cx(look, "transition-[scale] active:scale-90", className)}>
+      <Link href={`/login?next=${encodeURIComponent(`/products/${sku}`)}`} aria-label={tr("Sign in to save products")} title={tr("Sign in to save products")} className={cx(look, "active:scale-90", className)}>
         {heart}
         {variant === "pill" && tr("Save to My list")}
       </Link>
@@ -82,7 +88,7 @@ export function FavouriteButton({
             }
           });
         }}
-        className={cx(look, "cursor-pointer transition-[scale] active:scale-90", className)}
+        className={cx(look, "cursor-pointer active:scale-90", className)}
       >
         {heart}
         {variant === "pill" && tr(on ? "Saved to My list" : "Save to My list")}
