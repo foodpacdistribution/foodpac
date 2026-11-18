@@ -96,6 +96,11 @@ export default async function DocketsPage({ searchParams }: { searchParams: Prom
                     </>
                   )}
                 </p>
+                {d.readProblem && !d.added && (
+                  <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900 ring-1 ring-amber-200">
+                    <T>{"Couldn't be read:"}</T> {d.readProblem}
+                  </p>
+                )}
                 {d.goods.length > 0 && (
                   <details className="mt-2 text-xs text-slate-600">
                     <summary className="cursor-pointer font-medium text-slate-700">

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { type ActionResult, attempt } from "@/lib/action";
 import { assertUser } from "@/lib/auth/dal";
 import { getDb } from "@/lib/db";
-import { addDocket, type DeliverResult, deliverDockets, MAX_DOCKETS_AT_ONCE, removeDocket, updateDocket } from "@/lib/dockets";
+import { addDocket, type DeliverResult, deliverDockets, type DocketPick, MAX_DOCKETS_AT_ONCE, removeDocket, searchForDocket, updateDocket } from "@/lib/dockets";
 import { revalidateDriverPages } from "@/lib/driver-stops";
 import { getSettings, UserError } from "@/lib/planning";
 import { readUpload } from "@/lib/proofs";
@@ -29,13 +29,21 @@ export async function uploadDocket(form: FormData): Promise<ActionResult<{ id: s
   });
 }
 
-export async function saveDocket(id: string, f: { orderNumber: string; customerName: string; address: string; phone: string }): Promise<ActionResult> {
+export async function saveDocket(id: string, f: { orderNumber: string; customerName: string; address: string; phone: string; customerId?: string | null }): Promise<ActionResult> {
   return attempt(async () => {
     const user = await assertUser(["driver"]);
     await updateDocket(await getDb(), user, id, f);
     refresh();
     return { message: "Saved" };
   });
+}
+
+/** Customers on file and today's deliveries matching what the driver typed, to pick instead of typing. */
+export async function findForDocket(q: string): Promise<DocketPick[]> {
+  await assertUser(["driver"]);
+  const db = await getDb();
+  const s = await getSettings(db);
+  return searchForDocket(db, String(q ?? ""), todayIn(s.timezone));
 }
 
 export async function deleteDocket(id: string): Promise<ActionResult> {

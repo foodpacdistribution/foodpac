@@ -1,0 +1,1 @@
+ALTER TABLE "delivery_dockets" ADD COLUMN "read_problem" text;
