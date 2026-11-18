@@ -7,7 +7,7 @@ import { LoadMore, usePaged } from "@/components/load-more";
 import { adjustStock, bulkProducts, deleteProduct, type ProductBulkOp, saveProduct } from "@/app/actions/products";
 import { FormError, Modal, SubmitButton, Toast, type ToastMessage, KeptForm, useKeptForm } from "@/components/client-ui";
 import { Badge, btn, Card, cx, EmptyState, Field, inputCls, PageHeader } from "@/components/ui";
-import { aud } from "@/lib/money";
+import { aud, GST_RATE } from "@/lib/money";
 import { prettyDate } from "@/lib/dates";
 import { LOW_STOCK } from "@/lib/stock";
 import { formatCartons, perCarton } from "@/lib/stock-units";
@@ -403,6 +403,10 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
   const [state, form] = useKeptForm(saveProduct);
   const [photo, setPhoto] = useState<string | null>(p?.imageUrl ?? null);
   const [removing, setRemoving] = useState(false);
+  // The price ex GST (what's saved) and incl. GST, kept in step: type either one.
+  const [gstOn, setGstOn] = useState(p?.gst !== false);
+  const [exPrice, setExPrice] = useState(p ? (p.priceCents / 100).toFixed(2) : "");
+  const [incPrice, setIncPrice] = useState(p ? withGst(p.priceCents / 100, p.gst !== false) : "");
   useEffect(() => {
     if (state?.ok) onDone();
   }, [state, onDone]);
@@ -433,13 +437,45 @@ function ProductForm({ product: p, categories, onDone }: { product: Product | nu
         <input name="unit" defaultValue={p?.unit ?? "carton"} className={inputCls} />
       </Field>
       <Field label={tr("List price per unit, ex GST ($)")} hint={tr("Customers with their own price see that instead.")}>
-        <input name="price" required inputMode="decimal" defaultValue={p ? (p.priceCents / 100).toFixed(2) : ""} className={inputCls} />
+        <input
+          name="price"
+          required
+          inputMode="decimal"
+          value={exPrice}
+          onChange={(e) => {
+            setExPrice(e.target.value);
+            setIncPrice(withGst(Number(e.target.value), gstOn));
+          }}
+          className={inputCls}
+        />
       </Field>
       <Field label={tr("GST")} hint={tr("10% for most goods. 0% for GST-free goods, such as basic food.")}>
-        <select name="gst" defaultValue={p?.gst === false ? "off" : "on"} className={inputCls}>
+        <select
+          name="gst"
+          value={gstOn ? "on" : "off"}
+          onChange={(e) => {
+            const on = e.target.value === "on";
+            setGstOn(on);
+            setIncPrice(withGst(Number(exPrice), on));
+          }}
+          className={inputCls}
+        >
           <option value="on">10%</option>
           <option value="off">{tr("0% (GST free)")}</option>
         </select>
+      </Field>
+      <Field label={tr("Price incl. GST ($)")} hint={gstOn ? tr("The price ex GST plus 10%. Type a price incl. GST here and the price ex GST is worked out.") : tr("GST free: the same as the price ex GST.")}>
+        <input
+          inputMode="decimal"
+          value={incPrice}
+          readOnly={!gstOn}
+          onChange={(e) => {
+            setIncPrice(e.target.value);
+            const n = Number(e.target.value);
+            if (e.target.value.trim() && Number.isFinite(n)) setExPrice((n / (1 + GST_RATE)).toFixed(2));
+          }}
+          className={cx(inputCls, !gstOn && "bg-slate-50 text-slate-500")}
+        />
       </Field>
       <Field
         label={tr("Cost per unit, ex GST ($, optional)")}
@@ -551,4 +587,10 @@ function MarginNote({ p, className }: { p: Pick<Product, "priceCents" | "cost">;
       {pct < 0 ? tr("Below cost") : tr("Margin {pct}%", { pct })}
     </span>
   );
+}
+
+/** "15.65" ex GST → "17.22" incl. GST (blank when the price isn't a number yet). */
+function withGst(ex: number, gst: boolean) {
+  if (!Number.isFinite(ex) || ex <= 0) return "";
+  return (Math.round(ex * 100 * (gst ? 1 + GST_RATE : 1)) / 100).toFixed(2);
 }

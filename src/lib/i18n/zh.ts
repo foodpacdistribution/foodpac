@@ -3107,6 +3107,9 @@ export const ZH: Record<string, string> = {
   "One SKU and quantity per line. Add “ctn” for whole cartons, e.g. FP-1001 2 ctn.": "每行一个 SKU 和数量。整箱请加 “ctn”，例如 FP-1001 2 ctn。",
   "0% (GST free)": "0%（免 GST）",
   "10% for most goods. 0% for GST-free goods, such as basic food.": "大多数商品为 10%。免 GST 的商品(如基本食品)选 0%。",
+  "Price incl. GST ($)": "单价,含 GST($)",
+  "The price ex GST plus 10%. Type a price incl. GST here and the price ex GST is worked out.": "不含 GST 单价加 10%。也可以在这里填含 GST 的价格,系统会自动算出不含 GST 单价。",
+  "GST free: the same as the price ex GST.": "免 GST:与不含 GST 单价相同。",
   // Drivers photographing invoices
   "One photo per invoice, flat and in focus. The invoice number and customer are read for you and the address comes from the customer on file: check them, then add them to your route.": "每张发票拍一张，放平拍清楚。系统会自动识别发票号和客户，地址取自客户资料：核对无误后加入今天的配送路线。",
   "This doesn't look like an invoice. Retake the photo or search for the customer below.": "这看起来不像发票。请重拍，或在下面搜索客户。",
