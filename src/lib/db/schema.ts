@@ -504,6 +504,53 @@ export const goodsPhotos = pgTable("goods_photos", {
   createdAt: createdAt(),
 });
 
+/** What was read off a photographed invoice (each field null when it couldn't be read). */
+export type DocketRead = {
+  invoiceNumber: string | null;
+  salesOrderNumber: string | null;
+  customerName: string | null;
+  address: string | null;
+  phone: string | null;
+  goods: GoodsLine[];
+  totalCents: number | null;
+};
+export type DocketReadStatus = "reading" | "read" | "unread";
+
+/**
+ * A paper invoice a driver photographed to deliver: the photo, what was read off it (checked and
+ * corrected by the driver), and once added to their deliveries, the delivery order it became.
+ */
+export const deliveryDockets = pgTable(
+  "delivery_dockets",
+  {
+    id: id(),
+    driverId: uuid("driver_id").references(() => drivers.id, { onDelete: "set null" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    /** The day it was photographed for (the driver's today). */
+    deliveryDate: date("delivery_date", { mode: "string" }).notNull(),
+    mime: text("mime").notNull(),
+    bytes: integer("bytes").notNull(),
+    data: bytea("data").notNull(),
+    readStatus: text("read_status").$type<DocketReadStatus>().notNull().default("reading"),
+    /** Why it couldn't be read, for the driver (they type the details in instead). */
+    readError: text("read_error"),
+    /** As read, before any correction. */
+    read: jsonb("read").$type<DocketRead>(),
+    orderNumber: text("order_number"),
+    customerName: text("customer_name"),
+    address: text("address"),
+    phone: text("phone"),
+    goods: jsonb("goods").$type<GoodsLine[]>(),
+    totalCents: integer("total_cents"),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    /** The delivery it became. Set once it's on the driver's route (`addedAt`). */
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    addedAt: timestamp("added_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("delivery_dockets_date_idx").on(t.deliveryDate), index("delivery_dockets_order_idx").on(t.orderId)],
+);
+
 /** Keys for the /api/v1 order API. Only a SHA-256 hash of the key is stored. */
 export const apiKeys = pgTable("api_keys", {
   id: id(),

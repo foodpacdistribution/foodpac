@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeDollarSign, BarChart3, Boxes, Building2, ChevronDown, ClipboardList, Factory, FileText, GalleryHorizontal, Gauge, HandCoins, Inbox, LayoutDashboard, LayoutGrid, Map, MapPinned, Menu as MenuIcon, Package, PackageCheck, PackagePlus, QrCode, Radio, RotateCcw, Scale, Settings, ShoppingBag, Target, TrendingUp, Truck, Undo2, Wallet, Warehouse, X, Zap } from "lucide-react";
+import { BadgeDollarSign, BarChart3, Boxes, Building2, ChevronDown, ClipboardList, Factory, FileText, GalleryHorizontal, Gauge, HandCoins, Inbox, LayoutDashboard, LayoutGrid, Map, MapPinned, Menu as MenuIcon, Package, PackageCheck, PackagePlus, QrCode, Radio, RotateCcw, Scale, ScanText, Settings, ShoppingBag, Target, TrendingUp, Truck, Undo2, Wallet, Warehouse, X, Zap } from "lucide-react";
 import Link from "@/components/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -40,6 +40,7 @@ const SECTIONS = [
     items: [
       { href: "/admin/orders", label: "Delivery Orders", icon: Package },
       { href: "/admin/shipments", label: "Shipments", icon: PackageCheck },
+      { href: "/admin/dockets", label: "Driver Invoices", icon: ScanText },
       { href: "/admin/planner", label: "Route Planner", icon: Map },
       { href: "/quick-route", label: "Quick Route", icon: Zap },
       { href: "/admin/tracking", label: "Live Tracking", icon: Radio },
