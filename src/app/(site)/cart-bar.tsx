@@ -7,6 +7,7 @@ import Link from "@/components/link";
 import { cx } from "@/components/ui";
 import { aud } from "@/lib/money";
 import { RollingAmount, useCartCount } from "./cart-badge";
+import { openCart } from "./cart-drawer";
 
 /** Pages with their own bar at the bottom (or that are the cart already). */
 const OWN_BAR = /^\/(cart|checkout|products\/)/;
@@ -53,7 +54,17 @@ export function CartBar({ count, totalCents, freeGapCents, freeOverCents }: { co
           </div>
         )}
         <div className="flex items-center gap-4 px-4 py-2.5">
-          <Link href="/cart" data-cart-target="bar" className="min-w-0 flex-1 leading-tight" aria-label={tr("View cart")}>
+          <Link
+            href="/cart"
+            data-cart-target="bar"
+            className="min-w-0 flex-1 leading-tight"
+            aria-label={tr("View cart")}
+            onClick={(e) => {
+              // The cart slides in over the page instead of leaving it.
+              e.preventDefault();
+              openCart();
+            }}
+          >
             <span className={cx("block font-display text-lg font-semibold text-leaf-950 transition-opacity", pending !== 0 && "opacity-50")}>
               {totalCents > 0 ? <RollingAmount cents={totalCents} /> : tr(shown === 1 ? "1 item in your cart" : "{n} items in your cart", { n: shown })}
             </span>

@@ -6,7 +6,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { attempt } from "@/lib/action";
-import { assertCustomer } from "@/lib/auth/dal";
+import { assertCustomer, getCurrentCustomer } from "@/lib/auth/dal";
 import { hashPassword } from "@/lib/auth/password";
 import { SESSION_COOKIE, sessionCookieOptions, signSession } from "@/lib/auth/session";
 import { countAttempt } from "@/lib/auth/throttle";
@@ -14,7 +14,7 @@ import { getDb } from "@/lib/db";
 import { accountRequested, orderConfirmed } from "@/lib/notify";
 import { cartItems, customerAddresses, customers, favourites, orders, type PaymentMethod, products, salesOrderItems, salesOrders, users } from "@/lib/db/schema";
 import { getSettings, UserError } from "@/lib/planning";
-import { canSeePrices, cancelOrder, placeOrder } from "@/lib/shop";
+import { canSeePrices, cancelOrder, getCart, placeOrder, quote } from "@/lib/shop";
 import { refundOrExpire } from "@/lib/payments";
 import { readUnsubscribeToken } from "@/lib/restock";
 import { readLeaveBehindRef } from "@/lib/leave-behind";
@@ -169,6 +169,74 @@ export async function quickOrder(_prev: unknown, form: FormData) {
     revalidateShop();
     return { message: `${wanted.length} item${wanted.length === 1 ? "" : "s"} added to cart` };
   });
+}
+
+export type CartSnapshot = {
+  lines: {
+    id: string;
+    sku: string;
+    name: string;
+    packSize: string;
+    unit: string;
+    category: string;
+    hasImage: boolean;
+    updatedAt: string;
+    qty: number;
+    minQty: number;
+    byCarton: boolean;
+    per: number | null;
+    units: number;
+    priceCents: number | null;
+    lineCents: number;
+    issue: string | null;
+  }[];
+  subtotalCents: number;
+  deliveryFeeCents: number;
+  gstCents: number;
+  totalCents: number;
+  /** Free delivery from this subtotal (0 = no threshold or delivery is always free). */
+  freeOverCents: number;
+  minOrderCents: number;
+  belowMinimum: boolean;
+  /** Prices are hidden until the account is approved. */
+  priced: boolean;
+};
+
+/** The cart for the slide-in cart panel: its lines and totals. */
+export async function cartSnapshot(): Promise<CartSnapshot | null> {
+  const viewer = await getCurrentCustomer();
+  if (!viewer) return null;
+  const db = await getDb();
+  const [lines, s] = await Promise.all([getCart(db, viewer.customer), getSettings(db)]);
+  const q = quote(lines, s);
+  return {
+    lines: lines.map((l) => ({
+      id: l.id,
+      sku: l.sku,
+      name: l.name,
+      packSize: l.packSize,
+      unit: l.unit,
+      category: l.category,
+      hasImage: l.hasImage,
+      updatedAt: new Date(l.updatedAt).toISOString(),
+      qty: l.qty,
+      minQty: l.minQty,
+      byCarton: l.byCarton,
+      per: l.per,
+      units: l.units,
+      priceCents: l.priceCents,
+      lineCents: l.lineCents,
+      issue: l.issue,
+    })),
+    subtotalCents: q.subtotalCents,
+    deliveryFeeCents: q.deliveryFeeCents,
+    gstCents: q.gstCents,
+    totalCents: q.totalCents,
+    freeOverCents: s.deliveryFeeCents > 0 ? s.freeDeliveryOverCents : 0,
+    minOrderCents: s.minOrderCents,
+    belowMinimum: q.belowMinimum,
+    priced: canSeePrices(viewer.customer),
+  };
 }
 
 /** Puts everything from a past order back in the cart (still-available products only). */

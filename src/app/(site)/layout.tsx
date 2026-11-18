@@ -15,6 +15,7 @@ import { siteInfo } from "./site-info";
 import { BackToTop } from "./back-to-top";
 import { CartBadge } from "./cart-badge";
 import { CartBar } from "./cart-bar";
+import { CartButton, CartDrawer } from "./cart-drawer";
 import { CategoryNav } from "./category-nav";
 import { NavProgress } from "./nav-progress";
 import { SearchBox } from "./search-box";
@@ -59,11 +60,13 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
               </Link>
             )}
             {viewer && (
-              <Link href="/cart" data-cart-target="header" className="relative flex h-10 items-center gap-1.5 rounded-md px-3 hover:bg-leaf-950/5" aria-label={`Cart, ${cartCount} items`}>
+              <CartButton label={`Cart, ${cartCount} items`} className="relative flex h-10 items-center gap-1.5 rounded-md px-3 hover:bg-leaf-950/5">
                 <ShoppingCart className="size-4" />
-                <span className="hidden sm:inline"><T>{"Cart"}</T></span>
+                <span className="hidden sm:inline">
+                  <T>{"Cart"}</T>
+                </span>
                 <CartBadge count={cartCount} />
-              </Link>
+              </CartButton>
             )}
           </nav>
         </div>
@@ -164,6 +167,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             © {new Date().getFullYear()} {SITE.name}<T>{". Prices exclude GST unless shown otherwise."}</T></p>
         </div>
       </footer>
+      {viewer && <CartDrawer />}
       {viewer && <CartBar count={cartCount} totalCents={q?.totalCents ?? 0} freeGapCents={Math.max(0, freeGap)} freeOverCents={q && settings.deliveryFeeCents > 0 && settings.freeDeliveryOverCents > 0 ? settings.freeDeliveryOverCents : 0} />}
     </div>
   );
