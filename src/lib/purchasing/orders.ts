@@ -1,6 +1,7 @@
 import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "../db";
+import { productColumns } from "../db/product-columns";
 import { goodsReceipts, products, purchaseOrderItems, purchaseOrderNo, purchaseOrders, type PurchaseOrderStatus, supplierPayments, suppliers } from "../db/schema";
 import { UserError } from "../planning";
 import { guarded, nextNumber } from "./common";
@@ -62,7 +63,7 @@ async function buildLines(db: DB, lines: PurchaseOrderInput["lines"]) {
     merged.set(l.productId, m ? { ...m, qty: m.qty + l.qty } : { ...l });
   }
   if (!merged.size) throw new UserError("Add at least one product.");
-  const rows = await db.select().from(products).where(inArray(products.id, [...merged.keys()]));
+  const rows = await db.select(productColumns).from(products).where(inArray(products.id, [...merged.keys()]));
   if (rows.length !== merged.size) throw new UserError("One of the products no longer exists. Reload the page and try again.");
   const byId = new Map(rows.map((p) => [p.id, p]));
   return [...merged.values()].map((l) => {

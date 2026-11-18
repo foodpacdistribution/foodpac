@@ -10,22 +10,28 @@ import { FavouriteButton } from "./favourite-button";
 import { categoryInfo } from "./content";
 import { T, Tx } from "@/components/i18n";
 
+/** How wide a product card's photo shows: two across on phones, and the shop's column never gets wider than this. */
+const CARD_SIZES = "(min-width: 1280px) 280px, (min-width: 1024px) 480px, 50vw";
+
 /**
  * Product photo (optimised and cached for good), or the category icon when there's none.
  * `morph` names it for a view transition, so the photo glides from the card into the product
- * page. Only use it where each product appears once on the page.
+ * page. Only use it where each product appears once on the page. `eager` is for photos in the
+ * first row of a page, which shouldn't wait to be scrolled to.
  */
 export function ProductImage({
   p,
   className,
-  sizes = "(min-width: 1024px) 25vw, 50vw",
+  sizes = CARD_SIZES,
   priority,
+  eager,
   morph,
 }: {
   p: Pick<CatalogItem, "id" | "hasImage" | "category" | "name" | "updatedAt">;
   className?: string;
   sizes?: string;
   priority?: boolean;
+  eager?: boolean;
   morph?: boolean;
 }) {
   const Icon = categoryInfo(p.category).icon;
@@ -40,6 +46,7 @@ export function ProductImage({
           fill
           sizes={sizes}
           priority={priority}
+          {...(eager ? { loading: "eager" as const, fetchPriority: "high" as const } : {})}
           className="object-contain p-[9%] mix-blend-multiply transition-transform duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)] group-hover:scale-[1.045]"
         />
       ) : (
@@ -93,7 +100,7 @@ export function Price({ p, signedIn }: { p: Pick<CatalogItem, "priceCents" | "li
  * customer who knows what they want sees far more at once. A product without a photo gets a
  * shorter tile than one with a photo, so cards aren't mostly empty space.
  */
-export function ProductCard({ p, signedIn, morph }: { p: CatalogItem; signedIn: boolean; morph?: boolean; index?: number }) {
+export function ProductCard({ p, signedIn, morph, eager }: { p: CatalogItem; signedIn: boolean; morph?: boolean; eager?: boolean }) {
   const href = `/products/${encodeURIComponent(p.sku)}`;
   return (
     <div className="press reveal group relative flex flex-col group-data-[view=list]/view:flex-row group-data-[view=list]/view:overflow-hidden group-data-[view=list]/view:rounded-lg group-data-[view=list]/view:bg-white group-data-[view=list]/view:ring-1 group-data-[view=list]/view:ring-leaf-950/8">
@@ -101,7 +108,7 @@ export function ProductCard({ p, signedIn, morph }: { p: CatalogItem; signedIn: 
         <ProductImage
           p={p}
           morph={morph}
-          sizes="(min-width: 1024px) 25vw, 50vw"
+          eager={eager}
           className={cx(p.hasImage ? "aspect-[5/4]" : "aspect-[2/1]", "group-data-[view=list]/view:aspect-auto group-data-[view=list]/view:h-full group-data-[view=list]/view:min-h-20")}
         />
       </Link>

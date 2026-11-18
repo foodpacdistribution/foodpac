@@ -1,6 +1,7 @@
 import "server-only";
 import { and, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import type { DB } from "./db";
+import { productColumns } from "./db/product-columns";
 import { customers, orders, type PaymentMethod, products, routeStops, salesOrderItems, salesOrderNo, salesOrders } from "./db/schema";
 import { shiftDate } from "./dates";
 import { orderTotals } from "./order-totals";
@@ -55,12 +56,12 @@ function check(input: StaffOrderInput, today: string) {
 }
 
 async function productsFor(tx: DB, ids: string[]) {
-  const rows = await tx.select().from(products).where(inArray(products.id, ids));
+  const rows = await tx.select(productColumns).from(products).where(inArray(products.id, ids));
   if (rows.length !== ids.length) throw new UserError("One of the products no longer exists. Reload the page and try again.");
   return new Map(rows.map((p) => [p.id, p]));
 }
 
-const snapshot = (p: typeof products.$inferSelect) => ({ sku: p.sku, name: p.name, packSize: p.packSize, unit: p.unit, gst: p.gst });
+const snapshot = (p: Pick<typeof products.$inferSelect, "sku" | "name" | "packSize" | "unit" | "gst">) => ({ sku: p.sku, name: p.name, packSize: p.packSize, unit: p.unit, gst: p.gst });
 
 /**
  * A line as it's kept: `qty` in stock units whichever way it was ordered, so stock, picking and

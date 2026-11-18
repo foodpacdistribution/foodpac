@@ -1,6 +1,5 @@
 "use server";
 
-import { createHash } from "node:crypto";
 import { eq, getTableColumns, sql } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { after } from "next/server";
@@ -8,8 +7,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { isTheme, THEME_COOKIE } from "@/lib/theme";
 import { attempt } from "@/lib/action";
-import { getCurrentUser } from "@/lib/auth/dal";
-import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { getCurrentUser, renewSession } from "@/lib/auth/dal";
+import { hashPassword, passwordStamp, verifyPassword } from "@/lib/auth/password";
 import { afterLogin, homeFor, SESSION_COOKIE, sessionCookieOptions, signResetToken, signSession, verifyResetToken, verifySession } from "@/lib/auth/session";
 import { clearAttempts, countAttempt, loginKeys } from "@/lib/auth/throttle";
 import { getDb } from "@/lib/db";
@@ -39,7 +38,7 @@ export async function login(_prev: { error?: string } | undefined, form: FormDat
   }
   await clearAttempts(db, [keys[0].key]);
 
-  const token = await signSession({ sub: user.id, role: user.role, name: user.name, driverId: user.driverId });
+  const token = await signSession({ sub: user.id, role: user.role, name: user.name, driverId: user.driverId, stamp: passwordStamp(user.passwordHash) });
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, sessionCookieOptions);
   // The account's language wins over whatever this device had.
@@ -56,8 +55,7 @@ export async function switchRole(role: string) {
   if (!me) redirect("/login");
   const to = me.roles.find((r) => r === role);
   if (!to) redirect(homeFor(me.role));
-  const token = await signSession({ sub: me.id, role: to, name: me.name, driverId: me.driverId });
-  (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
+  await renewSession(me, to);
   redirect(homeFor(to));
 }
 
@@ -69,7 +67,7 @@ export async function logout(form?: FormData) {
   redirect(form?.get("switch") || session?.role !== "customer" ? "/login" : "/");
 }
 
-/** Any signed-in user can change their own password; the current one is required. */
+/** Any signed-in user can change their own password; the current one is required. Other devices are signed out, this one stays in. */
 export async function changePassword(_prev: unknown, form: FormData) {
   return attempt(async () => {
     const me = await getCurrentUser();
@@ -82,6 +80,7 @@ export async function changePassword(_prev: unknown, form: FormData) {
     const [u] = await db.select().from(users).where(eq(users.id, me.id)).limit(1);
     if (!u || !(await verifyPassword(current, u.passwordHash))) throw new UserError("Your current password is incorrect.");
     await db.update(users).set({ passwordHash: await hashPassword(next) }).where(eq(users.id, me.id));
+    await renewSession(me, me.role);
     return { message: "Password changed" };
   });
 }
@@ -118,9 +117,6 @@ export async function setLocale(locale: string) {
   if (me) await (await getDb()).update(users).set({ locale }).where(eq(users.id, me.id));
   revalidatePath("/", "layout");
 }
-
-/** Ties a reset link to the password it replaces, so the link dies once the password changes. */
-const passwordStamp = (hash: string) => createHash("sha256").update(hash).digest("hex").slice(0, 16);
 
 /** "Forgot password": emails a one-hour link. The answer is the same whether or not the account exists. */
 export async function requestPasswordReset(_prev: unknown, form: FormData) {
@@ -170,8 +166,7 @@ export async function resetPassword(_prev: unknown, form: FormData) {
     }
     await db.update(users).set({ passwordHash: await hashPassword(password) }).where(eq(users.id, user.id));
     await clearAttempts(db, [`email:${user.email}`, `reset:${user.email}`]);
-    const token = await signSession({ sub: user.id, role: user.role, name: user.name, driverId: user.driverId });
-    (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
+    await renewSession(user, user.role);
     redirect(homeFor(user.role));
   });
 }

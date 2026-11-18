@@ -2002,6 +2002,7 @@ export const ZH: Record<string, string> = {
   "No signal yet": "还没有信号",
   "Sign in again to send it.": "请重新登录后再上传。",
   "The upload was cut off.": "上传中断了。",
+  "This upload is too large to send.": "这次上传的文件太大,无法发送。",
   "The server couldn't save it.": "服务器暂时无法保存。",
   "Unknown result.": "未知的送货结果。",
   // Customer map (Nov 2026).

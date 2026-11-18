@@ -15,7 +15,7 @@ describe("password reset links", () => {
     expect(await verifyResetToken(token)).toEqual({ sub: "user-1", stamp: "stamp-a" });
     expect(await verifyResetToken(token.slice(0, -2) + "xx")).toBeNull();
     // A sign-in session must not double as a reset link.
-    expect(await verifyResetToken(await signSession({ sub: "user-1", role: "admin", name: "A", driverId: null }))).toBeNull();
+    expect(await verifyResetToken(await signSession({ sub: "user-1", role: "admin", name: "A", driverId: null, stamp: "stamp-a" }))).toBeNull();
   });
 });
 

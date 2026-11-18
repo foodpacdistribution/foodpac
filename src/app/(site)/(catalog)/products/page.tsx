@@ -140,8 +140,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           </div>
         ) : (
           <ProductGrid>
-            {items.map((p) => (
-              <ProductCard key={p.id} p={p} signedIn={!!viewer} morph />
+            {items.map((p, i) => (
+              <ProductCard key={p.id} p={p} signedIn={!!viewer} morph eager={i < 4} />
             ))}
           </ProductGrid>
         )}

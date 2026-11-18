@@ -1,6 +1,22 @@
 import type { NextConfig } from "next";
 
+// On every response. The CSP only covers what can't break the pages (who may frame the site, where
+// forms may post); limiting scripts as well would need a nonce on each page.
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  // The driver app and customer map use the phone's location; the camera is for delivery photos.
+  { key: "Permissions-Policy", value: "camera=(self), geolocation=(self), microphone=(), browsing-topics=()" },
+  { key: "Content-Security-Policy", value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self' https://checkout.stripe.com" },
+];
+
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
+  headers: async () => [{ source: "/((?!_next/image).*)", headers: securityHeaders }],
+  // The commit this build is from, in the browser code as well, so an open page can tell when a
+  // newer version has gone live (lib/stale-build.ts, /api/version).
+  env: { NEXT_PUBLIC_BUILD: process.env.VERCEL_GIT_COMMIT_SHA ?? "dev" },
   // Skips re-rendering what hasn't changed (a tap that opens a form no longer redraws a long list
   // behind it), which phones feel most. The code already follows its rules (react-hooks lint).
   reactCompiler: true,
@@ -14,6 +30,10 @@ const nextConfig: NextConfig = {
       { pathname: "/api/posters/**", search: "" },
     ],
     formats: ["image/avif", "image/webp"],
+    // Fewer sizes than the default: every width is listed in the page for every photo, and each one
+    // is another copy to generate. 2048 is enough for the full-width posters.
+    deviceSizes: [640, 828, 1200, 2048],
+    imageSizes: [48, 96, 128, 256, 384],
     // Product photo URLs change whenever the photo does, so optimised copies can be kept long.
     minimumCacheTTL: 2678400,
   },

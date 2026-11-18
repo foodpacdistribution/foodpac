@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { getDb } from "../db";
 import { customers, type Role, users } from "../db/schema";
+import { passwordStamp, sessionMatchesPassword } from "./password";
 import { rolesOf } from "./roles";
-import { homeFor, SESSION_COOKIE, verifySession } from "./session";
+import { homeFor, SESSION_COOKIE, sessionCookieOptions, signSession, verifySession } from "./session";
 
 export type CurrentUser = {
   id: string;
@@ -23,23 +24,32 @@ export type CurrentUser = {
 };
 
 
-/** Verifies the cookie and re-reads the user, so deleted users / role changes take effect immediately. */
+/** Verifies the cookie and re-reads the user, so deleted users / role changes / new passwords take effect immediately. */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const session = await verifySession((await cookies()).get(SESSION_COOKIE)?.value);
   if (!session) return null;
   const db = await getDb();
   const [u] = await db.select().from(users).where(eq(users.id, session.sub)).limit(1);
-  if (!u) return null;
+  if (!u || !sessionMatchesPassword(session.stamp, u.passwordHash)) return null;
   const roles = rolesOf(u);
   // The role the login was switched to, as long as this person still has it.
   const role = roles.includes(session.role) ? session.role : u.role;
   return { id: u.id, name: u.name, email: u.email, role, roles, driverId: u.driverId, customerId: u.customerId, staleRole: role !== session.role };
 });
 
+/** Signs this login in again on this device as `role`, tied to the password it has now. */
+export async function renewSession(user: Pick<CurrentUser, "id" | "name" | "driverId">, role: Role) {
+  const [{ passwordHash }] = await (await getDb()).select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, user.id)).limit(1);
+  const token = await signSession({ sub: user.id, role, name: user.name, driverId: user.driverId, stamp: passwordStamp(passwordHash) });
+  (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
+}
+
 /** For pages: redirects when not signed in or not allowed. */
 export async function requireUser(roles?: Role[]): Promise<CurrentUser> {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  // A cookie that no longer counts (password changed, login deleted) has to go first: the sign-in
+  // page would otherwise see a signed cookie and send the browser straight back here.
+  if (!user) redirect((await cookies()).has(SESSION_COOKIE) ? "/api/auth/role" : "/login");
   // Switched to a job that was taken away: the cookie still says it, so reset it to their own role.
   if (user.staleRole) redirect("/api/auth/role");
   if (roles && !roles.includes(user.role)) redirect(homeFor(user.role));
