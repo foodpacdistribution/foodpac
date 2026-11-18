@@ -33,11 +33,6 @@ export function Spinner({ className }: { className?: string }) {
   return <span aria-hidden className={clsx("inline-block size-4 shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent", className)} />;
 }
 
-/** Thin bar across the top of the window while a page or day is loading. */
-export function TopProgress() {
-  return <span aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-0.5 origin-left animate-progress bg-blue-500" />;
-}
-
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   return <div className={clsx("rounded-xl border border-line bg-white shadow-card", className)}>{children}</div>;
 }

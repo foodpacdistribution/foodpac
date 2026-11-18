@@ -5,7 +5,7 @@ import { useLinkStatus } from "next/link";
 import { createContext, useActionState, useContext, useEffect, useRef, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { useT } from "./i18n";
-import { btn, cx, Spinner, TopProgress } from "./ui";
+import { btn, cx, Spinner } from "./ui";
 
 const KeptPending = createContext(false);
 
@@ -199,17 +199,12 @@ export function Modal({
 }
 
 /**
- * Put inside a <Link>: shows the top progress bar and a small spinner while that link's
- * page is loading (only when it wasn't prefetched). Always rendered, so the link never shifts.
+ * Put inside a <Link>: a small spinner while that link's page is loading (only when it wasn't
+ * prefetched). Always rendered, so the link never shifts.
  */
 export function LinkPending({ className }: { className?: string }) {
   const { pending } = useLinkStatus();
-  return (
-    <>
-      <Spinner className={cx("size-3.5 transition-opacity", pending ? "opacity-100" : "opacity-0", className)} />
-      {pending && <TopProgress />}
-    </>
-  );
+  return <Spinner className={cx("size-3.5 transition-opacity", pending ? "opacity-100" : "opacity-0", className)} />;
 }
 
 export type ToastMessage ={ id: number; text: string; tone: "ok" | "warn" };
