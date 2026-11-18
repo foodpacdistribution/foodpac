@@ -19,6 +19,7 @@ import {
   salesOrders,
 } from "./db/schema";
 import { locateOrder, postcodeOf } from "./geo/geocode";
+import { nameLikeness, parseInvoiceText } from "./invoice-text";
 import { UserError } from "./planning";
 import { buildShipment, sendShipment, transferOrder } from "./shipments";
 
@@ -134,7 +135,7 @@ export async function matchCustomer(db: DB, name: string | null, phone: string |
   const key = name ? nameKey(name) : "";
   if (key) {
     const rows = await db
-      .select({ id: customers.id, address: customers.address, phone: customers.phone })
+      .select({ id: customers.id, name: customers.name, address: customers.address, phone: customers.phone })
       .from(customers)
       .where(sql`lower(regexp_replace(${customers.name}, '[[:space:][:punct:]]+', '', 'g')) = ${key}`)
       .limit(2);
@@ -143,7 +144,7 @@ export async function matchCustomer(db: DB, name: string | null, phone: string |
   const tel = digits(phone).slice(-9);
   if (tel.length >= 8) {
     const rows = await db
-      .select({ id: customers.id, address: customers.address, phone: customers.phone })
+      .select({ id: customers.id, name: customers.name, address: customers.address, phone: customers.phone })
       .from(customers)
       .where(sql`right(regexp_replace(coalesce(${customers.phone}, ''), '\\D', '', 'g'), 9) = ${tel}`)
       .limit(2);
@@ -158,49 +159,111 @@ type Who = { id: string; driverId: string | null };
  * Saves a photographed invoice and reads it. The photo is kept even when reading fails (no
  * signal to the model, not set up, a blurry photo): the driver then types the details in.
  */
-export async function addDocket(db: DB, who: Who, photo: { mime: string; data: Uint8Array }, date: string, read = readInvoicePhoto) {
+/** After the AI Gateway refuses (no card, no key), don't ask it again for a while. */
+let aiRestingUntil = 0;
+
+/**
+ * Saves a photographed invoice and reads it: with the AI model when it's available, else from
+ * the text the phone recognised in the photo (`text`). The invoice number finds the office's
+ * delivery for it today, whose customer, address and goods are then used as they are; else the
+ * customer is matched to one on file (allowing for misread letters) and their address used. The
+ * photo is kept whatever happens: the driver can always pick or type the details in.
+ */
+export async function addDocket(
+  db: DB,
+  who: Who,
+  photo: { mime: string; data: Uint8Array },
+  date: string,
+  read: typeof readInvoicePhoto | null = readInvoicePhoto,
+  text: string | null = null,
+) {
   if (!who.driverId) throw new UserError("Your login isn't linked to a driver. Ask the office to link it.");
   const [row] = await db
     .insert(deliveryDockets)
     .values({ driverId: who.driverId, userId: who.id, deliveryDate: date, mime: photo.mime, bytes: photo.data.byteLength, data: photo.data })
     .returning({ id: deliveryDockets.id });
-  let status: DocketReadStatus = "unread";
-  let error: string | null = null;
   let problem: string | null = null;
   let got: DocketRead | null = null;
-  if (!canReadPhotos()) {
-    error = "Reading photos isn't switched on yet. Type in the details.";
-  } else {
+  let postcode: string | null = null;
+  let notInvoice = false;
+  if (read && canReadPhotos() && Date.now() >= aiRestingUntil) {
     try {
       const r = await read(photo.data, photo.mime);
-      got = r;
-      if (!r.isInvoice && !r.customerName && !r.invoiceNumber) error = "This doesn't look like an invoice. Retake the photo or type in the details.";
-      else status = "read";
+      if (!r.isInvoice && !r.customerName && !r.invoiceNumber) notInvoice = true;
+      else got = r;
     } catch (err) {
       console.error("[docket read]", err);
       problem = readProblem(err);
-      error = "Couldn't read this photo. Type in the details, or retake it.";
+      const status = (err as { statusCode?: number }).statusCode;
+      if (status === 401 || status === 402 || status === 403) aiRestingUntil = Date.now() + 10 * 60_000;
     }
   }
-  const customer = got ? await matchCustomer(db, got.customerName, got.phone) : null;
+  if (!got && text?.trim()) {
+    const t = parseInvoiceText(text.slice(0, 20_000));
+    if (t.invoiceNumber || t.salesOrderNumber || t.customerName) {
+      got = { invoiceNumber: t.invoiceNumber, salesOrderNumber: t.salesOrderNumber, customerName: t.customerName, address: null, phone: null, goods: [], totalCents: t.totalCents };
+      postcode = t.postcode;
+      notInvoice = false;
+    }
+  }
+
+  // The office's delivery for this invoice today: everything comes from it.
+  const office = got ? await sameInvoice(db, got.invoiceNumber ?? got.salesOrderNumber, got, date) : null;
+  const customer = office
+    ? null
+    : got
+      ? ((await matchCustomer(db, got.customerName, got.phone)) ?? (got.customerName ? await likelyCustomer(db, got.customerName, postcode ?? postcodeOf(got.address)) : null))
+      : null;
+  const values = office
+    ? {
+        orderNumber: office.orderNumber,
+        customerName: office.customerName || got!.customerName,
+        address: office.address,
+        phone: office.phone ?? got!.phone,
+        goods: office.goods?.length ? office.goods : got!.goods.length ? got!.goods : null,
+        customerId: office.customerId,
+      }
+    : {
+        orderNumber: got?.invoiceNumber ?? got?.salesOrderNumber ?? null,
+        // The name on file when matched (it puts right a misread name).
+        customerName: customer?.name ?? got?.customerName ?? null,
+        // What's printed comes first; the customer's address on file fills a gap.
+        address: got?.address ?? customer?.address ?? null,
+        phone: got?.phone ?? customer?.phone ?? null,
+        goods: got?.goods.length ? got.goods : null,
+        customerId: customer?.id ?? null,
+      };
+  const error = !got
+    ? notInvoice
+      ? "This doesn't look like an invoice. Retake the photo or search for the customer below."
+      : "Couldn't read this photo. Search for the customer or invoice number below, or retake it."
+    : !values.customerName || !values.address
+      ? "Couldn't match the customer. Search for them below."
+      : null;
   await db
     .update(deliveryDockets)
-    .set({
-      readStatus: status,
-      readError: error,
-      readProblem: problem,
-      read: got,
-      orderNumber: got?.invoiceNumber ?? got?.salesOrderNumber ?? null,
-      customerName: got?.customerName ?? null,
-      // What's printed comes first; the customer's address on file fills a gap.
-      address: got?.address ?? customer?.address ?? null,
-      phone: got?.phone ?? customer?.phone ?? null,
-      goods: got?.goods.length ? got.goods : null,
-      totalCents: got?.totalCents ?? null,
-      customerId: customer?.id ?? null,
-    })
+    .set({ readStatus: got ? "read" : "unread", readError: error, readProblem: problem, read: got, totalCents: got?.totalCents ?? null, ...values })
     .where(eq(deliveryDockets.id, row.id));
   return row.id;
+}
+
+/**
+ * The customer a misread name most likely is: the closest name on file, when it's clearly the
+ * closest (a branch name in brackets tells "Sushi Paradise (Toowong)" from "(Jindalee)"), with
+ * the printed postcode to help. Null when it's not clear.
+ */
+export async function likelyCustomer(db: DB, name: string, postcode: string | null) {
+  const rows = await db
+    .select({ id: customers.id, name: customers.name, address: customers.address, phone: customers.phone })
+    .from(customers)
+    .where(sql`${customers.address} is not null and ${customers.address} <> ''`)
+    .limit(5000);
+  const scored = rows
+    .map((c) => ({ c, score: nameLikeness(name, c.name) + (postcode && c.address?.includes(postcode) ? 0.08 : 0) }))
+    .sort((a, b) => b.score - a.score);
+  const [best, next] = scored;
+  if (!best || best.score < 0.8 || (next && best.score - next.score < 0.06)) return null;
+  return best.c;
 }
 
 /** A docket the driver may change: their own, not yet on the route. Staff may change any. */

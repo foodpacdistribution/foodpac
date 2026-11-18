@@ -13,6 +13,24 @@ import type { DocketPick, DocketView } from "@/lib/dockets";
 import { aud } from "@/lib/money";
 import { resizeImage } from "@/lib/resize-image";
 
+/**
+ * The text in a photo, recognised on the phone itself (free; the photo isn't sent anywhere for
+ * it). The recogniser loads once (a few MB, then cached by the browser) and is reused. Empty
+ * when it can't run: the server then has only the photo.
+ */
+let recogniser: Promise<{ recognize: (f: File) => Promise<{ data: { text: string } }> }> | null = null;
+async function recognise(file: File): Promise<string> {
+  try {
+    recogniser ??= import("tesseract.js").then((t) => t.createWorker("eng"));
+    const w = await recogniser;
+    const { data } = await Promise.race([w.recognize(file), new Promise<never>((_, no) => setTimeout(() => no(new Error("slow")), 45_000))]);
+    return data.text;
+  } catch {
+    recogniser = null;
+    return "";
+  }
+}
+
 /** Photos sent at the same time: quick on 4G without choking a weak signal. */
 const AT_ONCE = 3;
 
@@ -22,7 +40,7 @@ type Upload = { key: number; file: File; preview: string; error: string | null; 
  * The driver photographs the invoices they've been handed (the camera one by one, or a stack
  * from the album), checks what was read off each, and adds them to today's route in one go.
  */
-export function DocketsClient({ today, linked, dockets, reading }: { today: string; linked: boolean; dockets: DocketView[]; reading: boolean }) {
+export function DocketsClient({ today, linked, dockets }: { today: string; linked: boolean; dockets: DocketView[] }) {
   const tr = useT();
   const router = useRouter();
   const [uploads, setUploads] = useState<Upload[]>([]);
@@ -49,6 +67,8 @@ export function DocketsClient({ today, linked, dockets, reading }: { today: stri
       const file = await resizeImage(up.file, 2000, 0.85);
       const form = new FormData();
       form.append("photo", file);
+      const text = await recognise(file);
+      if (text) form.append("text", text);
       const r = await uploadDocket(form);
       if (!r.ok) error = r.error;
     } catch {
@@ -155,16 +175,14 @@ export function DocketsClient({ today, linked, dockets, reading }: { today: stri
             </label>
           </div>
           <p className="mt-3 text-xs leading-relaxed text-slate-500">
-            {reading
-              ? tr("One photo per invoice, flat and in focus. The invoice number, customer, address and goods are read for you: check them, then add them to your route.")
-              : tr("One photo per invoice. Type in the customer and address for each, then add them to your route.")}
+            {tr("One photo per invoice, flat and in focus. The invoice number and customer are read for you and the address comes from the customer on file: check them, then add them to your route.")}
           </p>
         </section>
 
         {uploads.length > 0 && (
           <section className="overflow-hidden rounded-2xl bg-white shadow-card">
             <h2 className="border-b border-line px-4 py-2.5 text-sm font-semibold text-slate-900">
-              {reading ? tr("Reading {n}…", { n: uploads.length }) : tr("Sending {n}…", { n: uploads.length })}
+              {tr("Reading {n}…", { n: uploads.length })}
             </h2>
             <ul className="divide-y divide-line">
               {uploads.map((up) => (
@@ -183,7 +201,7 @@ export function DocketsClient({ today, linked, dockets, reading }: { today: stri
                     </>
                   ) : (
                     <p className="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-500">
-                      <Spinner className="text-blue-600" /> {up.busy ? tr(reading ? "Reading the invoice…" : "Sending…") : tr("Waiting…")}
+                      <Spinner className="text-blue-600" /> {up.busy ? tr("Reading the invoice…") : tr("Waiting…")}
                     </p>
                   )}
                 </li>

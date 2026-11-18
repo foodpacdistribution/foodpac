@@ -23,7 +23,9 @@ export async function uploadDocket(form: FormData): Promise<ActionResult<{ id: s
     if (!photo) throw new UserError("Add a photo.");
     const db = await getDb();
     const s = await getSettings(db);
-    const id = await addDocket(db, user, photo, todayIn(s.timezone));
+    // What the phone recognised in the photo, for when the AI model isn't available.
+    const text = typeof form.get("text") === "string" ? String(form.get("text")).slice(0, 20_000) : null;
+    const id = await addDocket(db, user, photo, todayIn(s.timezone), undefined, text);
     refresh();
     return { data: { id } };
   });
