@@ -18,7 +18,7 @@ export function SellBy({ unit, per, byCarton, onChange, className }: { unit: str
           role="radio"
           aria-checked={byCarton === carton}
           onClick={() => onChange(carton)}
-          className={cx("rounded px-2 py-1 whitespace-nowrap", byCarton === carton ? "bg-leaf-800 font-semibold text-white" : "text-leaf-900/70 hover:bg-leaf-50")}
+          className={cx("rounded px-2 py-1 whitespace-nowrap transition-colors duration-150", byCarton === carton ? "bg-leaf-100 font-semibold text-leaf-950" : "text-leaf-900/60 hover:text-leaf-950")}
         >
           {carton ? tr("Carton of {n}", { n: per }) : tr(unit)}
         </button>

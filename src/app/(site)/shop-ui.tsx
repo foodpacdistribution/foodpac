@@ -30,12 +30,21 @@ export function ProductImage({
 }) {
   const Icon = categoryInfo(p.category).icon;
   const box = (
-    <div className={cx("relative grid place-items-center overflow-hidden bg-sand/70", className)}>
+    <div className={cx("relative grid place-items-center overflow-hidden bg-[#f1ebdf]", className)}>
       {p.hasImage ? (
-        <Image src={productImageUrl(p)} alt={p.name} fill sizes={sizes} priority={priority} className="object-cover" />
+        // The whole product on the tile, like a catalogue page: a photo's white background takes the
+        // tile's colour (multiply), and it eases in a little when the card is pointed at.
+        <Image
+          src={productImageUrl(p)}
+          alt={p.name}
+          fill
+          sizes={sizes}
+          priority={priority}
+          className="object-contain p-[9%] mix-blend-multiply transition-transform duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)] group-hover:scale-[1.045]"
+        />
       ) : (
         // No photo yet: a plain kraft-coloured tile with a small outline of the range, like a gap in a printed catalogue.
-        <div className="grid size-full place-items-center bg-sand/70">
+        <div className="grid size-full place-items-center">
           <Icon className="size-[22%] max-h-14 max-w-14 text-leaf-900/25" strokeWidth={1.25} aria-hidden />
         </div>
       )}
@@ -70,7 +79,7 @@ export function Price({ p, signedIn }: { p: Pick<CatalogItem, "priceCents" | "li
   const special = p.listPriceCents !== null && p.priceCents < p.listPriceCents;
   return (
     <p className="leading-tight">
-      <span className="text-base font-bold tabular-nums sm:text-lg">{aud(p.priceCents)}</span>
+      <span className="text-base font-semibold tracking-tight tabular-nums sm:text-[17px]">{aud(p.priceCents)}</span>
       <span className="text-xs whitespace-nowrap text-leaf-900/60"> / <T>{p.unit}</T></span>
       {special && <span className="ml-1.5 text-xs text-leaf-900/45 line-through">{aud(p.listPriceCents)}</span>}
       <span className="block text-[11px] text-leaf-900/50">{p.gst ? <T>{"+ GST"}</T> : <T>{"GST free"}</T>}{special && <T>{" · your price"}</T>}</span>
@@ -87,21 +96,21 @@ export function Price({ p, signedIn }: { p: Pick<CatalogItem, "priceCents" | "li
 export function ProductCard({ p, signedIn, morph }: { p: CatalogItem; signedIn: boolean; morph?: boolean; index?: number }) {
   const href = `/products/${encodeURIComponent(p.sku)}`;
   return (
-    <div className="press group relative flex flex-col overflow-hidden rounded-lg border border-leaf-950/12 bg-white transition-colors hover:border-leaf-950/30 group-data-[view=list]/view:flex-row">
-      <Link href={href} className="block shrink-0 border-b border-leaf-950/8 group-data-[view=list]/view:w-20 group-data-[view=list]/view:border-r group-data-[view=list]/view:border-b-0 sm:group-data-[view=list]/view:w-24">
+    <div className="press reveal group relative flex flex-col group-data-[view=list]/view:flex-row group-data-[view=list]/view:overflow-hidden group-data-[view=list]/view:rounded-lg group-data-[view=list]/view:bg-white group-data-[view=list]/view:ring-1 group-data-[view=list]/view:ring-leaf-950/8">
+      <Link href={href} className="block shrink-0 overflow-hidden rounded-lg group-data-[view=list]/view:w-20 group-data-[view=list]/view:rounded-none sm:group-data-[view=list]/view:w-24">
         <ProductImage
           p={p}
           morph={morph}
           sizes="(min-width: 1024px) 25vw, 50vw"
-          className={cx(p.hasImage ? "aspect-[4/3]" : "aspect-[2/1]", "group-data-[view=list]/view:aspect-auto group-data-[view=list]/view:h-full group-data-[view=list]/view:min-h-20")}
+          className={cx(p.hasImage ? "aspect-[5/4]" : "aspect-[2/1]", "group-data-[view=list]/view:aspect-auto group-data-[view=list]/view:h-full group-data-[view=list]/view:min-h-20")}
         />
       </Link>
-      <FavouriteButton productId={p.id} sku={p.sku} favourite={p.favourite} signedIn={signedIn} className="absolute top-2 right-2 z-10 group-data-[view=list]/view:hidden" />
-      <div className="flex min-w-0 flex-1 flex-col p-3 sm:p-4 group-data-[view=list]/view:py-2.5 sm:group-data-[view=list]/view:py-3">
-        <Link href={href} className="line-clamp-2 text-sm leading-snug font-semibold underline-offset-2 hover:underline sm:text-[15px]">
+      <FavouriteButton productId={p.id} sku={p.sku} favourite={p.favourite} signedIn={signedIn} variant="float" className="absolute top-2 right-2 z-10 group-data-[view=list]/view:hidden" />
+      <div className="flex min-w-0 flex-1 flex-col px-0.5 pt-3 pb-1 group-data-[view=list]/view:px-3 group-data-[view=list]/view:py-2.5 sm:group-data-[view=list]/view:py-3">
+        <Link href={href} className="line-clamp-2 text-sm leading-snug font-medium text-leaf-950 underline-offset-[3px] decoration-leaf-950/30 hover:underline sm:text-[15px]">
           {p.name}
         </Link>
-        <p className="mt-1 line-clamp-1 text-xs text-leaf-900/60">
+        <p className="mt-1 line-clamp-1 text-xs text-leaf-900/55">
           {p.packSize}
           {p.minQty > 1 && (
             <>
@@ -109,12 +118,12 @@ export function ProductCard({ p, signedIn, morph }: { p: CatalogItem; signedIn: 
               <Tx>{`· min ${p.minQty}`}</Tx>
             </>
           )}
-          <span className="hidden font-mono text-[11px] text-leaf-900/40 group-data-[view=list]/view:inline">
+          <span className="hidden font-mono text-[10.5px] text-leaf-900/35 group-data-[view=list]/view:inline">
             {p.packSize ? " · " : ""}
             {p.sku}
           </span>
         </p>
-        <p className="mt-0.5 font-mono text-[11px] text-leaf-900/40 group-data-[view=list]/view:hidden">{p.sku}</p>
+        <p className="mt-0.5 font-mono text-[10.5px] tracking-wide text-leaf-900/35 group-data-[view=list]/view:hidden">{p.sku}</p>
         {/* In a list row: the price (with stock under it) on the left, ordering on the right, on one line. */}
         <div className="mt-auto group-data-[view=list]/view:flex group-data-[view=list]/view:items-end group-data-[view=list]/view:gap-3">
           <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-1 pt-3 group-data-[view=list]/view:min-w-0 group-data-[view=list]/view:flex-1 group-data-[view=list]/view:flex-col group-data-[view=list]/view:items-start group-data-[view=list]/view:gap-0.5 group-data-[view=list]/view:pt-1.5">

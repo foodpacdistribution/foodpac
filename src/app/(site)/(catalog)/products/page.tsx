@@ -87,7 +87,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         </p>
         <div className="mt-4 flex items-center gap-2 text-sm">
           {/* Phones: the sort order in one compact menu; wider screens: the choices side by side. */}
-          <div className="min-w-0 sm:hidden">
+          <div className="flex min-w-0 flex-1 sm:hidden">
             <SortSelect value={sort ?? "name"} options={sorts.map((k) => ({ value: k, label: SORTS[k], href: qs({ sort: k === "name" ? undefined : k }) }))} />
           </div>
           <div className="hidden flex-wrap items-center gap-2 sm:flex">

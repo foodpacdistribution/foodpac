@@ -62,7 +62,7 @@ export function AddToCart({
         />
       )}
       <div className={cx("flex items-center", lg ? "gap-2" : "gap-1.5")}>
-        <div className={cx("flex shrink-0 items-center rounded-md border border-leaf-950/20 bg-white", lg ? "h-12" : "h-9")}>
+        <div className={cx("flex shrink-0 items-center rounded-md border bg-white", lg ? "h-12 border-leaf-950/20" : "h-9 border-leaf-950/12")}>
           <button type="button" aria-label={tr("Less")} disabled={qty <= minQty} onClick={() => setQty((q) => Math.max(minQty, q - 1))} className={cx("grid place-items-center text-leaf-900 disabled:opacity-30", lg ? "size-12" : "size-8 sm:size-9")}>
             <Minus className="size-3.5" />
           </button>
@@ -97,9 +97,15 @@ export function AddToCart({
             });
           }}
           className={cx(
-            "inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md font-semibold text-white transition-[background-color,scale] duration-150 active:scale-95 disabled:opacity-50",
-            added > 0 ? "bg-leaf-700" : "bg-leaf-800 hover:bg-leaf-900",
-            lg ? "h-12 px-3 text-base sm:px-6" : "h-9 px-2 text-sm sm:px-3",
+            "inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md font-semibold transition-[background-color,color,box-shadow,scale] duration-200 active:scale-95 disabled:opacity-50",
+            // On a product's own page the main button; in a list a quiet outline that fills on hover,
+            // so a page of products isn't a wall of dark buttons.
+            lg
+              ? cx("h-12 px-3 text-base text-white sm:px-6", added > 0 ? "bg-leaf-700" : "bg-leaf-800 hover:bg-leaf-900")
+              : cx(
+                  "h-9 px-2 text-sm sm:px-3",
+                  added > 0 ? "bg-leaf-800 text-white" : "bg-white text-leaf-950 ring-1 ring-leaf-950/25 ring-inset hover:bg-leaf-950 hover:text-white hover:ring-leaf-950",
+                ),
           )}
         >
           {added > 0 ? (
