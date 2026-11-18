@@ -5,7 +5,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { type DB, schema } from "./db";
 import { customers, deliveryDockets, depots, drivers, orders, routes, routeStops, settings, users } from "./db/schema";
-import { addDocket, cleanRead, deliverDockets, listDockets, updateDocket } from "./dockets";
+import { addDocket, cleanRead, deliverDockets, listDockets, readProblem, searchForDocket, updateDocket } from "./dockets";
 import { buildShipment } from "./shipments";
 
 const DATE = "2026-11-18";
@@ -153,5 +153,46 @@ describe("photographed invoices", () => {
     const [samDocket] = await db.insert(deliveryDockets).values({ driverId: sam.driverId, deliveryDate: DATE, mime: "image/jpeg", bytes: 1, data: photo.data, customerName: "X", address: "Y" }).returning();
     await expect(deliverDockets(db, kim, [samDocket.id], DATE)).resolves.toEqual([]);
     await expect(updateDocket(db, kim, samDocket.id, { orderNumber: null, customerName: "Z", address: "Z", phone: null })).rejects.toThrow(/gone/);
+  });
+});
+
+describe("picking instead of typing", () => {
+  it("finds today's deliveries by invoice number and customers by name, code or phone", async () => {
+    await db.insert(orders).values({ orderNumber: "INV8080", deliveryDate: DATE, customerName: "Dumpling House", address: "5 Main St, Sunnybank QLD 4109" });
+    await db.insert(customers).values({ name: "Dumpling House", address: "5 Main St, Sunnybank QLD 4109", lat: -27.58, lng: 153.06, geocodeStatus: "ok", geocodedAddress: "5 Main St, Sunnybank QLD 4109" });
+    const byNumber = await searchForDocket(db, "inv80", DATE);
+    expect(byNumber).toEqual([expect.objectContaining({ kind: "order", orderNumber: "INV8080", customerName: "Dumpling House", driver: null })]);
+    expect(await searchForDocket(db, "inv80", "2026-11-19")).toEqual([]);
+    // Today's deliveries for them first (already on Sam's route), then the customer on file.
+    const byName = await searchForDocket(db, "sushi par", DATE);
+    expect(byName.map((h) => h.kind)).toEqual(["order", "order", "customer"]);
+    expect(byName.at(-1)).toMatchObject({ customerName: "Sushi Paradise (Toowong)", address: "K6/9 Sherwood Rd, Toowong QLD 4066", code: expect.any(String) });
+    expect(await searchForDocket(db, "0412345", DATE)).toEqual([expect.objectContaining({ kind: "customer", customerName: "Sushi Paradise (Toowong)" })]);
+    expect(await searchForDocket(db, "x", DATE)).toEqual([]);
+    expect(await searchForDocket(db, "100%_", DATE)).toEqual([]);
+  });
+
+  it("picking a delivery makes the docket that exact delivery", async () => {
+    const id = await addDocket(db, kim, photo, DATE, async () => {
+      throw Object.assign(new Error("Unauthenticated request to AI Gateway"), { statusCode: 401 });
+    });
+    const [failed] = await db.select().from(deliveryDockets).where(eq(deliveryDockets.id, id));
+    expect(failed.readProblem).toMatch(/not switched on/);
+    const [pick] = await searchForDocket(db, "INV8080", DATE);
+    if (pick.kind !== "order") throw new Error("expected an order");
+    await updateDocket(db, kim, id, { orderNumber: pick.orderNumber, customerName: pick.customerName, address: pick.address, phone: pick.phone, customerId: pick.customerId });
+    // The office's order had no pin yet: it's placed from the customer on file, then routed.
+    await expect(deliverDockets(db, kim, [id], DATE)).resolves.toEqual([{ id, ok: true }]);
+    const same = await db.select().from(orders).where(eq(orders.orderNumber, "INV8080"));
+    expect(same).toHaveLength(1);
+    expect(same[0]).toMatchObject({ driverId: kim.driverId, status: "dispatched", lat: -27.58 });
+  });
+});
+
+describe("readProblem", () => {
+  it("says what the office can do about it", () => {
+    expect(readProblem(Object.assign(new Error("x"), { statusCode: 402 }))).toMatch(/out of credit/);
+    expect(readProblem(Object.assign(new Error("x"), { statusCode: 403 }))).toMatch(/not switched on/);
+    expect(readProblem(new Error("The operation was aborted due to timeout"))).toMatch(/too long/);
   });
 });

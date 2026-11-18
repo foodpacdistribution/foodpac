@@ -1,15 +1,15 @@
 "use client";
 
-import { Camera, CheckCircle2, ChevronRight, FileText, Images, Pencil, RotateCcw, Trash2, TriangleAlert, UserCheck, X } from "lucide-react";
+import { Camera, CheckCircle2, ChevronRight, FileText, Images, Pencil, RotateCcw, Search, Trash2, TriangleAlert, UserCheck, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { deleteDocket, deliverDocketsNow, saveDocket, uploadDocket } from "@/app/actions/dockets";
+import { deleteDocket, deliverDocketsNow, findForDocket, saveDocket, uploadDocket } from "@/app/actions/dockets";
 import { Toast, type ToastMessage } from "@/components/client-ui";
 import { Tx, useT } from "@/components/i18n";
 import Link from "@/components/link";
 import { btn, cx, inputCls, Spinner } from "@/components/ui";
 import { prettyDate } from "@/lib/dates";
-import type { DocketView } from "@/lib/dockets";
+import type { DocketPick, DocketView } from "@/lib/dockets";
 import { aud } from "@/lib/money";
 import { resizeImage } from "@/lib/resize-image";
 
@@ -333,9 +333,9 @@ function DocketCard({
     queueMicrotask(() => setF({ orderNumber: d.orderNumber ?? "", customerName: d.customerName ?? "", address: d.address ?? "", phone: d.phone ?? "" }));
   }, [d.orderNumber, d.customerName, d.address, d.phone]);
 
-  const save = () =>
+  const save = (values: typeof f & { customerId?: string | null } = f) =>
     start(async () => {
-      const r = await saveDocket(d.id, f);
+      const r = await saveDocket(d.id, values);
       if (!r.ok) return setFormError(r.error);
       setFormError(null);
       setEditing(false);
@@ -402,6 +402,17 @@ function DocketCard({
       )}
       {editing ? (
         <div className="space-y-2 border-t border-line bg-slate-50/60 p-3">
+          <PickSearch
+            onPick={(p) => {
+              const values =
+                p.kind === "order"
+                  ? { orderNumber: p.orderNumber, customerName: p.customerName, address: p.address, phone: p.phone ?? "", customerId: p.customerId }
+                  : { orderNumber: f.orderNumber, customerName: p.customerName, address: p.address, phone: p.phone ?? f.phone, customerId: p.customerId };
+              setF(values);
+              save(values);
+            }}
+          />
+          <p className="pt-1 text-[11px] font-medium text-slate-500">{tr("Or type it in")}</p>
           <input value={f.customerName} onChange={(e) => setF({ ...f, customerName: e.target.value })} placeholder={tr("Customer")} aria-label={tr("Customer")} className={cx(inputCls, "h-11 text-base")} />
           <textarea
             value={f.address}
@@ -417,7 +428,7 @@ function DocketCard({
           </div>
           {formError && <p className="text-sm text-red-600">{tr(formError)}</p>}
           <div className="flex gap-2">
-            <button type="button" onClick={save} disabled={busy} className={btn("primary", "md", "h-11 flex-1")}>
+            <button type="button" onClick={() => save()} disabled={busy} className={btn("primary", "md", "h-11 flex-1")}>
               {busy && <Spinner />} {tr("Save")}
             </button>
             {complete && (
@@ -441,5 +452,85 @@ function DocketCard({
         </div>
       )}
     </article>
+  );
+}
+
+/**
+ * Search as you type: today's deliveries the office already has (pick one and it's that exact
+ * delivery) and customers on file (their address and phone come with them).
+ */
+function PickSearch({ onPick }: { onPick: (p: DocketPick) => void }) {
+  const tr = useT();
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<DocketPick[] | null>(null);
+  const [looking, setLooking] = useState(false);
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      queueMicrotask(() => setHits(null));
+      return;
+    }
+    let live = true;
+    const t = setTimeout(async () => {
+      setLooking(true);
+      try {
+        const r = await findForDocket(term);
+        if (live) setHits(r);
+      } catch {
+        if (live) setHits([]);
+      } finally {
+        if (live) setLooking(false);
+      }
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [q]);
+  return (
+    <div>
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={tr("Search customer, code or invoice no.")}
+          aria-label={tr("Search customer, code or invoice no.")}
+          enterKeyHint="search"
+          className={cx(inputCls, "h-11 pl-9 text-base")}
+        />
+        {looking && <Spinner className="absolute top-1/2 right-3 -translate-y-1/2 text-slate-400" />}
+      </div>
+      {hits && (
+        <ul className="mt-1.5 max-h-72 divide-y divide-line overflow-y-auto rounded-lg bg-white ring-1 ring-line">
+          {hits.length === 0 && <li className="px-3 py-2.5 text-sm text-slate-500">{tr("Nothing found. Type it in below.")}</li>}
+          {hits.map((h) => (
+            <li key={h.kind === "order" ? `o:${h.orderNumber}` : `c:${h.customerId}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  setQ("");
+                  setHits(null);
+                  onPick(h);
+                }}
+                className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left active:bg-blue-50"
+              >
+                {h.kind === "order" ? <FileText className="mt-0.5 size-4 shrink-0 text-blue-600" /> : <UserCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />}
+                <span className="min-w-0 flex-1 text-sm">
+                  <span className="block truncate font-medium text-slate-900">
+                    {h.kind === "order" && <span className="mr-1.5 font-mono text-xs text-blue-700">{h.orderNumber}</span>}
+                    {h.customerName}
+                  </span>
+                  <span className="block truncate text-xs text-slate-500">{h.address}</span>
+                  {h.kind === "order" && (
+                    <span className="block text-[11px] text-slate-400">{h.driver ? tr("Today's delivery · {driver}", { driver: h.driver }) : tr("Today's delivery · not on a route yet")}</span>
+                  )}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

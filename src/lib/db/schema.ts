@@ -534,6 +534,8 @@ export const deliveryDockets = pgTable(
     readStatus: text("read_status").$type<DocketReadStatus>().notNull().default("reading"),
     /** Why it couldn't be read, for the driver (they type the details in instead). */
     readError: text("read_error"),
+    /** The technical reason reading failed, for the office (e.g. the AI Gateway refused: not switched on). */
+    readProblem: text("read_problem"),
     /** As read, before any correction. */
     read: jsonb("read").$type<DocketRead>(),
     orderNumber: text("order_number"),

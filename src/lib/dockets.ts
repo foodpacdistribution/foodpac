@@ -114,6 +114,18 @@ export async function readInvoicePhoto(data: Uint8Array, mime: string): Promise<
   return { ...cleanRead(output), isInvoice: output.isInvoice };
 }
 
+/** Why the model couldn't be used, in a line the office can act on. */
+export function readProblem(err: unknown): string {
+  const e = err as { statusCode?: number; message?: string; name?: string; cause?: unknown } | null;
+  const status = e?.statusCode;
+  const msg = (e?.message ?? String(err)).replace(/\s+/g, " ").slice(0, 240);
+  if (status === 401 || status === 403 || /oidc|authenticat|api key/i.test(msg)) return `AI Gateway refused the request (not switched on for this project, or no key): ${msg}`;
+  if (status === 402 || /credit|payment|billing/i.test(msg)) return `AI Gateway is out of credit: ${msg}`;
+  if (status === 429) return `AI Gateway rate limit: ${msg}`;
+  if (/timeout|abort/i.test(msg) || e?.name === "TimeoutError") return `Reading took too long: ${msg}`;
+  return status ? `AI Gateway error ${status}: ${msg}` : msg;
+}
+
 const nameKey = (s: string) => s.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
 const digits = (s: string | null) => (s ?? "").replace(/\D/g, "");
 
@@ -154,6 +166,7 @@ export async function addDocket(db: DB, who: Who, photo: { mime: string; data: U
     .returning({ id: deliveryDockets.id });
   let status: DocketReadStatus = "unread";
   let error: string | null = null;
+  let problem: string | null = null;
   let got: DocketRead | null = null;
   if (!canReadPhotos()) {
     error = "Reading photos isn't switched on yet. Type in the details.";
@@ -165,6 +178,7 @@ export async function addDocket(db: DB, who: Who, photo: { mime: string; data: U
       else status = "read";
     } catch (err) {
       console.error("[docket read]", err);
+      problem = readProblem(err);
       error = "Couldn't read this photo. Type in the details, or retake it.";
     }
   }
@@ -174,6 +188,7 @@ export async function addDocket(db: DB, who: Who, photo: { mime: string; data: U
     .set({
       readStatus: status,
       readError: error,
+      readProblem: problem,
       read: got,
       orderNumber: got?.invoiceNumber ?? got?.salesOrderNumber ?? null,
       customerName: got?.customerName ?? null,
@@ -200,12 +215,16 @@ export async function updateDocket(
   db: DB,
   who: Who & { staff?: boolean },
   id: string,
-  f: { orderNumber: string | null; customerName: string | null; address: string | null; phone: string | null },
+  f: { orderNumber: string | null; customerName: string | null; address: string | null; phone: string | null; customerId?: string | null },
 ) {
   await editable(db, who, id);
   const name = text(f.customerName, 200);
   const phone = text(f.phone, 40);
-  const customer = await matchCustomer(db, name, phone);
+  // Picked from the list: that customer. Typed: whoever the name or phone matches.
+  const [picked] = f.customerId
+    ? await db.select({ id: customers.id, address: customers.address, phone: customers.phone }).from(customers).where(eq(customers.id, f.customerId)).limit(1)
+    : [];
+  const customer = picked ?? (await matchCustomer(db, name, phone));
   await db
     .update(deliveryDockets)
     .set({
@@ -221,6 +240,53 @@ export async function updateDocket(
 export async function removeDocket(db: DB, who: Who & { staff?: boolean }, id: string) {
   await editable(db, who, id);
   await db.delete(deliveryDockets).where(eq(deliveryDockets.id, id));
+}
+
+export type DocketPick =
+  | { kind: "order"; orderNumber: string; customerName: string; address: string; phone: string | null; customerId: string | null; driver: string | null }
+  | { kind: "customer"; customerId: string; customerName: string; address: string; phone: string | null; code: string };
+
+/**
+ * What a driver can pick instead of typing: the day's deliveries not yet delivered (by invoice
+ * number or customer), then customers on file (by name, code or phone).
+ */
+export async function searchForDocket(db: DB, q: string, date: string): Promise<DocketPick[]> {
+  const term = q.replace(/\s+/g, " ").trim().slice(0, 60);
+  if (term.length < 2) return [];
+  const like = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const tel = term.replace(/\D/g, "");
+  const [orderRows, customerRows] = await Promise.all([
+    db
+      .select({ orderNumber: orders.orderNumber, customerName: orders.customerName, address: orders.address, phone: orders.phone, customerId: orders.customerId, driver: drivers.name })
+      .from(orders)
+      .leftJoin(drivers, eq(drivers.id, orders.driverId))
+      .where(
+        and(
+          eq(orders.deliveryDate, date),
+          inArray(orders.status, ["pending", "planned", "dispatched"]),
+          sql`(${orders.orderNumber} ilike ${like} or ${orders.customerName} ilike ${like})`,
+        ),
+      )
+      .orderBy(orders.orderNumber)
+      .limit(6),
+    db
+      .select({ customerId: customers.id, customerName: customers.name, address: customers.address, phone: customers.phone, code: customers.code })
+      .from(customers)
+      .where(
+        and(
+          sql`${customers.address} is not null and ${customers.address} <> ''`,
+          tel.length >= 6
+            ? sql`(${customers.name} ilike ${like} or ${customers.code} ilike ${like} or regexp_replace(coalesce(${customers.phone}, ''), '\\D', '', 'g') like ${`%${tel}%`})`
+            : sql`(${customers.name} ilike ${like} or ${customers.code} ilike ${like})`,
+        ),
+      )
+      .orderBy(customers.name)
+      .limit(8),
+  ]);
+  return [
+    ...orderRows.map((o) => ({ kind: "order" as const, ...o })),
+    ...customerRows.map((c) => ({ kind: "customer" as const, ...c, address: c.address ?? "" })),
+  ];
 }
 
 export type DeliverResult = { id: string; ok: boolean; error?: string };
@@ -266,6 +332,17 @@ export async function deliverDockets(db: DB, who: Who, ids: string[], date: stri
       if (existing.deliveryDate !== date) {
         // Only an order this docket made can be on another day (photographed yesterday, added today).
         await db.update(orders).set({ deliveryDate: date, status: "pending", driverId: null, updatedAt: new Date() }).where(and(eq(orders.id, existing.id), eq(orders.status, "pending")));
+      }
+      if (existing.lat === null || existing.lng === null) {
+        // The office's order hasn't been placed on the map yet: place it now, from its own address
+        // (else the one on the photo), so it can go on the route.
+        let place = await placeFor(db, existing.address, existing.postcode ?? postcodeOf(existing.address), existing.customerName || d.customerName, existing.customerId ?? d.customerId);
+        if (place.status === "failed" && d.address !== existing.address) place = await placeFor(db, d.address, postcodeOf(d.address), d.customerName, d.customerId);
+        if (place.status === "failed" || place.lat === null || place.lng === null) {
+          fail("Couldn't find this address on the map. Check it (street, suburb and postcode) and try again.");
+          continue;
+        }
+        await db.update(orders).set({ lat: place.lat, lng: place.lng, geocodeStatus: place.status, geocodeLabel: place.label, updatedAt: new Date() }).where(eq(orders.id, existing.id));
       }
       const stop = await pendingStop(db, existing.id, date);
       try {
@@ -412,6 +489,8 @@ export type DocketView = {
   driverName: string | null;
   readStatus: DocketReadStatus;
   readError: string | null;
+  /** Why reading failed (office only). */
+  readProblem: string | null;
   orderNumber: string | null;
   customerName: string | null;
   address: string | null;
@@ -437,6 +516,7 @@ export async function listDockets(db: DB, date: string, driverId?: string): Prom
         createdAt: deliveryDockets.createdAt,
         readStatus: deliveryDockets.readStatus,
         readError: deliveryDockets.readError,
+        readProblem: deliveryDockets.readProblem,
         orderNumber: deliveryDockets.orderNumber,
         customerName: deliveryDockets.customerName,
         address: deliveryDockets.address,
@@ -475,6 +555,7 @@ export async function listDockets(db: DB, date: string, driverId?: string): Prom
       driverName,
       readStatus: d.readStatus,
       readError: d.readError,
+      readProblem: d.readProblem,
       orderNumber: d.orderNumber,
       customerName: d.customerName,
       address: d.address,
